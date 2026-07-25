@@ -1,0 +1,14 @@
+{
+  "include": [
+    "**/*.py",
+    "**/*.md",
+    "data/domains.json"
+  ],
+  "ignore": [
+    "datorum-env",
+    "data/chunks/*",
+    "data/sources/*",
+    "data/prompt.md"
+  ],
+  "output": "llm_context.txt"
+}

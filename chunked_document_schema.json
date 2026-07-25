@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Document title"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Meaningful tags",
+      "items": {
+        "type": "string"
+      }
+    },
+    "chunks": {
+      "type": "array",
+      "description": "List of semantic splited chunks",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Composed id for this chunk"
+          },
+          "content": {
+            "type": "string",
+            "description": "Chunk text content"
+          },
+          "section_path": {
+            "type": "string",
+            "description": "Section path"
+          },
+          "chunk_type": {
+            "type": "string",
+            "description": "A meaningful classifier"
+          },
+          "related": {
+            "type": "array",
+            "description": "IDs of related chunks",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "propertyOrdering": [
+          "id",
+          "content",
+          "section_path",
+          "chunk_type",
+          "related",
+          "metadata"
+        ]
+      }
+    }
+  },
+  "propertyOrdering": [
+    "title",
+    "tags",
+    "chunks"
+  ]
+}
