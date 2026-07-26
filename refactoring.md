@@ -86,7 +86,7 @@ TOTAL                                       888      0   100%
 - [x] Console entry point: `datorum = "datorum.cli:app"` (the `cli` module
   arrives in phase 4; until then it can point at the existing
   `__main__.main`).
-- [ ] `LICENSE` — **Apache-2.0** (decided: the explicit patent grant is worth
+- [x] `LICENSE` — **Apache-2.0** (decided: the explicit patent grant is worth
   having once this is open to external contributors).
 - [ ] `README.md` (what Datorum does, quickstart, one example domain/source),
   `CONTRIBUTING.md`, `CHANGELOG.md`, `.gitignore` hardened to exclude
