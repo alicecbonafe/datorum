@@ -15,6 +15,10 @@ def test_mdx_scraper(httpserver):
   sections:
     - title: Advanced Usage
       local: guides/advanced
+    - title: Redundant Reference
+      local: guides/advanced
+    - title: Broken Link
+      local: guides/notfound
 """
 
     index_md = (
@@ -29,13 +33,13 @@ def test_mdx_scraper(httpserver):
         'See the <a href="https://example.com/ref">reference</a> for details.\n'
     )
 
-    httpserver.expect_request("/_toctree.yml").respond_with_data(toctree_yaml)
-    httpserver.expect_request("/index.md").respond_with_data(index_md)
-    httpserver.expect_request("/guides/advanced.md").respond_with_data(advanced_md)
+    httpserver.expect_request("/folder/_toctree.yml").respond_with_data(toctree_yaml)
+    httpserver.expect_request("/folder/index.md").respond_with_data(index_md)
+    httpserver.expect_request("/folder/guides/advanced.md").respond_with_data(advanced_md)
 
     scraper = MDXScraper()
     document = scraper.extract(
-        httpserver.url_for("/"),
+        httpserver.url_for("/folder"),
         title="Test Docs",
         license="Apache-2.0",
     )
@@ -157,3 +161,150 @@ website:
 
     assert document.source == "https://github.com/acme/docs"
     assert "Hello." in document.body
+
+
+def test_mdx_scraper_clean_mdx_edge_cases():
+    """Targets MDX code protection, HTML stripping, and autodoc replacements."""
+    scraper = MDXScraper()
+    raw_text = (
+        "[[autodoc]] datorum.models.Document\n"
+        "    - all\n"
+        "    - method\n"
+        "`<|endoftext|>`\n"
+        "```python\n<code>\n```\n"
+        "<div><img src='decorative.png'/></div>\n"
+        "<iframe src='embed'></iframe>\n"
+        "<youtube src='vid'></youtube>\n"
+        "Line<br/>Break\n"
+        "<p>Paragraph Container</p>\n"
+        "<p>Other Paragraph</p>\n"
+    )
+    
+    cleaned = scraper._clean_mdx(raw_text)
+    
+    # 1. Autodoc replacements (Lines 105-106)
+    assert "API reference: `datorum.models.Document`" in cleaned
+    assert "- all" not in cleaned
+    assert "- method" not in cleaned
+    
+    # 2. Code protection & restore (Lines 134-137, 179)
+    assert "`<|endoftext|>`" in cleaned
+    assert "<code>" in cleaned
+    
+    # 3. HTML stripping (Lines 154, 157, 167, 172)
+    assert "img" not in cleaned
+    assert "iframe" not in cleaned
+    assert "youtube" not in cleaned
+    assert "Line\nBreak" in cleaned
+    assert "Paragraph Container\n\n" in cleaned
+
+
+def test_qmd_scraper_edge_cases(httpserver):
+    """Targets book configuration, GitHub token, duplicated files, HTTP errors, and trailing slashes."""
+    quarto_yaml = """
+book:
+  chapters:
+    - part: Part 1
+      contents:
+        - ch1.qmd
+        - ch1.qmd
+        - ch2.qmd
+    """
+    ch1_qmd = "Chapter 1\n{{< include _partial.qmd >}}\n{{< include _missing.qmd >}}"
+    partial_qmd = "Partial content"
+    
+    httpserver.expect_request("/project/_quarto.yml").respond_with_data(quarto_yaml)
+    httpserver.expect_request("/project/ch1.qmd").respond_with_data(ch1_qmd)
+    httpserver.expect_request("/project/_partial.qmd").respond_with_data(partial_qmd)
+    # HTTP Error endpoints (Lines 72-74, 196-202)
+    httpserver.expect_request("/project/_missing.qmd").respond_with_data("Not found", status=404)
+    httpserver.expect_request("/project/ch2.qmd").respond_with_data("Not found", status=404)
+
+    scraper = QMDScraper()
+    doc = scraper.extract(
+        httpserver.url_for("/project"),  # No trailing slash (Line 95)
+        title="Book",
+        license="MIT",
+        github_token="secret-token" # Token authorization (Line 41)
+    )
+
+    assert scraper.session.headers['Authorization'] == "Bearer secret-token"
+    assert doc.body.count("Chapter 1") == 1  # Duplicates skipped (Line 67)
+    assert "Partial content" in doc.body
+    assert "(missing include: `_missing.qmd`)" in doc.body
+    assert "ch2.qmd" not in doc.body
+
+
+def test_qmd_scraper_validation_errors():
+    """Targets structural validation errors when parsing."""
+    scraper = QMDScraper()
+    
+    # Missing website/book config (Lines 142, 145-149)
+    with pytest.raises(ValueError, match="No website.sidebar or book.chapters"):
+        scraper._sidebar_entries({"other_config": "values"})
+        
+    # Glob pattern without owner/repo (Lines 114-128)
+    with pytest.raises(ValueError, match="listing is only available for GitHub repos"):
+        list(scraper._flatten_sidebar(["docs/*"]))
+
+
+def test_qmd_scraper_github_glob(httpserver):
+    """Targets GitHub API directory listing and glob expansion."""
+    quarto_yaml = """
+website:
+  sidebar:
+    contents:
+      - section: Docs
+        contents: docs/*
+    """
+    
+    api_resp = [
+        {"type": "file", "name": "a.qmd", "path": "docs/a.qmd"},
+        {"type": "dir", "name": "skip", "path": "docs/skip"},
+        {"type": "file", "name": "b.txt", "path": "docs/b.txt"}
+    ]
+    
+    # Configure exact mock paths for glob fetching (Lines 161-162, 179)
+    httpserver.expect_request("/acme/repo/main/_quarto.yml").respond_with_data(quarto_yaml)
+    httpserver.expect_request("/api.github.com/repos/acme/repo/contents/docs").respond_with_json(api_resp)
+    httpserver.expect_request("/acme/repo/main/docs/a.qmd").respond_with_data("Glob content loaded.")
+    
+    scraper = QMDScraper()
+    scraper.GITHUB_RAW_BASE = httpserver.url_for("/")[:-1]
+    scraper.GITHUB_API_CONTENTS = httpserver.url_for("/api.github.com/repos/{owner}/{repo}/contents/{path}")
+    
+    doc = scraper.extract(
+        "https://ignored",
+        title="Test",
+        license="MIT",
+        owner="acme",
+        repo="repo",
+        branch="main"
+    )
+    
+    assert "Glob content loaded." in doc.body
+
+
+def test_qmd_scraper_sidebar_list():
+    """Website sidebar provided as a list instead of a dict."""
+    scraper = QMDScraper()
+    
+    # Test when sidebar is a populated list
+    quarto_yaml_list = {
+        "website": {
+            "sidebar": [
+                {"contents": ["intro.qmd"]}
+            ]
+        }
+    }
+    entries = scraper._sidebar_entries(quarto_yaml_list)
+    assert entries == ["intro.qmd"]
+
+    # Test when sidebar is an empty list
+    quarto_yaml_empty = {
+        "website": {
+            "sidebar": []
+        }
+    }
+    entries_empty = scraper._sidebar_entries(quarto_yaml_empty)
+    assert entries_empty == []

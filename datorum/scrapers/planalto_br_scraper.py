@@ -152,4 +152,4 @@ class PlanaltoBRScraper(BaseScraper):
         title_tag = soup.find("title")
         if title_tag:
             return title_tag.get_text(strip=True)
-        return url.split("/")[-1].replace(".htm", "").replace(".html", "")
+        return url.split("/")[-1].replace(".html", "").replace(".htm", "")

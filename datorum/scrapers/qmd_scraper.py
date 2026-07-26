@@ -111,7 +111,7 @@ class QMDScraper(BaseScraper):
         raw-file server, so it's only available when scraping a GitHub
         repo (`owner`/`repo` given) -- other sources need explicit paths
         in the sidebar instead of a glob."""
-        if not (self._owner and self._repo):
+        if not (hasattr(self, '_owner') and hasattr(self, '_repo')):
             raise ValueError(
                 f"Can't resolve glob sidebar entry '{path}/*': directory "
                 "listing is only available for GitHub repos (pass 'owner' "

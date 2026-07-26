@@ -6,3 +6,5 @@ venv
 datorum-env
 .context.json
 *.egg-info
+test_results.txt
+.coverage

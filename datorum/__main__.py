@@ -91,7 +91,7 @@ def main():
 
             print(f"Generating chunks for {source_metadata['slug']}...")
 
-            InferenceProvider.load('chunker').generate(request)
+            response = InferenceProvider.load('chunker').generate(request)
 
             print(f"Saving as {str(chunks_file)}...")
             with chunks_file.open('w', encoding = 'utf-8') as f:
@@ -101,4 +101,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() # pragma: no cover

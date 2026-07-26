@@ -312,7 +312,7 @@ class ArxivTeXScraper(BaseArxivScraper):
         # the alttext the HTML scraper pulls out of MathML.
         math_spans = []
         for pattern in (
-            r"\$\$.*?\$\$", r"(?<!\$)\$[^$]*\$(?!\$)",
+            r"\$\$.*?\$\$", r"(?<!\$)\$(?!\$)[^$]*\$(?!\$)",
             r"\\\[.*?\\\]", r"\\\(.*?\\\)",
             r"\\begin\{equation\*?\}.*?\\end\{equation\*?\}",
             r"\\begin\{align\*?\}.*?\\end\{align\*?\}",

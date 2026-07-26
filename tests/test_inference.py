@@ -1,5 +1,6 @@
-import responses
+from pydantic import BaseModel
 import pytest
+from unittest.mock import patch, mock_open, MagicMock
 
 from datorum.providers.inference import InferenceRequest, InferenceProvider
 
@@ -60,3 +61,36 @@ def test_inference_provider_call(mocked_server):
 
     assert output is not None
     assert "mocked reply" in str(output)
+
+
+class DummySchema(BaseModel):
+    result: str
+
+def test_inference_provider_load():
+    config = {"BASE_URL": "http://localhost", "API_KEY": "secret"}
+    provider = InferenceProvider.load(provider="", config=config)
+    assert provider.base_url == "http://localhost"
+    assert provider.provider == ""
+
+def test_inference_structured_output(mocked_server):
+    request = InferenceRequest(
+        provider='test',
+        model='mocked-model',
+        system_instructions='Return JSON.',
+        user_prompt='Data',
+        response_schema=DummySchema
+    )
+    
+    provider = InferenceProvider(
+        provider='test',
+        api_key=MOCKED_API_KEY,
+        base_url=mocked_server.url_for("/v1"),
+    )
+    
+    with patch.object(provider.client.beta.chat.completions, 'parse') as mock_parse:
+        mock_choice = MagicMock()
+        mock_choice.message.parsed.model_dump_json.return_value = '{"result": "success"}'
+        mock_parse.return_value.choices = [mock_choice]
+        
+        output = provider.generate(request)
+        assert '{"result": "success"}' in output

@@ -43,7 +43,7 @@ class BaseScraper(ABC):
 
     @abstractmethod
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
-        pass
+        pass # pragma: no cover
 
     def scrap_from(
         self,
