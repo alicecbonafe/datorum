@@ -56,13 +56,18 @@ def test_main_chunk_command(mock_json_load, mock_file, mock_provider, mock_domai
         
     mock_instance.generate.assert_called_once()
 
-@patch("json.load")
-def test_exceptions(mock_json_load, mock_domains_data):
-    mock_json_load.return_value = mock_domains_data
+def test_exceptions(mock_domains_data, tmp_path: Path):
+    domains_json = tmp_path / 'domains.json'
+    with domains_json.open('w', encoding='utf-8') as f:
+        json.dump(mock_domains_data, f)
 
     domain_exception = False
     try:
-        with patch.object(sys, "argv", ["datorum", "chunk", "f-t1-s001"]):
+        with patch.object(sys, "argv", [
+            "datorum",
+            "--data-path", str(tmp_path.absolute()),
+            "chunk", "f-t1-s001"
+        ]):
             app()
     except Exception as e:
         assert str(e) == 'Domain not found: f'
@@ -71,7 +76,11 @@ def test_exceptions(mock_json_load, mock_domains_data):
 
     topic_exception = False
     try:
-        with patch.object(sys, "argv", ["datorum", "chunk", "d-t2-s001"]):
+        with patch.object(sys, "argv", [
+            "datorum",
+            "--data-path", str(tmp_path.absolute()),
+            "chunk", "d-t2-s001"
+        ]):
             app()
     except Exception as e:
         assert str(e) == 'Topic not found: d-t2'
@@ -80,7 +89,10 @@ def test_exceptions(mock_json_load, mock_domains_data):
 
     source_exception = False
     try:
-        with patch.object(sys, "argv", ["datorum", "chunk", "d-t1-u001"]):
+        with patch.object(sys, "argv", [
+            "datorum",
+            "--data-path", str(tmp_path.absolute()),
+            "chunk", "d-t1-u001"]):
             app()
     except Exception as e:
         assert str(e) == 'Source not found: d-t1-u001'

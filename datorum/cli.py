@@ -25,11 +25,16 @@ class ChunkedDocument(BaseModel):
 
 def app():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--data-path", help="Path to the data directory.")
     parser.add_argument("command", help="Command name", choices = ['scrape', 'chunk'])
     parser.add_argument("source_id", help="ID of the source to scrape")
     args = parser.parse_args()
+    data_path: str|None = args.data_path
     command: str = args.command
     source_id: str = args.source_id
+
+    if data_path is not None:
+        GeneralConfig['DATA_DIR'] = data_path
 
     domain_id = source_id[:1]
     topic_id = source_id[:4]
