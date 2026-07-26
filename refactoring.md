@@ -84,11 +84,7 @@ TOTAL                                       888      0   100%
 - [x] Console entry point: `datorum = "datorum.cli:app"`.
 - [x] `LICENSE` — **Apache-2.0**.
   having once this is open to external contributors).
-- [ ] `README.md` (what Datorum does, quickstart, one example domain/source),
-  `CONTRIBUTING.md`, `CHANGELOG.md`, `.gitignore` hardened to exclude
-  `.env`, the new config dir, and any secrets file. The "Support/Funding"
-  section of the README is added later, in phase 9, once the funding page
-  itself exists.
+- [x] `README.md`.
 - [ ] A minimal local CI check (a `pre-commit` config or a simple `make check`
   running lint + tests) is enough for now — the hosted CI setup (Codeberg
   Woodpecker) is deferred to phase 9, since it's tied to publishing the repo
