@@ -315,17 +315,31 @@ cleaner order.
 
 1. **License** — MIT vs Apache-2.0 (leaning Apache-2.0 for the patent
    grant, but it's your call).
+
+   > Assume Apache-2.0
+
 2. **Config format** — plan assumes TOML; YAML is the alternative if you
    have a preference.
+
+   > Assume YAML
+
 3. **CLI framework** — plan assumes `typer`; `click` directly is the
    alternative if you'd rather avoid the extra dependency layer typer adds
    over click.
+
+   > Assume `typer`
+
 4. **Secret backend default** — plan assumes keyring-first with encrypted-file
    fallback; if you know this will mostly run headless, defaulting straight
    to the encrypted-file backend might be simpler and more predictable.
+
+   > This should be optional and configurable, with the encrypted-file as the default option
+
 5. **Local model server** for the router provider — Ollama, llama.cpp's
    server, vLLM, or something else? This only affects the `[providers.router]`
    example in phase 4 and doesn't block any other phase.
+
+   > This should be transparent, any OpenAI compatible endpoint should be compatible.
 
 None of these block starting Phase 0 — happy to proceed with the defaults
 above and adjust later if you'd rather decide as we go.

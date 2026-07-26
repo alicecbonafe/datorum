@@ -1,14 +1,13 @@
 # datorum/providers/inference.py
-from typing import Optional, Any, Type
-from abc import ABC, abstractmethod
+from typing import Optional, Type
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from .. import GeneralConfig
 
+
 class InferenceRequest(BaseModel):
-    provider: str = Field(default='')
 
     model: str
     system_instructions: str
@@ -21,50 +20,43 @@ class InferenceRequest(BaseModel):
     response_schema: Optional[Type[BaseModel]] = Field(default=None)
 
 
-class InferenceFactory():
-    _config: Optional[dict[str, str]] = None
-    _instance: Optional['InferenceFactory'] = None
+class InferenceProvider:
 
     @classmethod
-    def configure(cls, config: dict[str, str] = None):
-        if config is None:
-            config = {}
-        cls._config = {
-            **GeneralConfig,
-            **config
-        }
+    def load(cls,
+        provider: str = '',
+        config: dict = GeneralConfig
+    ) -> InferenceProvider:
 
-    def __new__(cls, *args, **kwargs):
-        if not cls._config:
-            cls.configure()
-        if not cls._instance:
-            cls._instance = super().__new__(cls, *args, **kwargs)
-            cls._instance.clients = {}
-        return cls._instance
+        provider = provider.strip()
+        prefix = f'{provider.upper()}_' if provider else ''
+        base_url = config[f'{prefix}BASE_URL']
+        api_key = config[f'{prefix}API_KEY']
+        return cls(
+            provider=provider,
+            api_key=api_key,
+            base_url=base_url,
+        )
 
-    def get_config(self, key: str, provider: str = '', default: Optional[str] = None):
-        prefix = f'{provider.strip()}_' if provider.strip() else ''
-        return self._config.get(f'{prefix}{key}'.upper(), default)
 
-    def get_client(self, provider: str = '') -> OpenAI:
-        if provider not in self.clients:
-            api_key = self.get_config('api_key', provider)
-            base_url = self.get_config('base_url', provider)
+    def __init__(self, provider: str, api_key: str, base_url: str):
 
-            self.clients[provider] = OpenAI(
-                api_key=api_key,
-                base_url=base_url
-            )
-        return self.clients[provider]
+        self.provider = provider
+        self.base_url = base_url
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+
 
     def generate(self, request: InferenceRequest) -> str:
-        client = self.get_client(request.provider)
-        
+
         messages = [
             {"role": "system", "content": request.system_instructions},
             {"role": "user", "content": request.user_prompt},
         ]
-        
+
         request_kwargs = {
             "model": request.model,
             "messages": messages,
@@ -74,13 +66,14 @@ class InferenceFactory():
         }
 
         if request.response_schema is not None:
-            completion = client.beta.chat.completions.parse(
+            completion = self.client.beta.chat.completions.parse(
                 **request_kwargs,
                 response_format=request.response_schema
             )
             return completion.choices[0].message.parsed.model_dump_json(indent=2)
 
-        completion = client.chat.completions.create(
+        completion = self.client.chat.completions.create(
             **request_kwargs
         )
         return completion.choices[0].message.content
+

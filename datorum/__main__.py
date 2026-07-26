@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from . import GeneralConfig
 from .scrapers import registry
-from .providers.inference import InferenceRequest, InferenceFactory
+from .providers.inference import InferenceRequest, InferenceProvider
 
 class Chunk(BaseModel):
     id: str = Field(description = "Composed id for this chunk")
@@ -23,7 +23,14 @@ class ChunkedDocument(BaseModel):
     chunks: list[Chunk] = Field(description = "List of semantic splited chunks", default_factory=list)
 
 
-def main(command: str, source_id: str):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", help="Command name", choices = ['scrap', 'chunk'])
+    parser.add_argument("source_id", help="ID of the source to scrap")
+    args = parser.parse_args()
+    command: str = args.command
+    source_id: str = args.source_id
+
     domain_id = source_id[:1]
     topic_id = source_id[:4]
     work_dir = Path(GeneralConfig.get('DATA_DIR', 'data'))
@@ -74,7 +81,6 @@ def main(command: str, source_id: str):
                 user_prompt = f.read()
 
             request = InferenceRequest(
-                provider = 'chunker',
                 model = GeneralConfig['CHUNKER_MODEL'],
                 system_instructions = system_instructions,
                 user_prompt = user_prompt,
@@ -85,7 +91,7 @@ def main(command: str, source_id: str):
 
             print(f"Generating chunks for {source_metadata['slug']}...")
 
-            response = InferenceFactory().generate(request)
+            InferenceProvider.load('chunker').generate(request)
 
             print(f"Saving as {str(chunks_file)}...")
             with chunks_file.open('w', encoding = 'utf-8') as f:
@@ -95,8 +101,4 @@ def main(command: str, source_id: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", help="Command name", choices = ['scrap', 'chunk'])
-    parser.add_argument("source_id", help="ID of the source to scrap")
-    args = parser.parse_args()
-    main(args.command, args.source_id)
+    main()

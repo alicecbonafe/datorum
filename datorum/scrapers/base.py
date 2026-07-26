@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 import requests
 import unicodedata
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -99,3 +100,7 @@ class BaseScraper(ABC):
         markdown = self._sanitize(self._render(document))
         with target.open('w', encoding='utf-8') as f:
             f.write(markdown)
+
+    def _origin(self, url: str) -> str:
+        parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}"

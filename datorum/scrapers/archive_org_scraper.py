@@ -1,6 +1,7 @@
+from collections import Counter
 import json
 import re
-from collections import Counter
+from urllib.parse import urlparse
 
 from .base import BaseScraper, ScrapedDocument
 
@@ -30,10 +31,10 @@ class ArchiveOrgScraper(BaseScraper):
       into the text as fake line breaks.
     """
 
-    METADATA_URL = "https://archive.org/metadata/{identifier}"
-    DOWNLOAD_URL = "https://archive.org/download/{identifier}/{filename}"
+    METADATA_PATH = "/metadata/{identifier}"
+    DOWNLOAD_PATH = "/download/{identifier}/{filename}"
 
-    IDENTIFIER_RE = re.compile(r"archive\.org/(?:details|download)/([^/]+)")
+    IDENTIFIER_RE = re.compile(r"/(?:details|download)/([^/]+)")
 
     _PAGE_NUMBER_RE = re.compile(r"^\s*[\divxlcdm]{1,6}\s*$", re.IGNORECASE)
     _BOILERPLATE_RE = re.compile(
@@ -45,13 +46,14 @@ class ArchiveOrgScraper(BaseScraper):
 
     
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
+        origin = self._origin(url)
         identifier = self._extract_identifier(url)
         print(f"Item identifier: {identifier}")
 
         item = {}
         try:
             print("  Fetching metadata...")
-            item = self._fetch_item_metadata(identifier)
+            item = self._fetch_item_metadata(origin, identifier)
         except Exception as e:
             print(f"  (metadata fetch skipped: {e})")
 
@@ -65,7 +67,7 @@ class ArchiveOrgScraper(BaseScraper):
         txt_filename = kwargs.get("txt_filename") or self._find_djvu_txt_filename(
             item.get("files", []), identifier
         )
-        txt_url = self.DOWNLOAD_URL.format(identifier=identifier, filename=txt_filename)
+        txt_url = f"{origin}{self.DOWNLOAD_PATH.format(identifier=identifier, filename=txt_filename)}"
         print(f"  Fetching OCR text ({txt_filename})...")
         raw_text = self._fetch(txt_url)
 
@@ -77,22 +79,20 @@ class ArchiveOrgScraper(BaseScraper):
         return ScrapedDocument(
             title=title,
             license=kwargs.get("license", "Unknown"),
-            source=f"https://archive.org/details/{identifier}",
+            source=f"{origin}/details/{identifier}",
             metadata=metadata,
             body=body,
         )
 
 
-    # ---- fetching ----------------------------------------------------
-
     def _extract_identifier(self, url: str) -> str:
-        m = self.IDENTIFIER_RE.search(url)
+        m = self.IDENTIFIER_RE.search(urlparse(url).path)
         if not m:
             raise ValueError(f"Could not find an archive.org item identifier in: {url}")
         return m.group(1)
 
-    def _fetch_item_metadata(self, identifier: str) -> dict:
-        raw = self._fetch(self.METADATA_URL.format(identifier=identifier))
+    def _fetch_item_metadata(self, origin: str, identifier: str) -> dict:
+        raw = self._fetch(f"{origin}{self.METADATA_PATH.format(identifier=identifier)}")
         return json.loads(raw)
 
     def _find_djvu_txt_filename(self, files: list[dict], identifier: str) -> str:
@@ -117,7 +117,20 @@ class ArchiveOrgScraper(BaseScraper):
     # ---- cleaning ------------------------------------------------------
 
     def _clean(self, raw_text: str) -> str:
-        pages = raw_text.split("\x0c") if "\x0c" in raw_text else [raw_text]
+
+        # Rejoin words hyphenated across a line-wrap
+        text = re.sub(r"(\w)-\n(\w)", r"\1\2", raw_text)
+
+        # Collapse single line-wraps into spaces, keep blank-line paragraph breaks
+        text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+
+        # Normalize whitespace
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r" *\n *", "\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        pages = text.split("\x0c") if "\x0c" in text else [text]
+
         page_lines = [p.strip("\n").split("\n") for p in pages]
 
         running_lines = self._detect_running_lines(page_lines)
@@ -140,17 +153,6 @@ class ArchiveOrgScraper(BaseScraper):
             cleaned_pages.append("\n".join(kept))
 
         text = "\n\n".join(cleaned_pages)
-
-        # Rejoin words hyphenated across a line-wrap
-        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
-
-        # Collapse single line-wraps into spaces, keep blank-line paragraph breaks
-        text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
-
-        # Normalize whitespace
-        text = re.sub(r"[ \t]+", " ", text)
-        text = re.sub(r" *\n *", "\n", text)
-        text = re.sub(r"\n{3,}", "\n\n", text)
 
         return text.strip()
 

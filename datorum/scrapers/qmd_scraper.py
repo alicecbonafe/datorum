@@ -8,33 +8,46 @@ from .base import BaseScraper, ScrapedDocument
 
 
 class QMDScraper(BaseScraper):
-    """Scraper for Quarto-based documentation repos (any project with a
-    `_quarto.yml` book/website config), reading directly from GitHub source
-    rather than the rendered HTML site.
+    """Scraper for Quarto-based documentation projects (any project with a
+    `_quarto.yml` book/website config), reading directly from the raw
+    source files rather than the rendered HTML site.
 
-    Unlike MDXScraper, there's no single doc-server base URL to resolve
-    relative paths against -- Quarto docs are plain files in a GitHub repo,
-    fetched via raw.githubusercontent.com. So `extract()` takes `owner`/
-    `repo`/`branch` kwargs instead of relying purely on `url`.
+    Domain independent: like MDXScraper, everything is fetched relative to
+    a base `url` -- a location that serves `_quarto.yml` and the `.qmd`
+    files its sidebar/chapters reference as plain-text/raw files. QMDScraper
+    itself makes no assumption about *which* server hosts those files, so
+    the same code works against raw.githubusercontent.com, any other
+    git-forge's raw-file endpoint, a self-hosted docs mirror, or (in tests)
+    a local server.
+
+    For GitHub-hosted repos specifically, passing `owner`/`repo` (and
+    optionally `branch`) instead of `url` is still supported as a
+    convenience: they're used to build the raw.githubusercontent.com base
+    url automatically, and -- only in that case -- glob sidebar entries
+    like `docs/section/*` can be resolved via the GitHub contents API,
+    since there's no domain-independent way to list a directory on an
+    arbitrary raw-file server.
     """
 
-    RAW_BASE = "https://raw.githubusercontent.com"
-    API_CONTENTS = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
+    GITHUB_API_CONTENTS = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
 
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
-        self._owner = kwargs['owner']
-        self._repo = kwargs['repo']
+        self._owner = kwargs.get('owner')
+        self._repo = kwargs.get('repo')
         self._branch = kwargs.get('branch', 'main')
         github_token = kwargs.get('github_token')
         if github_token:
             self.session.headers['Authorization'] = f"Bearer {github_token}"
+
+        self._base_url = self._resolve_base_url(url)
 
         quarto_path = kwargs.get('quarto_path', '_quarto.yml')
 
         result = ScrapedDocument(
             title = kwargs['title'],
             license = kwargs['license'],
-            source = f"https://github.com/{self._owner}/{self._repo}",
+            source = self._resolve_source_url(url),
         )
 
         quarto = yaml.safe_load(self._fetch(self._raw_url(quarto_path)))
@@ -69,15 +82,43 @@ class QMDScraper(BaseScraper):
 
     # ---- fetching --------------------------------------------------------
 
+    def _resolve_base_url(self, url: str) -> str:
+        """Base url everything else gets fetched relative to. When
+        `owner`/`repo` are given, this builds GitHub's raw-content endpoint
+        for that repo/branch (the `url` argument is ignored in that case,
+        kept only so the registry's uniform `extract(url, **kwargs)` call
+        shape still works); otherwise `url` itself is the base, exactly
+        like MDXScraper uses its `url` argument."""
+        if self._owner and self._repo:
+            return f"{self.GITHUB_RAW_BASE}/{self._owner}/{self._repo}/{self._branch}/"
+        if not url.endswith('/'):
+            url += '/'
+        return url
+
+    def _resolve_source_url(self, url: str) -> str:
+        if self._owner and self._repo:
+            return f"https://github.com/{self._owner}/{self._repo}"
+        return url
+
     def _raw_url(self, path: str) -> str:
-        path = path.lstrip('/')
-        return f"{self.RAW_BASE}/{self._owner}/{self._repo}/{self._branch}/{path}"
+        return self._base_url + path.lstrip('/')
 
     def _list_dir(self, path: str) -> list[str]:
         """List `.qmd` file paths in a repo directory, via the GitHub
         contents API. Needed to resolve glob sidebar entries like
-        `docs/dataset-formats/*`, which the YAML alone can't tell us."""
-        api_url = self.API_CONTENTS.format(
+        `docs/dataset-formats/*`, which the YAML alone can't tell us.
+        There's no domain-independent equivalent of this for an arbitrary
+        raw-file server, so it's only available when scraping a GitHub
+        repo (`owner`/`repo` given) -- other sources need explicit paths
+        in the sidebar instead of a glob."""
+        if not (self._owner and self._repo):
+            raise ValueError(
+                f"Can't resolve glob sidebar entry '{path}/*': directory "
+                "listing is only available for GitHub repos (pass 'owner' "
+                "and 'repo'). List the files explicitly in the sidebar "
+                "for other sources."
+            )
+        api_url = self.GITHUB_API_CONTENTS.format(
             owner = self._owner, repo = self._repo, path = path.strip('/'),
         )
         resp = self.session.get(
@@ -107,7 +148,7 @@ class QMDScraper(BaseScraper):
 
         raise ValueError(
             "No website.sidebar or book.chapters found in _quarto.yml -- "
-            "this repo's nav structure isn't one QMDScraper recognizes."
+            "this project's nav structure isn't one QMDScraper recognizes."
         )
 
     def _flatten_sidebar(self, entries, depth=0):
