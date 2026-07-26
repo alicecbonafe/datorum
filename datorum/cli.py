@@ -23,7 +23,7 @@ class ChunkedDocument(BaseModel):
     chunks: list[Chunk] = Field(description = "List of semantic splited chunks", default_factory=list)
 
 
-def main():
+def app():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", help="Command name", choices = ['scrap', 'chunk'])
     parser.add_argument("source_id", help="ID of the source to scrap")
@@ -101,4 +101,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() # pragma: no cover
+    app() # pragma: no cover
