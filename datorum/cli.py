@@ -25,8 +25,8 @@ class ChunkedDocument(BaseModel):
 
 def app():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", help="Command name", choices = ['scrap', 'chunk'])
-    parser.add_argument("source_id", help="ID of the source to scrap")
+    parser.add_argument("command", help="Command name", choices = ['scrape', 'chunk'])
+    parser.add_argument("source_id", help="ID of the source to scrape")
     args = parser.parse_args()
     command: str = args.command
     source_id: str = args.source_id
@@ -63,9 +63,9 @@ def app():
         raise Exception(f'Source not found: {source_id}')
 
     match command:
-        case 'scrap':
+        case 'scrape':
             scraper = registry[source_metadata['scraper']]()
-            scraper.scrap_from(
+            scraper.scrape_from(
                 source_metadata['url'],
                 work_dir / source_metadata['source_file'],
                 **source_metadata.get('scraper_args', {})

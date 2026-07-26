@@ -80,13 +80,9 @@ TOTAL                                       888      0   100%
 
 ## 3. Phase 1 — Packaging & OSS skeleton
 
-- [x] `pyproject.toml` replacing the implicit
-  `requirements.txt`-style setup. Pin real version ranges for `requests`,
-  `beautifulsoup4`, `pydantic`, `openai`, `python-dotenv`, `pyyaml`.
-- [x] Console entry point: `datorum = "datorum.cli:app"` (the `cli` module
-  arrives in phase 4; until then it can point at the existing
-  `__main__.main`).
-- [x] `LICENSE` — **Apache-2.0** (decided: the explicit patent grant is worth
+- [x] `pyproject.toml`.
+- [x] Console entry point: `datorum = "datorum.cli:app"`.
+- [x] `LICENSE` — **Apache-2.0**.
   having once this is open to external contributors).
 - [ ] `README.md` (what Datorum does, quickstart, one example domain/source),
   `CONTRIBUTING.md`, `CHANGELOG.md`, `.gitignore` hardened to exclude
@@ -97,9 +93,7 @@ TOTAL                                       888      0   100%
   running lint + tests) is enough for now — the hosted CI setup (Codeberg
   Woodpecker) is deferred to phase 9, since it's tied to publishing the repo
   and isn't needed while this is still a private, in-progress refactor.
-- [ ] Rename the `scrap` command to `scrape` (keep `scrap` as a silent alias for
-  one release) — small thing, but it's the kind of typo that's awkward to
-  fix once external users script against it.
+- [x] Rename the `scrap` command to `scrape`.
 
 **Deliverable:** `pip install -e .` gives a working `datorum` command,
 lint/tests are easy to run locally, repo is presentable.

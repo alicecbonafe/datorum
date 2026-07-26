@@ -28,17 +28,17 @@ def mock_domains_data():
 @patch("datorum.cli.registry")
 @patch("pathlib.Path.open", new_callable=mock_open, read_data="mocked content")
 @patch("json.load")
-def test_main_scrap_command(mock_json_load, mock_file, mock_registry, mock_domains_data):
+def test_main_scrape_command(mock_json_load, mock_file, mock_registry, mock_domains_data):
     mock_json_load.return_value = mock_domains_data
     
     # Mock the scraper
     mock_scraper_instance = MagicMock()
     mock_registry.__getitem__.return_value = lambda: mock_scraper_instance
 
-    with patch.object(sys, "argv", ["datorum", "scrap", "d-t1-s001"]):
+    with patch.object(sys, "argv", ["datorum", "scrape", "d-t1-s001"]):
         app()
         
-    mock_scraper_instance.scrap_from.assert_called_once()
+    mock_scraper_instance.scrape_from.assert_called_once()
 
 @patch("datorum.cli.InferenceProvider")
 @patch("pathlib.Path.open", new_callable=mock_open, read_data="mocked instructions")

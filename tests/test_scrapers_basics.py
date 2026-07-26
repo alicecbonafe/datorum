@@ -28,12 +28,12 @@ def test_base_scraper_interface():
     assert result.title == "Scraped: https://example.com"
 
 
-def test_base_scraper_scrap_from(tmp_path):
+def test_base_scraper_scrape_from(tmp_path):
     scraper = ConcreteScraper()
     target_file = tmp_path / "output.md"
     
     # Test scrap_from which calls _write and _render
-    doc = scraper.scrap_from("https://example.com", target_file)
+    doc = scraper.scrape_from("https://example.com", target_file)
     
     assert doc.title == "Scraped: https://example.com"
     assert target_file.exists()
@@ -69,7 +69,7 @@ def sample_contents():
                 <main>
                     <p><a href="contents.htm">{signature}_index</a></p>
                     <p><a href="contents2.htm">nomain</a></p>
-                    <p><a href="../otherfolder/mustignore.htm">Don't scrap me!</a></p>
+                    <p><a href="../otherfolder/mustignore.htm">Don't scrape me!</a></p>
                     <p><a href="contents2.htm">You again?!?</a></p>
                     <p>Created by Mocked Person</p>
                 </main>
