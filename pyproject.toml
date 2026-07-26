@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datorum"
-version = "0.1.0"
-description = "Data scraping and LLM dataset extraction pipeline"
+version = "0.1.0a1.dev1"
+description = "Context engineering AI agent."
 readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "Datorum Team" }]
@@ -32,7 +32,7 @@ dev = [
 ]
 
 [project.scripts]
-datorum = "datorum.__main__:main"
+datorum = "datorum.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["."]

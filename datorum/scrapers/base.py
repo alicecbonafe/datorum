@@ -45,7 +45,7 @@ class BaseScraper(ABC):
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         pass # pragma: no cover
 
-    def scrap_from(
+    def scrape_from(
         self,
         url: str,
         target: Path,

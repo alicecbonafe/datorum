@@ -48,45 +48,51 @@ working — no long-lived broken branches.
 **Why first:** there are currently no tests. Any restructuring is a gamble
 without something to diff behavior against.
 
-- Add `pytest` + a `tests/` tree.
-- Characterization tests per scraper using recorded fixtures (`responses` or
-  `vcr.py` to mock HTTP) — feed each scraper a canned response and assert
-  the `ScrapedDocument` it produces, using the real `data/domains.json`
-  entries as the parameter source. This also documents current scraper
-  behavior before anything moves.
-- One end-to-end test for `datorum scrap <id>` and `datorum chunk <id>`
-  against a temp `domains.json` fixture, with `InferenceFactory` mocked out.
-- Baseline `ruff` run (lint only, no fixes yet) to catalog existing issues
-  without touching code.
+**Deliverable:** green test suite that pins current behavior, runnable
+locally from here on (a local `pre-commit`/`make check`, added in phase 1;
+hosted CI arrives in phase 9 alongside publishing).
 
-**Deliverable:** green test suite that pins current behavior, run in CI
-(added in phase 1) from here on.
+```
+=================================================================================== tests coverage ===================================================================================
+__________________________________________________________________ coverage: platform linux, python 3.14.6-final-0 ___________________________________________________________________
+
+Name                                      Stmts   Miss  Cover   Missing
+-----------------------------------------------------------------------
+datorum/__init__.py                           3      0   100%
+datorum/__main__.py                          72      0   100%
+datorum/providers/__init__.py                 0      0   100%
+datorum/providers/inference.py               29      0   100%
+datorum/scrapers/__init__.py                  8      0   100%
+datorum/scrapers/archive_org_scraper.py      90      0   100%
+datorum/scrapers/arxiv_scraper.py           235      0   100%
+datorum/scrapers/base.py                     50      0   100%
+datorum/scrapers/html_scraper.py             86      0   100%
+datorum/scrapers/mdx_scraper.py              98      0   100%
+datorum/scrapers/planalto_br_scraper.py     100      0   100%
+datorum/scrapers/qmd_scraper.py             117      0   100%
+-----------------------------------------------------------------------
+TOTAL                                       888      0   100%
+================================================================================= 45 passed in 1.74s =================================================================================
+[1]+  Done                       clear
+```
 
 ---
 
 ## 3. Phase 1 — Packaging & OSS skeleton
 
-- `pyproject.toml` (hatchling or setuptools — either is fine; hatchling is
-  less config for a pure-Python package like this) replacing the implicit
-  `requirements.txt`-style setup. Pin real version ranges for `requests`,
-  `beautifulsoup4`, `pydantic`, `openai`, `python-dotenv`, `pyyaml`.
-- Console entry point: `datorum = "datorum.cli:app"` (the `cli` module
-  arrives in phase 4; until then it can point at the existing
-  `__main__.main`).
-- `LICENSE` — given the project redistributes scraped public-domain/OSS-doc
-  content and is itself a tool, Apache-2.0 or MIT both fit; Apache-2.0 adds
-  an explicit patent grant, which is worth having if this gets external
-  contributors. **Needs your call**, noted in the open questions below.
-- `README.md` (what Datorum does, quickstart, one example domain/source),
-  `CONTRIBUTING.md`, `CHANGELOG.md`, `.gitignore` hardened to exclude
-  `.env`, the new config dir, and any secrets file.
-- GitHub Actions CI: lint (`ruff`), format check, `pytest`, on PR + push.
-- Rename the `scrap` command to `scrape` (keep `scrap` as a silent alias for
-  one release) — small thing, but it's the kind of typo that's awkward to
-  fix once external users script against it.
+- [x] `pyproject.toml`.
+- [x] Console entry point: `datorum = "datorum.cli:app"`.
+- [x] `LICENSE` — **Apache-2.0**.
+  having once this is open to external contributors).
+- [x] `README.md`.
+- [ ] A minimal local CI check (a `pre-commit` config or a simple `make check`
+  running lint + tests) is enough for now — the hosted CI setup (Codeberg
+  Woodpecker) is deferred to phase 9, since it's tied to publishing the repo
+  and isn't needed while this is still a private, in-progress refactor.
+- [x] Rename the `scrap` command to `scrape`.
 
 **Deliverable:** `pip install -e .` gives a working `datorum` command,
-CI is green, repo is presentable.
+lint/tests are easy to run locally, repo is presentable.
 
 ---
 
@@ -150,29 +156,29 @@ be independently useful (better error messages, self-documenting).
   → CLI flags**. Env vars stay in the mix (useful for CI/containers), but
   stop being the primary interface.
 - File location via `platformdirs` (handles the right XDG/AppData/Library
-  path per OS) — e.g. `~/.config/datorum/config.toml` on Linux.
-- **Format: TOML.** It's the standard for this kind of file in the Python
-  ecosystem now (comments, native types, no YAML indentation footguns).
+  path per OS) — e.g. `~/.config/datorum/config.yaml` on Linux.
+- **Format: YAML** (decided).
 - Shape sketch:
-  ```toml
-  [general]
-  data_dir = "data"
+  ```yaml
+  general:
+    data_dir: "data"
 
-  [providers.chunker]
-  base_url = "https://api.openai.com/v1"
-  model = "gpt-4o-mini"
-  api_key_ref = "chunker"        # points into the secret store, phase 5
+  providers:
+    chunker:
+      base_url: "https://api.openai.com/v1"
+      model: "gpt-4o-mini"
+      api_key_ref: "chunker"        # points into the secret store, phase 5
 
-  [providers.router]
-  base_url = "http://localhost:11434/v1"   # local model server
-  model = "qwen2.5-3b-instruct"
-  api_key_ref = ""                          # local models often need none
+    router:
+      base_url: "http://localhost:11434/v1"   # any OpenAI-compatible endpoint
+      model: "qwen2.5-3b-instruct"
+      api_key_ref: ""                          # local models often need none
   ```
 - CLI: `datorum config init` (writes a commented template),
   `datorum config edit` (opens `$EDITOR`), `datorum config show` (prints
   resolved config with secrets masked).
 - Migration path: `datorum config migrate-env` reads an existing `.env`,
-  writes the equivalent `config.toml`, and pushes any `*_API_KEY` values
+  writes the equivalent `config.yaml`, and pushes any `*_API_KEY` values
   into the secret store from phase 5. `.env` support stays as a fallback
   (with a one-time deprecation notice) for a release or two rather than
   breaking existing setups outright.
@@ -197,10 +203,12 @@ The config file above intentionally never holds raw keys — only an
   headless (servers, CI, containers without a Secret Service running),
   which matters here since part of the point is running a local model —
   plausibly on a headless box.
-- **Selection:** try `keyring` first; if it raises (no backend available —
-  common on plain Linux servers) fall back to the encrypted file
-  automatically, with a one-line notice so it's not silent. Overridable
-  explicitly via `[secrets] backend = "keyring" | "file"` in the config.
+- **Selection (decided): encrypted file is the default backend**, since
+  headless use (a local model server, CI, containers) is the common case
+  here and shouldn't depend on a Secret Service being available. `keyring`
+  is available as an explicit opt-in, configurable via
+  `secrets.backend: "file" | "keyring"` in the config — no silent
+  auto-detection/fallback between the two.
 - Passphrase for the file backend: prompted interactively (`getpass`, never
   echoed, never logged) or read from `DATORUM_MASTER_PASSWORD` for
   non-interactive use. Document clearly that the latter only moves the
@@ -236,7 +244,7 @@ With phases 2–5 in place, the CLI itself is mostly wiring.
     scraper's declared param schema from phase 3 to validate input (and
     can prompt interactively for missing required fields).
   - `datorum provider {add,edit,remove,list}` — manage the
-    `[providers.*]` blocks in config.
+    `providers:` block in config.
   - `datorum config {init,edit,show,migrate-env}`
   - `datorum secrets {set,rm,list}`
 - All mutating commands go through `DomainsRepository`'s atomic save —
@@ -263,9 +271,10 @@ this phase is deliberately just the interfaces, not a working router:
   is only ever asked to choose among a short, relevant list — important
   for a small local model's accuracy.
 - Wire the `router` provider profile (added in phase 4's config sketch)
-  through `InferenceFactory`, pointed at a local OpenAI-compatible
-  endpoint (Ollama / llama.cpp server / vLLM — whichever you land on for
-  serving the small model).
+  through `InferenceFactory`. This stays transparent to whichever server
+  hosts the local model (decided) — `InferenceFactory` only needs a
+  `base_url` pointing at any OpenAI-compatible endpoint (Ollama, llama.cpp
+  server, vLLM, or otherwise), with no server-specific code in Datorum.
 - `datorum route <url>` CLI command that runs routing and prints the
   decision without executing the scrape — lets you iterate on the router
   prompt/model in isolation before it's wired into `scrape`.
@@ -300,46 +309,63 @@ package, not just the new modules.
 
 ---
 
+## 11. Phase 9 — Publishing & OSS release
+
+Everything up to here can happen in a private repo. This phase is what
+actually makes Datorum public, so it comes last rather than in phase 1.
+
+- **Canonical repo on Codeberg, CI via Codeberg's hosted Woodpecker
+  instance** (`.woodpecker.yml`): lint (`ruff`), format check, `pytest`, on
+  PR + push. linux/amd64 only, which is fine for a pure-Python CLI. Chosen
+  over GitHub Actions for alignment with a community-driven, donation-funded
+  forge rather than a platform subject to one company's commercial
+  direction — no access-request delay since you're already a Codeberg user.
+- **Read-only mirror to GitHub** (Codeberg's push-mirror feature, or a
+  scheduled `git push --mirror`), to keep the project discoverable where
+  most contributors/search traffic still are, without moving issues/PRs/CI
+  off Codeberg. GitHub Issues/PRs left disabled on the mirror so
+  contribution stays funneled to Codeberg.
+- **Funding**: Liberapay as the primary donation link, backed by a
+  Brazilian PayPal account (Liberapay doesn't support Stripe payouts to
+  Brazil, only PayPal). Concretely:
+  - Open a PayPal Brasil account under your CPF, link it as the payout
+    method on your Liberapay profile.
+  - Register a Pix key on that PayPal account — PayPal settles your
+    balance to your linked Brazilian bank account via Pix (or TED),
+    automatically, daily.
+  - Add a `FUNDING.md` (or a "Support" section in the README, written now
+    that the page exists) linking to the Liberapay page.
+- Rest of the OSS-release checklist: tag `v1.0.0`, publish to PyPI (trusted
+  publishing from CI once it's on Codeberg/Woodpecker, or a manual `twine
+  upload` for the first release), list Datorum on relevant awesome-lists.
+
+**Deliverable:** Datorum is public on Codeberg with green CI, discoverable
+via a GitHub mirror, installable from PyPI, and has a working donation
+link that actually reaches your bank account.
+
+---
+
 ## Suggested order
 
-Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7, with phase 8 threaded through each
+Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 9, with phase 8 threaded through each
 phase as it lands (not saved entirely for the end) rather than done as one
 giant cleanup pass. Phases 4 and 5 could swap if you'd rather see key
 encryption solved before touching the config format, but config needs to
 exist first for `api_key_ref` to have somewhere to live, so 4-then-5 is the
-cleaner order.
+cleaner order. Phase 9 is last on purpose — publishing only makes sense
+once everything else is done.
 
 ---
 
-## Open decisions worth your input before starting
+## Decisions made
 
-1. **License** — MIT vs Apache-2.0 (leaning Apache-2.0 for the patent
-   grant, but it's your call).
+These were open questions in an earlier draft; all are now resolved and
+reflected in the relevant phases above.
 
-   > Assume Apache-2.0
-
-2. **Config format** — plan assumes TOML; YAML is the alternative if you
-   have a preference.
-
-   > Assume YAML
-
-3. **CLI framework** — plan assumes `typer`; `click` directly is the
-   alternative if you'd rather avoid the extra dependency layer typer adds
-   over click.
-
-   > Assume `typer`
-
-4. **Secret backend default** — plan assumes keyring-first with encrypted-file
-   fallback; if you know this will mostly run headless, defaulting straight
-   to the encrypted-file backend might be simpler and more predictable.
-
-   > This should be optional and configurable, with the encrypted-file as the default option
-
-5. **Local model server** for the router provider — Ollama, llama.cpp's
-   server, vLLM, or something else? This only affects the `[providers.router]`
-   example in phase 4 and doesn't block any other phase.
-
-   > This should be transparent, any OpenAI compatible endpoint should be compatible.
-
-None of these block starting Phase 0 — happy to proceed with the defaults
-above and adjust later if you'd rather decide as we go.
+1. **License** — Apache-2.0 (phase 1).
+2. **Config format** — YAML (phase 4).
+3. **CLI framework** — `typer` (phase 6).
+4. **Secret backend default** — encrypted file by default, `keyring`
+   available as an explicit, configurable opt-in (phase 5).
+5. **Local model server** for the router provider — no assumption baked in;
+   any OpenAI-compatible endpoint works via `base_url` (phase 7).
