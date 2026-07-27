@@ -90,26 +90,15 @@ class Domain(BaseNode):
             yield source
 
     @model_validator(mode='after')
-    def validate_unique_child_ids(self) -> 'Domain':
-        child_ids = [domain.id for domain in self.domains]
-        child_ids.extend([source.id for source in self.sources])
-        if len(child_ids) != len(set(child_ids)):
-            # Identify duplicates to provide a clearer error message
-            from collections import Counter
-            duplicates = [id for id, count in Counter(child_ids).items() if count > 1]
-            raise ValueError(f"Duplicate child IDs found: {duplicates}")
-        return self
-
-    @model_validator(mode='after')
     def _post_init_setup(self) -> 'Domain':
-        # 1. Valida IDs duplicados no mesmo nível
+        # Validate ID uniqueness
         child_ids = [d.id for d in self.domains] + [s.id for s in self.sources]
         if len(child_ids) != len(set(child_ids)):
             from collections import Counter
             duplicates = [id for id, count in Counter(child_ids).items() if count > 1]
             raise ValueError(f"Duplicate child IDs found in '{self.id}': {duplicates}")
 
-        # 2. Amarra referências de pai aos filhos automaticamente
+        # Set the child's parent
         for domain in self.domains:
             domain._parent = self
         for source in self.sources:
@@ -124,20 +113,22 @@ class DomainCollection(Domain):
 
     @classmethod
     def load(cls, file_path: Optional[str|Path] = None):
-        if file_path is None:
-            file_path = Path(GeneralConfig.get('DATA_DIR', 'data')) / 'domains.yml'
-        elif type(file_path) == str:
-            file_path = Path(file_path)
+        file_path = cls._resolve_path(file_path)
 
         with file_path.open('r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
         return cls.model_validate(data)
 
-    def save(self, file_path: Optional[str|Path] = None):
+    @classmethod
+    def _resolve_path(cls, file_path: Optional[str|Path] = None) -> Path:
         if file_path is None:
             file_path = Path(GeneralConfig.get('DATA_DIR', 'data')) / 'domains.yml'
         elif type(file_path) == str:
             file_path = Path(file_path)
+        return file_path
+
+    def save(self, file_path: Optional[str|Path] = None):
+        file_path = self._resolve_path(file_path)
 
         data = self.model_dump(mode="python")
         print(data)

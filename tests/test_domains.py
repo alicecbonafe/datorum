@@ -10,6 +10,13 @@ from datorum.domains import (
 )
 
 
+def test_resolve_path():
+    p1 = DomainCollection._resolve_path()
+    p2 = DomainCollection._resolve_path('data')
+    p3 = DomainCollection._resolve_path(Path('data'))
+    assert p2 == p3
+
+
 def test_persistence(tmp_path: Path):
     domains_file = tmp_path / 'domains.yml'
 
@@ -85,10 +92,38 @@ def test_find():
 
     assert _col.get(f'{idd2}{DOMAIN_DELIMITER}{idd1}') is None
     assert _col.get(f'{idd2}{DOMAIN_DELIMITER}{ids1}{DOMAIN_DELIMITER}{idd1}') is None
+
+
+def test_find_errors():
+    error_ok = False
+
+    idc = 'a_collection'
+    idd1 = 'a_domain_1'
+    idd2 = 'a_domain_2'
+    ids1 = 'a_source_1'
+
+    col = DomainCollection(id=idc, name='Domain Collection Test')
+    d1 = Domain(id=idd1, name='Domain Test 1')
+    d1_clone = Domain(id=idd1, name='Domain Test 1')
+    d2 = Domain(id=idd2, name='Domain Test 2')
+    s1 = Source(id=ids1, name='Source Test 1')
+
+    col.domains.append(d1)
+    col.domains.append(d1_clone)
+    col.domains.append(d2)
+    d1.domains.append(s1)
+
+    try:
+        col[f'{idd2}{DOMAIN_DELIMITER}{idd1}']
+    except KeyError:
+        error_ok = True
+    assert error_ok
+
     error_ok = False
     try:
-        _col[f'{idd2}{DOMAIN_DELIMITER}{idd1}']
-    except KeyError:
+        col_dump = col.model_dump()
+        _col = DomainCollection.model_validate(col_dump)
+    except ValueError:
         error_ok = True
     assert error_ok
 
