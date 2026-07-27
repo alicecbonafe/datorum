@@ -1,9 +1,9 @@
+import unicodedata
 from abc import ABC, abstractmethod
 from pathlib import Path
-import requests
-import unicodedata
 from urllib.parse import urlparse
 
+import requests
 from pydantic import BaseModel, Field
 
 
@@ -13,37 +13,33 @@ class ScrapedDocument(BaseModel):
     source: str
 
     metadata: dict[str, str] = Field(default_factory=dict)
-    body: str = Field(default='')
+    body: str = Field(default="")
 
 
 class BaseScraper(ABC):
-
     REQUEST_TIMEOUT: int = 30
 
     # Characters that are invisible/normalized away entirely
     _STRIP_CHARS = (
-        "\ufeff"   # BOM
-        "\u200b"   # zero-width space
-        "\u200c"   # zero-width non-joiner
-        "\u200d"   # zero-width joiner
-        "\u00ad"   # soft hyphen
+        "\ufeff"  # BOM
+        "\u200b"  # zero-width space
+        "\u200c"  # zero-width non-joiner
+        "\u200d"  # zero-width joiner
+        "\u00ad"  # soft hyphen
     )
 
     # Characters that are semantically "a line break" but not literally \n
     _LINEBREAK_CHARS = "\u2028\u2029\u0085"  # LS, PS, NEL
 
-
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': (
-                'Datorum - Context Engineering AI Agent'
-            )
-        })
+        self.session.headers.update(
+            {"User-Agent": ("Datorum - Context Engineering AI Agent")}
+        )
 
     @abstractmethod
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
-        pass # pragma: no cover
+        pass  # pragma: no cover
 
     def scrape_from(
         self,
@@ -56,7 +52,7 @@ class BaseScraper(ABC):
         return document
 
     def _fetch(self, url: str) -> str:
-        resp = self.session.get(url, timeout = self.REQUEST_TIMEOUT)
+        resp = self.session.get(url, timeout=self.REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.text
 
@@ -70,8 +66,8 @@ class BaseScraper(ABC):
             lines.append("- **Metadata**:")
             for key, val in doc.metadata.items():
                 lines.append(f"  - **{key}**: {val}")
-        lines.extend(['', doc.body])
-        return '\n'.join(lines)
+        lines.extend(["", doc.body])
+        return "\n".join(lines)
 
     def _sanitize(self, text: str) -> str:
         # Normalize CRLF/CR -> LF first
@@ -90,7 +86,8 @@ class BaseScraper(ABC):
 
         # Strip remaining C0/C1 control chars except \n and \t
         text = "".join(
-            c for c in text
+            c
+            for c in text
             if c in "\n\t" or unicodedata.category(c) not in ("Cc", "Cf")
         )
 
@@ -98,7 +95,7 @@ class BaseScraper(ABC):
 
     def _write(self, document: ScrapedDocument, target: Path):
         markdown = self._sanitize(self._render(document))
-        with target.open('w', encoding='utf-8') as f:
+        with target.open("w", encoding="utf-8") as f:
             f.write(markdown)
 
     def _origin(self, url: str) -> str:

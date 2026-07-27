@@ -1,45 +1,38 @@
-import os
-from pathlib import Path
 import re
-from typing import List, Dict, Any, Optional, Generator
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any, Optional
 
-from pydantic import (
-    BaseModel,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator
-)
 import yaml
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from . import GeneralConfig
+from .exceptions import InvalidIdentifierException, OrphanSourceException
 
-
-DOMAIN_DELIMITER = '.'
-ID_PATTERN = r'^\w+$'
+DOMAIN_DELIMITER = "."
+ID_PATTERN = r"^\w+$"
 
 
 class BaseNode(BaseModel):
-
     id: str
     name: str | None = None
     description: str | None = None
-    metadata: Dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
-    _parent: Optional['Domain'] = PrivateAttr(default=None)
+    _parent: Optional["Domain"] = PrivateAttr(default=None)
 
     @property
-    def parent(self) -> Optional['Domain']:
+    def parent(self) -> Optional["Domain"]:
         return self._parent
 
     @property
     def full_id(self) -> str:
         if self.parent is None:
             return self.id
-        return f'{self.parent.full_id}{DOMAIN_DELIMITER}{self.id}'
+        return f"{self.parent.full_id}{DOMAIN_DELIMITER}{self.id}"
 
     @property
-    def root(self) -> 'BaseNode':
+    def root(self) -> "BaseNode":
         return self if self.parent is None else self.parent.root
 
     @property
@@ -48,54 +41,66 @@ class BaseNode(BaseModel):
             return ()
         return self.parent.path_parts + (self.id,)
 
-    @field_validator('id')
+    @field_validator("id")
     @classmethod
     def validate_delimiter(cls, v: str) -> str:
         if DOMAIN_DELIMITER in v:
-            raise ValueError(f"ID '{v}' cannot contain [{DOMAIN_DELIMITER}]")
+            raise InvalidIdentifierException(
+                f"ID '{v}' cannot contain [{DOMAIN_DELIMITER}]"
+            )
         if not re.match(ID_PATTERN, v):
-            raise ValueError(f"ID '{v}' has invalid characters")
+            raise InvalidIdentifierException(f"ID '{v}' has invalid characters")
         return v
 
 
 class Source(BaseNode):
-
     url: str | None = None
     source_file: str | None = None
     chunks_file: str | None = None
     scraper: str | None = None
-    scraper_args: Dict[str, Any] = Field(default_factory=dict)
+    scraper_args: dict[str, Any] = Field(default_factory=dict)
 
     @property
-    def _collection(self) -> 'DomainCollection':
+    def _collection(self) -> "DomainCollection":
         root = self.root
         if not isinstance(root, DomainCollection):
-            raise RuntimeError(f"'Source '{self.id}' is not attached to a loaded DomainCollection.")
+            raise OrphanSourceException(
+                f"'Source '{self.id}' is not attached to a loaded DomainCollection."
+            )
         return root
 
     @property
     def source_path(self) -> Path:
         c: DomainCollection = self._collection
-        return c.data_dir / c.sources_dir / Path(*self.path_parts) / (self.source_file or f"{self.id}.md")
+        return (
+            c.data_dir
+            / c.sources_dir
+            / Path(*self.path_parts)
+            / (self.source_file or f"{self.id}.md")
+        )
 
     @property
     def chunks_path(self) -> Path:
         c: DomainCollection = self._collection
-        return c.data_dir / c.chunks_dir / Path(*self.path_parts) / (self.chunks_file or f"{self.id}.json")
+        return (
+            c.data_dir
+            / c.chunks_dir
+            / Path(*self.path_parts)
+            / (self.chunks_file or f"{self.id}.json")
+        )
 
 
 class Domain(BaseNode):
+    domains: list["Domain"] = Field(default_factory=list)
+    sources: list["Source"] = Field(default_factory=list)
 
-    domains: List['Domain'] = Field(default_factory=list)
-    sources: List['Source'] = Field(default_factory=list)
-
-    def get_child(self, child_id: str) -> Optional[BaseNode]:
+    def get_child(self, child_id: str) -> BaseNode | None:
         for child in self.domains + self.sources:
             if child.id == child_id:
                 return child
         return None
 
-    def get(self, path: str) -> Optional[BaseNode]:
+    def get(self, path: str) -> BaseNode | None:
         if not path:
             return self
 
@@ -110,13 +115,13 @@ class Domain(BaseNode):
             return child.get(rest_of_path)
         return None
 
-    def create_domain(self, path: str, **kwargs) -> 'Domain':
+    def create_domain(self, path: str, **kwargs) -> "Domain":
         """
         Creates a new domain or returns an existing one based on a delimited path.
         Automatically creates any missing intermediate domains.
         """
         if not path:
-            raise ValueError("Domain path cannot be empty.")
+            raise InvalidIdentifierException("Domain path cannot be empty.")
 
         parts = path.split(DOMAIN_DELIMITER)
         current = self
@@ -126,7 +131,7 @@ class Domain(BaseNode):
             if child is None:
                 # Apply extra arguments (like name, description) ONLY to the final target domain
                 node_kwargs = kwargs if i == len(parts) - 1 else {}
-                
+
                 new_domain = Domain(id=part, **node_kwargs)
                 new_domain._parent = current
                 current.domains.append(new_domain)
@@ -135,19 +140,19 @@ class Domain(BaseNode):
                 # Domain exists, traverse into it
                 current = child
             else:
-                raise ValueError(
+                raise InvalidIdentifierException(
                     f"Conflict at '{part}': Cannot create domain because a Source with this ID already exists."
                 )
 
         return current
 
-    def create_source(self, path: str, **kwargs) -> 'Source':
+    def create_source(self, path: str, **kwargs) -> "Source":
         """
-        Creates a new Source based on a delimited path. 
+        Creates a new Source based on a delimited path.
         Automatically creates any missing parent domains.
         """
         if not path:
-            raise ValueError("Source path cannot be empty.")
+            raise InvalidIdentifierException("Source path cannot be empty.")
 
         # Separate the parent domain path from the actual source ID
         if DOMAIN_DELIMITER in path:
@@ -159,7 +164,7 @@ class Domain(BaseNode):
 
         # Check for conflicts to maintain ID uniqueness
         if parent_domain.get_child(source_id) is not None:
-            raise ValueError(
+            raise InvalidIdentifierException(
                 f"Cannot create source: A node with ID '{source_id}' already exists in domain '{parent_domain.id}'."
             )
 
@@ -182,17 +187,19 @@ class Domain(BaseNode):
         for domain in self.domains:
             yield domain
             yield from domain.walk()
-        for source in self.sources:
-            yield source
+        yield from self.sources
 
-    @model_validator(mode='after')
-    def _post_init_setup(self) -> 'Domain':
+    @model_validator(mode="after")
+    def _post_init_setup(self) -> "Domain":
         # Validate ID uniqueness
         child_ids = [d.id for d in self.domains] + [s.id for s in self.sources]
         if len(child_ids) != len(set(child_ids)):
             from collections import Counter
+
             duplicates = [id for id, count in Counter(child_ids).items() if count > 1]
-            raise ValueError(f"Duplicate child IDs found in '{self.id}': {duplicates}")
+            raise InvalidIdentifierException(
+                f"Duplicate child IDs found in '{self.id}': {duplicates}"
+            )
 
         # Set the child's parent
         for domain in self.domains:
@@ -202,30 +209,32 @@ class Domain(BaseNode):
 
         return self
 
+
 class DomainCollection(Domain):
+    sources_dir: str = Field(default="sources")
+    chunks_dir: str = Field(default="chunks")
 
-    sources_dir: str = Field(default='sources')
-    chunks_dir: str = Field(default='chunks')
-
-    _path: Optional[Path] = PrivateAttr(default=None)
+    _path: Path | None = PrivateAttr(default=None)
 
     @classmethod
-    def load(cls, file_path: Optional[str|Path] = None):
-        file_path = cls._resolve_path(file_path)
+    def load(cls, file_path: str | Path | None = None):
+        if not isinstance(file_path, Path):
+            file_path = cls._resolve_path(file_path)
 
-        with file_path.open('r', encoding='utf-8') as f:
+        with file_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         instance = cls.model_validate(data)
         instance._path = file_path
         return instance
 
     @classmethod
-    def _resolve_path(cls, file_path: Optional[str|Path] = None) -> Path:
+    def _resolve_path(cls, file_path: str | Path | None = None) -> Path:
+        resolved: Path
         if file_path is None:
-            file_path = Path(GeneralConfig.get('DATA_DIR', 'data')) / 'domains.yml'
-        elif type(file_path) == str:
-            file_path = Path(file_path)
-        return file_path
+            resolved = Path(str(GeneralConfig.get("DATA_DIR", "data"))) / "domains.yml"
+        else:
+            resolved = Path(file_path)
+        return resolved
 
     @property
     def path(self) -> Path:
@@ -235,11 +244,11 @@ class DomainCollection(Domain):
     def data_dir(self) -> Path:
         return self.path.parent
 
-    def save(self, file_path: Optional[str|Path] = None):
+    def save(self, file_path: str | Path | None = None):
         if file_path is not None:
             self._path = self._resolve_path(file_path)
 
         data = self.model_dump(mode="python")
 
-        with self.path.open('w', encoding='utf-8') as f:
+        with self.path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, sort_keys=False)

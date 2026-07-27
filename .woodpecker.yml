@@ -1,0 +1,23 @@
+steps:
+
+  lint:
+    image: python:3.14-slim
+    commands:
+      - pip install --upgrade pip
+      - pip install -e .[lint]
+
+      - ruff check . --output-format=github
+      - ruff format --check .
+
+      - mypy . --install-types --non-interactive --check-untyped-defs
+    when:
+      event: [pull_request, tag, manual]
+
+  test:
+    image: python:3.14-slim
+    commands:
+      - pip install --upgrade pip
+      - pip install -e .[test]
+      - pytest --cov=. --cov-fail-under=100 -v
+    when:
+      event: [pull_request, tag, manual]

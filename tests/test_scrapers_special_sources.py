@@ -5,19 +5,20 @@ import tarfile
 import pytest
 from bs4 import BeautifulSoup
 
+from datorum.exceptions import ScraperException
 from datorum.scrapers import (
+    ArchiveOrgScraper,
     ArxivHTMLScraper,
     ArxivTeXScraper,
-    ArchiveOrgScraper,
     PlanaltoBRScraper,
 )
 
 
 def test_arxiv_html_scraper(httpserver):
 
-    arxiv_id = '0000.00000'
+    arxiv_id = "0000.00000"
 
-    html_content =  f"""
+    html_content = """
         <!DOCTYPE html>
         <html>
         <head><title>Test Article</title></head>
@@ -44,22 +45,21 @@ def test_arxiv_html_scraper(httpserver):
         </html>
     """
 
-    httpserver.expect_request(f"/html/{arxiv_id}v1").respond_with_data(
-        html_content)
+    httpserver.expect_request(f"/html/{arxiv_id}v1").respond_with_data(html_content)
 
     scraper = ArxivHTMLScraper()
-    document1 = scraper.extract(httpserver.url_for(f'/abs/{arxiv_id}'))
-    document2 = scraper.extract(httpserver.url_for(f'/html/{arxiv_id}v1'))
+    document1 = scraper.extract(httpserver.url_for(f"/abs/{arxiv_id}"))
+    document2 = scraper.extract(httpserver.url_for(f"/html/{arxiv_id}v1"))
 
     assert document1.title == document2.title
     assert document1.metadata == document2.metadata
     assert "arXiv HTML scraper" in document1.body
-    assert "author_1" in document1.metadata['authors']
+    assert "author_1" in document1.metadata["authors"]
 
 
 def test_arxiv_tex_scraper(httpserver):
 
-    arxiv_id = '0000.00000'
+    arxiv_id = "0000.00000"
 
     tex_content = r"""
     \documentclass{article}
@@ -72,8 +72,7 @@ def test_arxiv_tex_scraper(httpserver):
     \end{document}
     """
 
-    httpserver.expect_request(f"/e-print/{arxiv_id}").respond_with_data(
-        tex_content)
+    httpserver.expect_request(f"/e-print/{arxiv_id}").respond_with_data(tex_content)
 
     scraper = ArxivTeXScraper()
     result = scraper.extract(httpserver.url_for(f"/abs/{arxiv_id}")).body
@@ -81,22 +80,22 @@ def test_arxiv_tex_scraper(httpserver):
 
 
 def test_arxiv_tex_gzip_fallback(httpserver):
-    arxiv_id = '9999.99999'
+    arxiv_id = "9999.99999"
     raw_tex = b"\\documentclass{article}\\begin{document}Gzipped content\\end{document}"
     gzipped_content = gzip.compress(raw_tex)
-    
+
     httpserver.expect_request(f"/e-print/{arxiv_id}").respond_with_data(gzipped_content)
-    
+
     scraper = ArxivTeXScraper()
-    doc = scraper.extract(httpserver.url_for(f'/abs/{arxiv_id}'))
+    doc = scraper.extract(httpserver.url_for(f"/abs/{arxiv_id}"))
     assert "Gzipped content" in doc.body
 
 
 def test_arxiv_id_fallback():
-    arxiv_id = '9999.99999'
-    
+    arxiv_id = "9999.99999"
+
     scraper = ArxivHTMLScraper()
-    new_arxiv_id = scraper._extract_arxiv_id(f'/dummyurl/{arxiv_id}.pdf/')
+    new_arxiv_id = scraper._extract_arxiv_id(f"/dummyurl/{arxiv_id}.pdf/")
     assert new_arxiv_id == arxiv_id
 
 
@@ -105,7 +104,9 @@ def test_arxiv_tex_unpack_uncompressed_tar():
     # the tarfile-extraction branch entirely and are decoded as a single
     # "main.tex" blob instead - even when they happen to be a real
     # (uncompressed) tar archive. This documents that current behavior.
-    tex_content = b"\\documentclass{article}\\begin{document}UncompressedTarBody\\end{document}"
+    tex_content = (
+        b"\\documentclass{article}\\begin{document}UncompressedTarBody\\end{document}"
+    )
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         info = tarfile.TarInfo(name="main.tex")
@@ -135,7 +136,9 @@ def test_arxiv_tex_unpack_no_tex_files_raises():
 
 
 def test_arxiv_tex_unpack_valid_gzip_tar_extracts_tex_member():
-    tex_content = b"\\documentclass{article}\\begin{document}RealTarballBody\\end{document}"
+    tex_content = (
+        b"\\documentclass{article}\\begin{document}RealTarballBody\\end{document}"
+    )
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         info = tarfile.TarInfo(name="paper.tex")
@@ -267,21 +270,21 @@ def test_strip_remaining_commands_overlapping_spans_skipped():
 
 def test_archive_org_scraper(httpserver):
 
-    identifier = 'article-identifier'
-    filename = 'Article-File-Name'
+    identifier = "article-identifier"
+    filename = "Article-File-Name"
 
     metadata = {
         "metadata": {
             "creator": "Mocked Creator",
         },
         "files": [
-            { "name": f"{filename}.pdf" },
-            { "name": f"{filename}.epub" },
-            { "name": f"{filename}_djvu.txt" },
-        ]
+            {"name": f"{filename}.pdf"},
+            {"name": f"{filename}.epub"},
+            {"name": f"{filename}_djvu.txt"},
+        ],
     }
 
-    djvu =  (
+    djvu = (
         "Test djvu string for ArchiveOrgScraper"
         "\n\n\n\n"
         "\n\naaa\n\x0c"
@@ -295,14 +298,15 @@ def test_archive_org_scraper(httpserver):
         "\n\naaa\n\x0c"
     )
 
-    httpserver.expect_request(f"/metadata/{identifier}").respond_with_json(
-        metadata)
-    httpserver.expect_request(f"/download/{identifier}/{filename}_djvu.txt").respond_with_data(
-        djvu
-    )
+    httpserver.expect_request(f"/metadata/{identifier}").respond_with_json(metadata)
+    httpserver.expect_request(
+        f"/download/{identifier}/{filename}_djvu.txt"
+    ).respond_with_data(djvu)
 
     scraper = ArchiveOrgScraper()
-    result = scraper.extract(httpserver.url_for(f'/details/{identifier}/{filename}/')).body
+    result = scraper.extract(
+        httpserver.url_for(f"/details/{identifier}/{filename}/")
+    ).body
 
     assert "djvu string for Arch" in result
     assert "page\n\nbreak" in result
@@ -311,15 +315,19 @@ def test_archive_org_scraper(httpserver):
 
 
 def test_archive_org_missing_metadata(httpserver):
-    identifier = 'missing-meta-id'
-    
+    identifier = "missing-meta-id"
+
     # 404 the metadata to force the exception block
-    httpserver.expect_request(f"/metadata/{identifier}").respond_with_data("Not Found", status=404)
-    httpserver.expect_request(f"/download/{identifier}/{identifier}_djvu.txt").respond_with_data("Fallback text")
-    
+    httpserver.expect_request(f"/metadata/{identifier}").respond_with_data(
+        "Not Found", status=404
+    )
+    httpserver.expect_request(
+        f"/download/{identifier}/{identifier}_djvu.txt"
+    ).respond_with_data("Fallback text")
+
     scraper = ArchiveOrgScraper()
-    doc = scraper.extract(httpserver.url_for(f'/details/{identifier}'))
-    
+    doc = scraper.extract(httpserver.url_for(f"/details/{identifier}"))
+
     assert doc.title == identifier
     assert "Fallback text" in doc.body
 
@@ -328,15 +336,15 @@ def test_archive_org_identifier_value_error():
     scraper = ArchiveOrgScraper()
     value_error_ok = False
     try:
-        scraper._extract_identifier('dummy_url')
-    except ValueError:
+        scraper._extract_identifier("dummy_url")
+    except ScraperException:
         value_error_ok = True
     assert value_error_ok
 
 
 def test_planalto_br_scraper(httpserver):
 
-    html_content =  f"""
+    html_content = """
         <!DOCTYPE html>
         <html>
         <head><title>Lei n° 0.000 - Estatuto dos Testes Unitários</title></head>
@@ -354,12 +362,10 @@ def test_planalto_br_scraper(httpserver):
         </body>
         </html>
     """
-    httpserver.expect_request("/planalto").respond_with_data(
-        html_content
-    )
+    httpserver.expect_request("/planalto").respond_with_data(html_content)
 
     scraper = PlanaltoBRScraper()
-    result = scraper.extract(httpserver.url_for('/planalto')).body
+    result = scraper.extract(httpserver.url_for("/planalto")).body
     assert "## Capítulo I" in result
     assert "**Art. 1º" in result
     assert "  **Parágrafo único" in result
@@ -368,7 +374,7 @@ def test_planalto_br_scraper(httpserver):
 
 def test_planalto_br_scraper_edge_cases(httpserver):
     """Targets title fallbacks, list logic, and heading backtracking."""
-    html_content =  """
+    html_content = """
         <!DOCTYPE html>
         <html>
         <head></head>
@@ -389,25 +395,25 @@ def test_planalto_br_scraper_edge_cases(httpserver):
         </html>
     """
     httpserver.expect_request("/lei_teste.html").respond_with_data(html_content)
-    
+
     scraper = PlanaltoBRScraper()
-    doc = scraper.extract(httpserver.url_for('/lei_teste.html'))
+    doc = scraper.extract(httpserver.url_for("/lei_teste.html"))
 
     # 1. Title fallback since <title> is missing (Line 155)
     assert doc.title == "lei_teste"
-    
+
     # 2. Heading level adjustment & backtracking logic (Lines 97-105)
     assert "## TÍTULO I" in doc.body
     assert "### CAPÍTULO I" in doc.body
     assert "#### Seção I" in doc.body
     assert "## TÍTULO II" in doc.body
-    
+
     # 3. Article list branching & backtracking logic (Lines 116-122)
     assert "**Art. 1º**" in doc.body
     assert "  - **I - ** Inciso" in doc.body
     assert "    - **a) ** Alínea" in doc.body
     assert "  - **II - ** Inciso 2" in doc.body
-    
+
     # 4. Plain text loop catch-all (Lines 84, 127)
     assert "Texto plano sem formatação" in doc.body
 
@@ -415,7 +421,7 @@ def test_planalto_br_scraper_edge_cases(httpserver):
 def test_planalto_format_device_fallback():
     """Direct invocation to test fallback when a regex string fails internally."""
     scraper = PlanaltoBRScraper()
-    
+
     # Targets Line 145 where pattern matches as true inside process but fails inner match.
     # While practically gated during loop execution, we directly verify logic response:
     result = scraper._format_device("Format without regex marker", "artigo", 2)
@@ -427,14 +433,16 @@ def test_planalto_process_elements_empty_text():
     scraper = PlanaltoBRScraper()
     # A string of spaces will pass BS4's existence check but fail _clean_text
     soup = BeautifulSoup("<p>   </p>", "html.parser")
-    result = scraper._process_elements([soup.find("p")])
-    
+    tag = soup.find("p")
+    if tag is not None:
+        result = scraper._process_elements([tag])
+
     assert result == []
 
 
 def test_planalto_heading_backtrack_middle(httpserver):
     """Targets Line 105: forces a backtrack to a middle-tier heading."""
-    html_content =  """
+    html_content = """
         <!DOCTYPE html>
         <html><body><div class="texto-lei">
             <p>TÍTULO I</p>
@@ -445,8 +453,8 @@ def test_planalto_heading_backtrack_middle(httpserver):
     """
     httpserver.expect_request("/backtrack.html").respond_with_data(html_content)
     scraper = PlanaltoBRScraper()
-    doc = scraper.extract(httpserver.url_for('/backtrack.html'))
-    
+    doc = scraper.extract(httpserver.url_for("/backtrack.html"))
+
     # Verifies the backtrack loops past Título and breaks at Capítulo, iterating current_heading_level
     assert "## TÍTULO I" in doc.body
     assert "### CAPÍTULO I" in doc.body

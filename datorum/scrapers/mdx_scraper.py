@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 
 import requests
 import yaml
@@ -9,7 +8,6 @@ from .base import BaseScraper, ScrapedDocument
 
 
 class MDXScraper(BaseScraper):
-
     _BLOCK_TAGS = ("div", "p", "li", "tr", "section", "table", "ul", "ol")
 
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
@@ -17,14 +15,12 @@ class MDXScraper(BaseScraper):
             url += "/"
 
         result = ScrapedDocument(
-            title = kwargs['title'],
-            license = kwargs['license'],
-            source = url,
+            title=kwargs["title"],
+            license=kwargs["license"],
+            source=url,
         )
 
-        toctree = yaml.safe_load(
-            self._fetch(url + "_toctree.yml")
-        )
+        toctree = yaml.safe_load(self._fetch(url + "_toctree.yml"))
 
         seen = set()
         chunks = []
@@ -39,20 +35,21 @@ class MDXScraper(BaseScraper):
                 continue
             seen.add(_local)
 
-            _url = url + _local + '.md'
+            _url = url + _local + ".md"
             try:
                 raw = self._fetch(_url)
             except requests.HTTPError as e:
-                print(f"  skip({e.response.status_code}): {_local}")
+                print(
+                    f"  skip({e.response.status_code if e.response else ''}): {_local}"
+                )
                 continue
 
             chunks.append(f"\n{'#' * heading_level} {_title}\n")
             chunks.append(self._clean_mdx(raw))
             print(f"  fetched: {_local}")
 
-        result.body = '\n'.join(chunks)
+        result.body = "\n".join(chunks)
         return result
-
 
     def _flatten_toctree(self, entries, depth=0):
         """Yield (depth, title, local_path_or_None) in document order."""
@@ -68,7 +65,6 @@ class MDXScraper(BaseScraper):
                 yield depth, title, local  # local may be None or a landing page
                 if sections:
                     yield from self._flatten_toctree(sections, depth + 1)
-
 
     def _clean_mdx(self, text: str) -> str:
         """Strip MDX/JSX-only constructs while preserving the markdown content."""
@@ -122,7 +118,6 @@ class MDXScraper(BaseScraper):
 
         return text.strip()
 
-
     def _protect_code(self, text: str):
         """Swap fenced/inline code out for placeholders so the HTML parser below
         can't mistake things like `<|endoftext|>` or `<model_name>` inside code
@@ -139,7 +134,6 @@ class MDXScraper(BaseScraper):
         text = re.sub(r"```.*?```", repl, text, flags=re.DOTALL)
         text = re.sub(r"`[^`\n]+`", repl, text)
         return text, placeholders
-
 
     def _strip_html(self, text: str) -> str:
         """Strip the raw HTML/JSX layout wrappers (div, i, span, img, a, ...)
@@ -172,7 +166,6 @@ class MDXScraper(BaseScraper):
             tag.insert_after(NavigableString("\n\n"))
 
         return soup.get_text()
-
 
     def _restore_code(self, text: str, placeholders: dict) -> str:
         for key, val in placeholders.items():

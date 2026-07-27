@@ -1,6 +1,6 @@
-import re
-from typing import Optional, List, Tuple
 import random
+import re
+from typing import ClassVar
 
 from bs4 import BeautifulSoup, Tag
 
@@ -13,27 +13,25 @@ class PlanaltoBRScraper(BaseScraper):
     Detecta estrutura jurídica por classes CSS ou regex.
     """
 
-    USER_AGENTS = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    USER_AGENTS: ClassVar[list[str]] = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
     ]
 
-    PATTERNS: dict[str, re.Pattern] = {
-        "titulo":    re.compile(r"^TÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
-        "capitulo":  re.compile(r"^CAPÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
-        "secao":     re.compile(r"^Seção\s+[IVXLCDM]+", re.IGNORECASE),
-        "artigo":    re.compile(r"^(Art\.\s*\d+[º°]?(?:-[A-Z])?)", re.IGNORECASE),
+    PATTERNS: ClassVar[dict[str, re.Pattern]] = {
+        "titulo": re.compile(r"^TÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
+        "capitulo": re.compile(r"^CAPÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
+        "secao": re.compile(r"^Seção\s+[IVXLCDM]+", re.IGNORECASE),
+        "artigo": re.compile(r"^(Art\.\s*\d+[º°]?(?:-[A-Z])?)", re.IGNORECASE),
         "paragrafo": re.compile(r"^(§\s*\d+[º°]?|Parágrafo\s+único)", re.IGNORECASE),
-        "inciso":    re.compile(r"^([IVXLCDM]+\s*[-–]\s*)", re.IGNORECASE),
-        "alinea":    re.compile(r"^([a-z]\)\s*)", re.IGNORECASE),
+        "inciso": re.compile(r"^([IVXLCDM]+\s*[-–]\s*)", re.IGNORECASE),
+        "alinea": re.compile(r"^([a-z]\)\s*)", re.IGNORECASE),
     }
 
     def __init__(self):
         super().__init__()
-        self.session.headers.update({
-            'User-Agent': random.choice(self.USER_AGENTS)
-        })
+        self.session.headers.update({"User-Agent": random.choice(self.USER_AGENTS)})
 
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         raw = self._fetch(url)
@@ -59,7 +57,7 @@ class PlanaltoBRScraper(BaseScraper):
             body="\n\n".join(markdown_lines).strip(),
         )
 
-    def _collect_text_elements(self, container: Tag) -> List[Tag]:
+    def _collect_text_elements(self, container: Tag) -> list[Tag]:
         """Coleta elementos de texto (p e div) sem duplicação."""
         elements = []
         for tag in container.find_all(["p", "div"]):
@@ -69,7 +67,7 @@ class PlanaltoBRScraper(BaseScraper):
                 elements.append(tag)
         return elements
 
-    def _process_elements(self, elements: List[Tag]) -> List[str]:
+    def _process_elements(self, elements: list[Tag]) -> list[str]:
         output = []
 
         first_heading_level = 2
@@ -93,8 +91,14 @@ class PlanaltoBRScraper(BaseScraper):
                 if dtype in ("titulo", "capitulo", "secao"):
                     if dtype not in current_heading_branch:
                         current_heading_branch.append(dtype)
-                        current_heading_level = current_heading_level + 1 if len(current_heading_branch) > 1 else first_heading_level
-                    elif dtype != current_heading_branch[len(current_heading_branch)-1]:
+                        current_heading_level = (
+                            current_heading_level + 1
+                            if len(current_heading_branch) > 1
+                            else first_heading_level
+                        )
+                    elif (
+                        dtype != current_heading_branch[len(current_heading_branch) - 1]
+                    ):
                         current_heading_level = first_heading_level
                         old_heading_branch = current_heading_branch
                         current_heading_branch = []
@@ -113,14 +117,16 @@ class PlanaltoBRScraper(BaseScraper):
                         current_list_branch = ["artigo", "paragrafo"]
                     elif dtype not in current_list_branch:
                         current_list_branch.append(dtype)
-                    elif dtype != current_list_branch[len(current_list_branch)-1]:
+                    elif dtype != current_list_branch[len(current_list_branch) - 1]:
                         old_list_branch = current_list_branch
                         current_list_branch = []
                         for _level in old_list_branch:
                             current_list_branch.append(_level)
                             if _level == dtype:
                                 break
-                    line = self._format_device(text, dtype, len(current_list_branch)-1)
+                    line = self._format_device(
+                        text, dtype, len(current_list_branch) - 1
+                    )
                     output.append(line)
                 continue
 
@@ -139,10 +145,10 @@ class PlanaltoBRScraper(BaseScraper):
         match = pattern.match(text)
         if match:
             marker = match.group(1)
-            rest = text[len(marker):].strip()
-            bullet = '- ' if dtype in ("inciso", "alinea") else ''
-            return f"{'  '*level}{bullet}**{marker}** {rest}"
-        return f"{'  '*level}- {text}"
+            rest = text[len(marker) :].strip()
+            bullet = "- " if dtype in ("inciso", "alinea") else ""
+            return f"{'  ' * level}{bullet}**{marker}** {rest}"
+        return f"{'  ' * level}- {text}"
 
     def _clean_text(self, text: str) -> str:
         text = re.sub(r"\s+", " ", text)

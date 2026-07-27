@@ -8,3 +8,6 @@ datorum-env
 *.egg-info
 test_results.txt
 .coverage
+.mypy_cache
+.pytest_cache
+.ruff_cache
