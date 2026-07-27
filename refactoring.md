@@ -43,78 +43,31 @@ working — no long-lived broken branches.
 
 ---
 
-## 2. Phase 0 — Safety net
-
-**Why first:** there are currently no tests. Any restructuring is a gamble
-without something to diff behavior against.
+## 2. Phase 0 (done) — Safety net
 
 **Deliverable:** green test suite that pins current behavior, runnable
 locally from here on (a local `pre-commit`/`make check`, added in phase 1;
 hosted CI arrives in phase 9 alongside publishing).
 
-```
-=================================================================================== tests coverage ===================================================================================
-__________________________________________________________________ coverage: platform linux, python 3.14.6-final-0 ___________________________________________________________________
-
-Name                                      Stmts   Miss  Cover   Missing
------------------------------------------------------------------------
-datorum/__init__.py                           3      0   100%
-datorum/__main__.py                          72      0   100%
-datorum/providers/__init__.py                 0      0   100%
-datorum/providers/inference.py               29      0   100%
-datorum/scrapers/__init__.py                  8      0   100%
-datorum/scrapers/archive_org_scraper.py      90      0   100%
-datorum/scrapers/arxiv_scraper.py           235      0   100%
-datorum/scrapers/base.py                     50      0   100%
-datorum/scrapers/html_scraper.py             86      0   100%
-datorum/scrapers/mdx_scraper.py              98      0   100%
-datorum/scrapers/planalto_br_scraper.py     100      0   100%
-datorum/scrapers/qmd_scraper.py             117      0   100%
------------------------------------------------------------------------
-TOTAL                                       888      0   100%
-================================================================================= 45 passed in 1.74s =================================================================================
-[1]+  Done                       clear
-```
-
 ---
 
-## 3. Phase 1 — Packaging & OSS skeleton
+## 3. Phase 1 (done) — Packaging & OSS skeleton
 
 - [x] `pyproject.toml`.
 - [x] Console entry point: `datorum = "datorum.cli:app"`.
 - [x] `LICENSE` — **Apache-2.0**
 - [x] `README.md`.
-- [ ] A minimal local CI check (a `pre-commit` config or a simple `make check`
-  running lint + tests) is enough for now — the hosted CI setup (Codeberg
-  Woodpecker) is deferred to phase 9, since it's tied to publishing the repo
-  and isn't needed while this is still a private, in-progress refactor.
+- [x] CI pipeline
 - [x] Rename the `scrap` command to `scrape`.
 
 **Deliverable:** `pip install -e .` gives a working `datorum` command,
 lint/tests are easy to run locally, repo is presentable.
 
-> Deliverable ok, CI waiting for CodeBerg's onboarding.
-
 ---
 
-## 4. Phase 2 — Domain data model
+## 4. Phase 2 (done) — Domain data model
 
-Currently `__main__.main()` loads `domains.json` into a raw dict and walks
-it by hand three levels deep with a `match`/loop. This is the thing every
-later phase (CLI editing, scraper schemas, agent) needs to not be built on
-top of.
-
-- `datorum/domains/models.py`: `Source`, `Topic`, `Domain` as pydantic
-  models (mirroring the existing JSON shape exactly — no field changes yet).
-- `datorum/domains/repository.py`: `DomainsRepository` with
-  `load()`, `save()` (atomic write: temp file + rename, so a crash mid-write
-  can't corrupt `domains.json`), `get_source(id)`, `add_domain/topic/source`,
-  `remove_*`, plus validation (unique slugs/ids, scraper name exists in the
-  registry).
-- Swap `__main__.py`'s inline traversal for calls to this repository.
-  Behavior-identical — covered by the phase-0 tests.
-
-**Deliverable:** all reads/writes of `domains.json` go through one class;
+**Deliverable:** all reads/writes of `domains.yml` go through one class;
 `scrap`/`chunk` behave exactly as before.
 
 > Dropped the `Topic` data structure and made `Domain` recursive.
@@ -124,7 +77,7 @@ top of.
 
 ---
 
-## 5. Phase 3 — Scraper parameter schemas (the decoupling groundwork)
+## 5. Phase 3 (marked for review) — Scraper parameter schemas (the decoupling groundwork)
 
 This is the piece that most directly unblocks the "agent picks a scraper"
 feature, so it's worth doing as its own phase rather than folding it into
@@ -155,7 +108,7 @@ be independently useful (better error messages, self-documenting).
 
 ---
 
-## 6. Phase 4 — Config system: user config files instead of `.env`
+## 6. Phase 4 (marked for review) — Config system: user config files instead of `.env`
 
 - New module `datorum/config/`. Config is layered, lowest to highest
   priority: **built-in defaults → user config file → environment variables
@@ -194,7 +147,7 @@ with a clean migration for anyone already using this.
 
 ---
 
-## 7. Phase 5 — Encrypting the API keys
+## 7. Phase 5 (marked for review) — Encrypting the API keys
 
 The config file above intentionally never holds raw keys — only an
 `api_key_ref`. Actual secret storage is a pluggable backend:
