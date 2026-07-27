@@ -7,17 +7,17 @@ steps:
       - pip install -e .[lint]
       
       - echo "========================================"
-      - echo "🔍 Rodando Ruff (Linter)..."
+      - echo "| Running Ruff (Linter)..."
       - echo "========================================"
       - ruff check . --output-format=github
       
       - echo "========================================"
-      - echo "🎨 Rodando Ruff (Formatador)..."
+      - echo "| Running Ruff (Format)..."
       - echo "========================================"
       - ruff format --check .
       
       - echo "========================================"
-      - echo "🧪 Rodando Mypy (Verificador de Tipos)..."
+      - echo "| Running Mypy..."
       - echo "========================================"
       - mypy --install-types --non-interactive
       - mypy . --check-untyped-defs
