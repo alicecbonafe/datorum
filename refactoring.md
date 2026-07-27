@@ -108,7 +108,7 @@ be independently useful (better error messages, self-documenting).
 
 ---
 
-## 6. Phase 4 — Config system: user config files instead of `.env`
+## 6. Phase 4 (marked for review) — Config system: user config files instead of `.env`
 
 - New module `datorum/config/`. Config is layered, lowest to highest
   priority: **built-in defaults → user config file → environment variables
@@ -147,7 +147,7 @@ with a clean migration for anyone already using this.
 
 ---
 
-## 7. Phase 5 — Encrypting the API keys
+## 7. Phase 5 (marked for review) — Encrypting the API keys
 
 The config file above intentionally never holds raw keys — only an
 `api_key_ref`. Actual secret storage is a pluggable backend:
