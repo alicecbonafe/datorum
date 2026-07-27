@@ -1,10 +1,10 @@
 import argparse
-import json
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from . import GeneralConfig
+from .domains import DomainCollection, Source
 from .scrapers import registry
 from .providers.inference import InferenceRequest, InferenceProvider
 
@@ -36,53 +36,24 @@ def app():
     if data_path is not None:
         GeneralConfig['DATA_DIR'] = data_path
 
-    domain_id = source_id[:1]
-    topic_id = source_id[:4]
-    work_dir = Path(GeneralConfig.get('DATA_DIR', 'data'))
-
-    domains_file = work_dir / 'domains.json'
-    with domains_file.open('r', encoding='utf-8') as f:
-        domains = json.load(f)
-
-    domain_metadata : dict = None
-    topic_metadata: dict = None
-    source_metadata : dict = None
-    for _domain in domains:
-        if _domain['id'] == domain_id:
-            domain_metadata = _domain
-            for _topic in domain_metadata['topics']:
-                if _topic['id'] == topic_id:
-                    topic_metadata = _topic
-                    for _source in _topic['sources']:
-                        if _source['id'] == source_id:
-                            source_metadata = _source
-                            break
-                    break
-            break
-
-    if domain_metadata is None:
-        raise Exception(f'Domain not found: {domain_id}')
-    if topic_metadata is None:
-        raise Exception(f'Topic not found: {topic_id}')
-    if source_metadata is None:
-        raise Exception(f'Source not found: {source_id}')
+    domain_collection = DomainCollection.load()
+    source: Source = domain_collection[source_id]
 
     match command:
         case 'scrape':
-            scraper = registry[source_metadata['scraper']]()
+            scraper = registry[source.scraper]()
+            source.source_path.parent.mkdir(parents=True, exist_ok=True)
             scraper.scrape_from(
-                source_metadata['url'],
-                work_dir / source_metadata['source_file'],
-                **source_metadata.get('scraper_args', {})
+                source.url,
+                source.source_path,
+                **source.scraper_args
             )
         case 'chunk':
-            system_file = work_dir / 'instructions.md'
-            source_file = work_dir / source_metadata['source_file']
-            chunks_file = work_dir / source_metadata['chunks_file']
+            system_file = domain_collection.data_dir / 'instructions.md'
 
-            with source_file.open('r', encoding='utf-8') as f:
+            with system_file.open('r', encoding='utf-8') as f:
                 system_instructions = f.read()
-            with source_file.open('r', encoding='utf-8') as f:
+            with source.source_path.open('r', encoding='utf-8') as f:
                 user_prompt = f.read()
 
             request = InferenceRequest(
@@ -94,12 +65,14 @@ def app():
                 response_schema = ChunkedDocument,
             )
 
-            print(f"Generating chunks for {source_metadata['slug']}...")
+            print(f"Generating chunks for {source.full_id}...")
 
             response = InferenceProvider.load('chunker').generate(request)
 
-            print(f"Saving as {str(chunks_file)}...")
-            with chunks_file.open('w', encoding = 'utf-8') as f:
+            chunks_path = source.chunks_path
+            chunks_path.parent.mkdir(parents=True, exist_ok=True)
+            print(f"Saving as {str(chunks_path)}...")
+            with chunks_path.open('w', encoding = 'utf-8') as f:
                 f.write(response)
             print("Done!")
 

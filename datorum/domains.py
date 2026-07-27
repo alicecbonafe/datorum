@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 from typing import List, Dict, Any, Optional, Generator
 
 from pydantic import (
@@ -15,6 +16,7 @@ from . import GeneralConfig
 
 
 DOMAIN_DELIMITER = '.'
+ID_PATTERN = r'^\w+$'
 
 
 class BaseNode(BaseModel):
@@ -30,11 +32,29 @@ class BaseNode(BaseModel):
     def parent(self) -> Optional['Domain']:
         return self._parent
 
+    @property
+    def full_id(self) -> str:
+        if self.parent is None:
+            return self.id
+        return f'{self.parent.full_id}{DOMAIN_DELIMITER}{self.id}'
+
+    @property
+    def root(self) -> 'BaseNode':
+        return self if self.parent is None else self.parent.root
+
+    @property
+    def path_parts(self) -> tuple[str, ...]:
+        if self.parent is None:
+            return ()
+        return self.parent.path_parts + (self.id,)
+
     @field_validator('id')
     @classmethod
     def validate_delimiter(cls, v: str) -> str:
         if DOMAIN_DELIMITER in v:
             raise ValueError(f"ID '{v}' cannot contain [{DOMAIN_DELIMITER}]")
+        if not re.match(ID_PATTERN, v):
+            raise ValueError(f"ID '{v}' has invalid characters")
         return v
 
 
@@ -45,6 +65,23 @@ class Source(BaseNode):
     chunks_file: str | None = None
     scraper: str | None = None
     scraper_args: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def _collection(self) -> 'DomainCollection':
+        root = self.root
+        if not isinstance(root, DomainCollection):
+            raise RuntimeError(f"'Source '{self.id}' is not attached to a loaded DomainCollection.")
+        return root
+
+    @property
+    def source_path(self) -> Path:
+        c: DomainCollection = self._collection
+        return c.data_dir / c.sources_dir / Path(*self.path_parts) / (self.source_file or f"{self.id}.md")
+
+    @property
+    def chunks_path(self) -> Path:
+        c: DomainCollection = self._collection
+        return c.data_dir / c.chunks_dir / Path(*self.path_parts) / (self.chunks_file or f"{self.id}.json")
 
 
 class Domain(BaseNode):
@@ -167,8 +204,8 @@ class Domain(BaseNode):
 
 class DomainCollection(Domain):
 
-    sources_path: str = Field(default='sources')
-    chunks_path: str = Field(default='chunks')
+    sources_dir: str = Field(default='sources')
+    chunks_dir: str = Field(default='chunks')
 
     _path: Optional[Path] = PrivateAttr(default=None)
 
@@ -193,6 +230,10 @@ class DomainCollection(Domain):
     @property
     def path(self) -> Path:
         return self._path if self._path is not None else self._resolve_path()
+
+    @property
+    def data_dir(self) -> Path:
+        return self.path.parent
 
     def save(self, file_path: Optional[str|Path] = None):
         if file_path is not None:

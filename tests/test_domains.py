@@ -96,6 +96,9 @@ def test_find():
     assert _col.get(f'{idd2}{DOMAIN_DELIMITER}{idd1}') is None
     assert _col.get(f'{idd2}{DOMAIN_DELIMITER}{ids1}{DOMAIN_DELIMITER}{idd1}') is None
 
+    assert _col.full_id == _col.id
+    assert _col[idd1].full_id == f'{_col.id}{DOMAIN_DELIMITER}{idd1}'
+
 
 def test_find_errors():
     error_ok = False
@@ -190,5 +193,74 @@ def test_create_errors():
     try:
         col.create_source(idd1)
     except ValueError:
+        error_ok = True
+    assert error_ok
+
+
+def test_invalid_id_characters():
+    for bad_id in ('invalid/id', 'invalid id', 'invalid..id'):
+        error_ok = False
+        try:
+            Domain(id=bad_id)
+        except ValueError:
+            error_ok = True
+        assert error_ok, f"expected '{bad_id}' to be rejected"
+
+
+def test_path_parts_and_root():
+    col = DomainCollection(id='a_collection', name='Collection')
+    d1 = col.create_domain('domain_1')
+    d2 = d1.create_domain('domain_2')
+    s1 = d2.create_source('source_1')
+
+    assert col.path_parts == ()
+    assert d1.path_parts == ('domain_1',)
+    assert d2.path_parts == ('domain_1', 'domain_2')
+    assert s1.path_parts == ('domain_1', 'domain_2', 'source_1')
+
+    assert d1.root is col
+    assert d2.root is col
+    assert s1.root is col
+
+
+def test_source_path_defaults(tmp_path: Path):
+    col = DomainCollection(id='col')
+    col.save(tmp_path / 'domains.yml')
+
+    d1 = col.create_domain('domain_1')
+    s1 = d1.create_source('source_1')
+
+    assert s1.source_path == tmp_path / 'sources' / 'domain_1' / 'source_1' / 'source_1.md'
+    assert s1.chunks_path == tmp_path / 'chunks' / 'domain_1' / 'source_1' / 'source_1.json'
+
+
+def test_source_path_explicit_filenames(tmp_path: Path):
+    col = DomainCollection(id='col')
+    col.save(tmp_path / 'domains.yml')
+
+    d1 = col.create_domain('domain_1')
+    s1 = d1.create_source('source_1', source_file='raw.html', chunks_file='out.json')
+
+    assert s1.source_path == tmp_path / 'sources' / 'domain_1' / 'source_1' / 'raw.html'
+    assert s1.chunks_path == tmp_path / 'chunks' / 'domain_1' / 'source_1' / 'out.json'
+
+
+def test_source_path_custom_dirs(tmp_path: Path):
+    col = DomainCollection(id='col', sources_dir='raw', chunks_dir='processed')
+    col.save(tmp_path / 'domains.yml')
+
+    s1 = col.create_source('source_1')
+
+    assert s1.source_path == tmp_path / 'raw' / 'source_1' / 'source_1.md'
+    assert s1.chunks_path == tmp_path / 'processed' / 'source_1' / 'source_1.json'
+
+
+def test_source_path_requires_attached_collection():
+    detached = Source(id='detached')
+
+    error_ok = False
+    try:
+        detached.source_path
+    except RuntimeError:
         error_ok = True
     assert error_ok
