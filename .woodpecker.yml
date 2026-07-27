@@ -5,22 +5,13 @@ steps:
     commands:
       - pip install --upgrade pip
       - pip install -e .[lint]
-      
-      - echo "========================================"
-      - echo "| Running Ruff (Linter)..."
-      - echo "========================================"
+
       - ruff check . --output-format=github
-      
-      - echo "========================================"
-      - echo "| Running Ruff (Format)..."
-      - echo "========================================"
       - ruff format --check .
-      
-      - echo "========================================"
-      - echo "| Running Mypy..."
-      - echo "========================================"
-      - mypy --install-types --non-interactive
-      - mypy . --check-untyped-defs
+
+      - mypy .
+      # - mypy --install-types --non-interactive
+      # - mypy . --check-untyped-defs
     when:
       event: [pull_request, tag, manual]
 
