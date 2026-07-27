@@ -11,8 +11,9 @@ steps:
 
       - mypy . --install-types --non-interactive --check-untyped-defs
     when:
-      event: [push, pull_request]
-      branch: main
+      - event: push
+        branch: main
+      - event: pull_request
 
   test:
     image: python:3.14-slim
@@ -21,5 +22,6 @@ steps:
       - pip install -e .[test]
       - pytest --cov=. --cov-fail-under=100 -v
     when:
-      event: [push, pull_request]
-      branch: main
+      - event: push
+        branch: main
+      - event: pull_request
