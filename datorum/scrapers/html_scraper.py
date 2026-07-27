@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup, NavigableString
+
 from .base import BaseScraper, ScrapedDocument
 
 
@@ -14,19 +15,24 @@ class BasicHTMLScraper(BaseScraper):
     2. div with id/class containing 'content', 'main', 'body', 'article'
     3. fallback to <body>
     """
+
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         raw = self._fetch(url)
         soup = BeautifulSoup(raw, "html.parser")
         return self._extract_document(soup, url, **kwargs)
 
-    def _extract_document(self, soup: BeautifulSoup, url: str, **kwargs) -> ScrapedDocument:
+    def _extract_document(
+        self, soup: BeautifulSoup, url: str, **kwargs
+    ) -> ScrapedDocument:
         """Runs the extraction heuristics against an already-parsed soup.
         Split out from extract() so callers that already have a soup in
         hand (e.g. MultiHTMLScraper reusing its index page) don't have to
         refetch the same URL to process it."""
 
         # 1. Remove script, style, noscript, nav, footer, header (common noise)
-        for tag in soup.find_all(["script", "style", "noscript", "nav", "footer", "header"]):
+        for tag in soup.find_all(
+            ["script", "style", "noscript", "nav", "footer", "header"]
+        ):
             tag.decompose()
 
         # 2. Find main content container
@@ -66,7 +72,7 @@ class BasicHTMLScraper(BaseScraper):
                 metadata["authors"] = meta_author["content"]
             else:
                 # fallback: first <p> containing "by " might work
-                byline = soup.find("p", string=re.compile(r"\bby\b", re.I))
+                byline = soup.find("p", string=re.compile(r"\bby\b", re.IGNORECASE))
                 if byline:
                     metadata["authors"] = byline.get_text(strip=True).replace("by ", "")
 
@@ -93,8 +99,16 @@ class BasicHTMLScraper(BaseScraper):
 
         # Try common id/class patterns
         selectors = [
-            "#content", "#main", "#body", "#article",
-            ".content", ".main", ".body", ".article", ".post", ".entry"
+            "#content",
+            "#main",
+            "#body",
+            "#article",
+            ".content",
+            ".main",
+            ".body",
+            ".article",
+            ".post",
+            ".entry",
         ]
         for sel in selectors:
             elem = soup.select_one(sel)

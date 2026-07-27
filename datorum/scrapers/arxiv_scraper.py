@@ -1,8 +1,8 @@
-import io
 import gzip
-from pathlib import Path
+import io
 import re
 import tarfile
+from pathlib import Path
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, NavigableString
@@ -11,8 +11,9 @@ from .base import BaseScraper, ScrapedDocument
 
 
 class BaseArxivScraper(BaseScraper):
-
-    ARXIV_ID_RE = re.compile(r"/(?:abs|pdf|e-print|html)/([\w.\-/]+?)(?:v\d+)?(?:\.pdf)?/?$")
+    ARXIV_ID_RE = re.compile(
+        r"/(?:abs|pdf|e-print|html)/([\w.\-/]+?)(?:v\d+)?(?:\.pdf)?/?$"
+    )
 
     def _extract_arxiv_id(self, url: str) -> str:
         m = self.ARXIV_ID_RE.search(urlparse(url).path)
@@ -22,21 +23,22 @@ class BaseArxivScraper(BaseScraper):
 
 
 class ArxivHTMLScraper(BaseArxivScraper):
-
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         origin = self._origin(url)
         arxiv_id = self._extract_arxiv_id(url)
         source_url = f"{origin}/html/{arxiv_id}v1"
-        print(f'Article ID: {arxiv_id}')
+        print(f"Article ID: {arxiv_id}")
 
-        print('  Fetching...')
+        print("  Fetching...")
         raw_html = self._fetch(source_url)
 
-        print('  Parsing...')
+        print("  Parsing...")
         soup = BeautifulSoup(raw_html, "html.parser")
 
         # arXiv HTML uses latexml; the main content is typically inside ltx_page_main or ltx_document
-        main_content = soup.find(class_="ltx_page_main") or soup.find(class_="ltx_document")
+        main_content = soup.find(class_="ltx_page_main") or soup.find(
+            class_="ltx_document"
+        )
         if not main_content:
             main_content = soup.find("body") or soup
 
@@ -86,17 +88,20 @@ class ArxivHTMLScraper(BaseArxivScraper):
 
         # Extract metadata and title
         title_tag = soup.find("title")
-        title = kwargs.get('title')
+        title = kwargs.get("title")
         if not title:
             # Fallback to HTML title or URL ending
             title = title_tag.get_text(strip=True) if title_tag else url.split("/")[-1]
 
-        metadata = kwargs.get('metadata', {})
-        
+        metadata = kwargs.get("metadata", {})
+
         # Try to extract authors from the latexml author block if not provided
         authors_div = soup.find(class_="ltx_authors")
         if authors_div and "authors" not in metadata:
-            authors = [a.get_text(strip=True) for a in authors_div.find_all(class_="ltx_personname")]
+            authors = [
+                a.get_text(strip=True)
+                for a in authors_div.find_all(class_="ltx_personname")
+            ]
             if authors:
                 metadata["authors"] = ", ".join(authors)
 
@@ -113,10 +118,10 @@ class ArxivHTMLScraper(BaseArxivScraper):
 
         return ScrapedDocument(
             title=title,
-            license=kwargs.get('license', 'Unknown'),
+            license=kwargs.get("license", "Unknown"),
             source=url,
             metadata=metadata,
-            body=body_text
+            body=body_text,
         )
 
 
@@ -125,28 +130,33 @@ class ArxivTeXScraper(BaseArxivScraper):
     rendering, for papers that don't have an HTML version available.
     """
 
-
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         origin = self._origin(url)
         arxiv_id = self._extract_arxiv_id(url)
         source_url = f"{origin}/e-print/{arxiv_id}"
-        print(f'Article ID: {arxiv_id}')
+        print(f"Article ID: {arxiv_id}")
 
-        print('  Fetching...')
+        print("  Fetching...")
         raw_bytes = self._fetch_bytes(source_url)
-        print('  Unpacking...')
+        print("  Unpacking...")
         tex_source = self._unpack(raw_bytes)
 
-        print('  Extracting...')
+        print("  Extracting...")
         tex_source = self._strip_comments(tex_source)
 
-        title = kwargs.get("title") or self._extract_command(tex_source, "title") or arxiv_id
+        title = (
+            kwargs.get("title")
+            or self._extract_command(tex_source, "title")
+            or arxiv_id
+        )
         author_raw = self._extract_command(tex_source, "author")
         metadata = kwargs.get("metadata", {})
         if author_raw and "authors" not in metadata:
             metadata["authors"] = self._clean_authors(author_raw)
 
-        body_match = re.search(r"\\begin\{document\}(.*)\\end\{document\}", tex_source, re.DOTALL)
+        body_match = re.search(
+            r"\\begin\{document\}(.*)\\end\{document\}", tex_source, re.DOTALL
+        )
         body = body_match.group(1) if body_match else tex_source
 
         body = self._strip_bibliography(body)
@@ -183,7 +193,9 @@ class ArxivTeXScraper(BaseArxivScraper):
                         if member.isfile() and member.name.endswith(".tex"):
                             f = tar.extractfile(member)
                             if f:
-                                tex_files[member.name] = f.read().decode("utf-8", errors="replace")
+                                tex_files[member.name] = f.read().decode(
+                                    "utf-8", errors="replace"
+                                )
             except tarfile.ReadError:
                 text = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
                 tex_files["main.tex"] = text
@@ -211,7 +223,9 @@ class ArxivTeXScraper(BaseArxivScraper):
                 return c
         return candidates[0]
 
-    def _resolve_inputs(self, text: str, tex_files: dict[str, str], depth: int = 0) -> str:
+    def _resolve_inputs(
+        self, text: str, tex_files: dict[str, str], depth: int = 0
+    ) -> str:
         if depth > 10:
             return text
 
@@ -219,7 +233,9 @@ class ArxivTeXScraper(BaseArxivScraper):
             name = match.group(1)
             for candidate in (name, f"{name}.tex"):
                 if candidate in tex_files:
-                    return self._resolve_inputs(tex_files[candidate], tex_files, depth + 1)
+                    return self._resolve_inputs(
+                        tex_files[candidate], tex_files, depth + 1
+                    )
             return ""
 
         return re.sub(r"\\(?:input|include)\{([^}]+)\}", replace, text)
@@ -243,8 +259,8 @@ class ArxivTeXScraper(BaseArxivScraper):
             elif text[i] == "}":
                 depth -= 1
                 if depth == 0:
-                    return text[brace_start + 1:i]
-        return text[brace_start + 1:]
+                    return text[brace_start + 1 : i]
+        return text[brace_start + 1 :]
 
     def _braced_end(self, text: str, brace_start: int) -> int:
         depth = 0
@@ -265,7 +281,12 @@ class ArxivTeXScraper(BaseArxivScraper):
         return ", ".join(names)
 
     def _strip_bibliography(self, text: str) -> str:
-        text = re.sub(r"\\begin\{thebibliography\}.*?\\end\{thebibliography\}", "", text, flags=re.DOTALL)
+        text = re.sub(
+            r"\\begin\{thebibliography\}.*?\\end\{thebibliography\}",
+            "",
+            text,
+            flags=re.DOTALL,
+        )
         text = re.sub(r"\\bibliography\{[^}]*\}", "", text)
         text = re.sub(r"\\bibliographystyle\{[^}]*\}", "", text)
         return text
@@ -276,9 +297,12 @@ class ArxivTeXScraper(BaseArxivScraper):
 
     def _convert_sections(self, text: str) -> str:
         levels = {
-            "section": 1, "section*": 1,
-            "subsection": 2, "subsection*": 2,
-            "subsubsection": 3, "subsubsection*": 3,
+            "section": 1,
+            "section*": 1,
+            "subsection": 2,
+            "subsection*": 2,
+            "subsubsection": 3,
+            "subsubsection*": 3,
             "paragraph": 4,
         }
         for command, level in levels.items():
@@ -291,7 +315,7 @@ class ArxivTeXScraper(BaseArxivScraper):
                 title = self._extract_braced(text, brace_start)
                 braced_end = self._braced_end(text, brace_start)
                 heading = f"\n\n{'#' * level} {title}\n\n"
-                text = text[:m.start()] + heading + text[braced_end:]
+                text = text[: m.start()] + heading + text[braced_end:]
         return text
 
     def _convert_formatting(self, text: str) -> str:
@@ -302,7 +326,9 @@ class ArxivTeXScraper(BaseArxivScraper):
 
     def _convert_citations_refs(self, text: str) -> str:
         text = re.sub(r"\\cite[tp]?\{([^}]*)\}", lambda m: f"[{m.group(1)}]", text)
-        text = re.sub(r"\\[a-zA-Z]*ref\{([^}]*)\}", lambda m: f"[ref:{m.group(1)}]", text)
+        text = re.sub(
+            r"\\[a-zA-Z]*ref\{([^}]*)\}", lambda m: f"[ref:{m.group(1)}]", text
+        )
         text = re.sub(r"\\label\{[^}]*\}", "", text)
         return text
 
@@ -312,8 +338,10 @@ class ArxivTeXScraper(BaseArxivScraper):
         # the alttext the HTML scraper pulls out of MathML.
         math_spans = []
         for pattern in (
-            r"\$\$.*?\$\$", r"(?<!\$)\$(?!\$)[^$]*\$(?!\$)",
-            r"\\\[.*?\\\]", r"\\\(.*?\\\)",
+            r"\$\$.*?\$\$",
+            r"(?<!\$)\$(?!\$)[^$]*\$(?!\$)",
+            r"\\\[.*?\\\]",
+            r"\\\(.*?\\\)",
             r"\\begin\{equation\*?\}.*?\\end\{equation\*?\}",
             r"\\begin\{align\*?\}.*?\\end\{align\*?\}",
         ):

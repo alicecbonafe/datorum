@@ -1,5 +1,6 @@
 import sys
 from unittest.mock import patch
+
 import pytest
 
 from datorum.cli import app

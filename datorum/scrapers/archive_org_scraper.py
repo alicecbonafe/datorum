@@ -1,8 +1,9 @@
-from collections import Counter
 import json
 import re
+from collections import Counter
 from urllib.parse import urlparse
 
+from ..exceptions import ScraperException
 from .base import BaseScraper, ScrapedDocument
 
 
@@ -44,7 +45,6 @@ class ArchiveOrgScraper(BaseScraper):
     )
     _HEADER_FOOTER_MIN_REPEATS = 3
 
-    
     def extract(self, url: str, **kwargs) -> ScrapedDocument:
         origin = self._origin(url)
         identifier = self._extract_identifier(url)
@@ -62,7 +62,9 @@ class ArchiveOrgScraper(BaseScraper):
         for key in ("creator", "date", "publisher", "language"):
             if key in item_meta and key not in metadata:
                 value = item_meta[key]
-                metadata[key] = ", ".join(value) if isinstance(value, list) else str(value)
+                metadata[key] = (
+                    ", ".join(value) if isinstance(value, list) else str(value)
+                )
 
         txt_filename = kwargs.get("txt_filename") or self._find_djvu_txt_filename(
             item.get("files", []), identifier
@@ -84,11 +86,12 @@ class ArchiveOrgScraper(BaseScraper):
             body=body,
         )
 
-
     def _extract_identifier(self, url: str) -> str:
         m = self.IDENTIFIER_RE.search(urlparse(url).path)
         if not m:
-            raise ValueError(f"Could not find an archive.org item identifier in: {url}")
+            raise ScraperException(
+                f"Could not find an archive.org item identifier in: {url}"
+            )
         return m.group(1)
 
     def _fetch_item_metadata(self, origin: str, identifier: str) -> dict:
@@ -112,7 +115,6 @@ class ArchiveOrgScraper(BaseScraper):
         # back to the old guess so behavior degrades gracefully rather than
         # raising here; a bad guess will still 404 with a clear error.
         return f"{identifier}_djvu.txt"
-
 
     # ---- cleaning ------------------------------------------------------
 
@@ -173,11 +175,13 @@ class ArchiveOrgScraper(BaseScraper):
         threshold = max(self._HEADER_FOOTER_MIN_REPEATS, len(page_lines) // 4)
 
         running = {
-            line for line, count in header_counts.items()
+            line
+            for line, count in header_counts.items()
             if count >= threshold and len(line) < 80
         }
         running |= {
-            line for line, count in footer_counts.items()
+            line
+            for line, count in footer_counts.items()
             if count >= threshold and len(line) < 80
         }
         return running

@@ -1,0 +1,34 @@
+steps:
+
+  lint:
+    image: python:3.14-slim
+    commands:
+      - pip install --upgrade pip
+      - pip install -e .[lint]
+      
+      - echo "========================================"
+      - echo "🔍 Rodando Ruff (Linter)..."
+      - echo "========================================"
+      - ruff check . --output-format=github
+      
+      - echo "========================================"
+      - echo "🎨 Rodando Ruff (Formatador)..."
+      - echo "========================================"
+      - ruff format --check .
+      
+      - echo "========================================"
+      - echo "🧪 Rodando Mypy (Verificador de Tipos)..."
+      - echo "========================================"
+      - mypy --install-types --non-interactive
+      - mypy . --ignore-missing-imports
+    when:
+      event: [push, pull_request, manual]
+
+  test:
+    image: python:3.14-slim
+    commands:
+      - pip install --upgrade pip
+      - pip install -e .[test]
+      - pytest --cov=. --cov-fail-under=100 -v
+    when:
+      event: [push, pull_request, manual]
