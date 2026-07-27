@@ -113,8 +113,7 @@ def test_inference_structured_output_error(mocked_server):
 
         error_ok = False
         try:
-            output = provider.generate(request)
-            raise Exception(type(output))
+            provider.generate(request)
         except InferenceException:
             error_ok = True
         assert error_ok

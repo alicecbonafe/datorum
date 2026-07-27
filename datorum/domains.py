@@ -187,8 +187,7 @@ class Domain(BaseNode):
         for domain in self.domains:
             yield domain
             yield from domain.walk()
-        for source in self.sources:
-            yield source
+        yield from self.sources
 
     @model_validator(mode="after")
     def _post_init_setup(self) -> "Domain":

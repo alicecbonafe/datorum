@@ -151,6 +151,8 @@ def test_create():
     s1 = d1.create_source(ids1)
     s2 = col.create_source(f"{idd2}{DOMAIN_DELIMITER}{idd3}{DOMAIN_DELIMITER}{ids2}")
 
+    assert s1.full_id == f"{idc}{DOMAIN_DELIMITER}{idd1}{DOMAIN_DELIMITER}{ids1}"
+    assert s2.id == ids2
     assert len(col.domains) == 2
     assert isinstance(d2, Domain) and len(d2.domains) == 1
     assert len(d3.sources) == 1
@@ -266,8 +268,7 @@ def test_source_path_requires_attached_collection():
 
     error_ok = False
     try:
-        if detached.source_path:
-            assert False
+        assert detached.source_path
     except OrphanSourceException:
         error_ok = True
     assert error_ok

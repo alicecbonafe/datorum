@@ -16,3 +16,17 @@ registry = {
     "ArchiveOrgScraper": ArchiveOrgScraper,
     "PlanaltoBRScraper": PlanaltoBRScraper,
 }
+
+__all__ = [
+    "ArchiveOrgScraper",
+    "ArxivHTMLScraper",
+    "ArxivTeXScraper",
+    "BaseArxivScraper",
+    "BaseScraper",
+    "BasicHTMLScraper",
+    "IndexedHTMLScraper",
+    "MDXScraper",
+    "PlanaltoBRScraper",
+    "QMDScraper",
+    "ScrapedDocument",
+]

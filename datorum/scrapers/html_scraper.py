@@ -168,9 +168,7 @@ class IndexedHTMLScraper(BasicHTMLScraper):
                 page_doc = super().extract(page_url, **kwargs)
             except requests.HTTPError as e:
                 print(
-                    f"  skip({e.response.status_code if e.response else ''}): {
-                        page_url
-                    }"
+                    f"  skip({e.response.status_code if e.response else ''}): {page_url}"
                 )
                 continue
             chunks.append(page_doc.body)
@@ -189,6 +187,4 @@ class IndexedHTMLScraper(BasicHTMLScraper):
         already stripped by the caller), false for '' (was anchor-only),
         'mailto:...', '../works/', 'https://...', etc."""
         href = href.strip()
-        if not href or ":" in href or "/" in href:
-            return False
-        return True
+        return len(href) > 0 and ":" not in href and "/" not in href

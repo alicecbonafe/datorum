@@ -1,12 +1,12 @@
-from typing import Tuple, Any, Dict
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from datorum import GeneralConfig
 from datorum.cli import app
-from datorum.exceptions import ScraperException, ChunkerException
+from datorum.exceptions import ChunkerException, ScraperException
 from datorum.providers.inference import InferenceProvider
 from datorum.scrapers import BaseScraper, ScrapedDocument, registry
 
@@ -38,7 +38,7 @@ domains:
 
 
 class FakeScraper(BaseScraper):
-    last_call: Tuple[str, Dict[str, Any]] = ("", {})
+    last_call: tuple[str, dict[str, Any]] = ("", {})
 
     def extract(self, url, **kwargs):
         FakeScraper.last_call = (url, kwargs)

@@ -3,6 +3,8 @@ import re
 from collections import Counter
 from urllib.parse import urlparse
 
+from requests import HTTPError
+
 from ..exceptions import ScraperException
 from .base import BaseScraper, ScrapedDocument
 
@@ -54,7 +56,7 @@ class ArchiveOrgScraper(BaseScraper):
         try:
             print("  Fetching metadata...")
             item = self._fetch_item_metadata(origin, identifier)
-        except Exception as e:
+        except HTTPError as e:
             print(f"  (metadata fetch skipped: {e})")
 
         item_meta = item.get("metadata", {})

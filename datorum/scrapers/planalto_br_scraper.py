@@ -1,5 +1,6 @@
 import random
 import re
+from typing import ClassVar
 
 from bs4 import BeautifulSoup, Tag
 
@@ -12,13 +13,13 @@ class PlanaltoBRScraper(BaseScraper):
     Detecta estrutura jurídica por classes CSS ou regex.
     """
 
-    USER_AGENTS = [
+    USER_AGENTS: ClassVar[list[str]] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
     ]
 
-    PATTERNS: dict[str, re.Pattern] = {
+    PATTERNS: ClassVar[dict[str, re.Pattern]] = {
         "titulo": re.compile(r"^TÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
         "capitulo": re.compile(r"^CAPÍTULO\s+[IVXLCDM]+", re.IGNORECASE),
         "secao": re.compile(r"^Seção\s+[IVXLCDM]+", re.IGNORECASE),

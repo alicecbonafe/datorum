@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from . import GeneralConfig
 from .domains import DomainCollection, Source
-from .exceptions import ScraperException, ChunkerException
+from .exceptions import ChunkerException, ScraperException
 from .providers.inference import InferenceProvider, InferenceRequest
 from .scrapers import registry
 
@@ -49,9 +49,9 @@ def app():
     match command:
         case "scrape":
             if source.scraper is None:
-                raise ScraperException(f"Source doesn't define a scraper")
+                raise ScraperException("Source doesn't define a scraper")
             if source.url is None:
-                raise ScraperException(f"Source doesn't define an URL")
+                raise ScraperException("Source doesn't define an URL")
 
             scraper = registry[source.scraper]()  # type: ignore[abstract]
             source.source_path.parent.mkdir(parents=True, exist_ok=True)

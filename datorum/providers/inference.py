@@ -1,10 +1,7 @@
-from typing import List
-
 from openai import OpenAI
 from openai.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
-    ParsedChatCompletion,
 )
 from pydantic import BaseModel, Field
 
@@ -28,7 +25,7 @@ class InferenceProvider:
     @classmethod
     def load(
         cls, provider: str = "", config: dict = GeneralConfig
-    ) -> InferenceProvider:
+    ) -> "InferenceProvider":
 
         provider = provider.strip()
         prefix = f"{provider.upper()}_" if provider else ""
@@ -57,7 +54,7 @@ class InferenceProvider:
             "role": "user",
             "content": request.user_prompt,
         }
-        messages: List[
+        messages: list[
             ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
         ] = [
             system_instructions,
