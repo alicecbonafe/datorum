@@ -117,6 +117,11 @@ top of.
 **Deliverable:** all reads/writes of `domains.json` go through one class;
 `scrap`/`chunk` behave exactly as before.
 
+> Dropped the `Topic` data structure and made `Domain` recursive.
+> Changed persisted file to YAML.
+> All data can be accessed, stored and loaded using `DomainCollection`.
+> All changes integrated and all tests implemented.
+
 ---
 
 ## 5. Phase 3 — Scraper parameter schemas (the decoupling groundwork)
