@@ -73,6 +73,65 @@ class Domain(BaseNode):
             return child.get(rest_of_path)
         return None
 
+    def create_domain(self, path: str, **kwargs) -> 'Domain':
+        """
+        Creates a new domain or returns an existing one based on a delimited path.
+        Automatically creates any missing intermediate domains.
+        """
+        if not path:
+            raise ValueError("Domain path cannot be empty.")
+
+        parts = path.split(DOMAIN_DELIMITER)
+        current = self
+
+        for i, part in enumerate(parts):
+            child = current.get_child(part)
+            if child is None:
+                # Apply extra arguments (like name, description) ONLY to the final target domain
+                node_kwargs = kwargs if i == len(parts) - 1 else {}
+                
+                new_domain = Domain(id=part, **node_kwargs)
+                new_domain._parent = current
+                current.domains.append(new_domain)
+                current = new_domain
+            elif isinstance(child, Domain):
+                # Domain exists, traverse into it
+                current = child
+            else:
+                raise ValueError(
+                    f"Conflict at '{part}': Cannot create domain because a Source with this ID already exists."
+                )
+
+        return current
+
+    def create_source(self, path: str, **kwargs) -> 'Source':
+        """
+        Creates a new Source based on a delimited path. 
+        Automatically creates any missing parent domains.
+        """
+        if not path:
+            raise ValueError("Source path cannot be empty.")
+
+        # Separate the parent domain path from the actual source ID
+        if DOMAIN_DELIMITER in path:
+            domain_path, source_id = path.rsplit(DOMAIN_DELIMITER, 1)
+            parent_domain = self.create_domain(domain_path)
+        else:
+            parent_domain = self
+            source_id = path
+
+        # Check for conflicts to maintain ID uniqueness
+        if parent_domain.get_child(source_id) is not None:
+            raise ValueError(
+                f"Cannot create source: A node with ID '{source_id}' already exists in domain '{parent_domain.id}'."
+            )
+
+        new_source = Source(id=source_id, **kwargs)
+        new_source._parent = parent_domain
+        parent_domain.sources.append(new_source)
+
+        return new_source
+
     def __getitem__(self, path: str) -> BaseNode:
         node = self.get(path)
         if node is None:
@@ -111,13 +170,17 @@ class DomainCollection(Domain):
     sources_path: str = Field(default='sources')
     chunks_path: str = Field(default='chunks')
 
+    _path: Optional[Path] = PrivateAttr(default=None)
+
     @classmethod
     def load(cls, file_path: Optional[str|Path] = None):
         file_path = cls._resolve_path(file_path)
 
         with file_path.open('r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
-        return cls.model_validate(data)
+        instance = cls.model_validate(data)
+        instance._path = file_path
+        return instance
 
     @classmethod
     def _resolve_path(cls, file_path: Optional[str|Path] = None) -> Path:
@@ -127,10 +190,15 @@ class DomainCollection(Domain):
             file_path = Path(file_path)
         return file_path
 
+    @property
+    def path(self) -> Path:
+        return self._path if self._path is not None else self._resolve_path()
+
     def save(self, file_path: Optional[str|Path] = None):
-        file_path = self._resolve_path(file_path)
+        if file_path is not None:
+            self._path = self._resolve_path(file_path)
 
         data = self.model_dump(mode="python")
-        print(data)
-        with file_path.open('w', encoding='utf-8') as f:
+
+        with self.path.open('w', encoding='utf-8') as f:
             yaml.safe_dump(data, f, sort_keys=False)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from datorum import GeneralConfig
 from datorum.domains import (
     DOMAIN_DELIMITER,
     DomainCollection,
@@ -11,9 +12,11 @@ from datorum.domains import (
 
 
 def test_resolve_path():
+    GeneralConfig['DATA_DIR'] = 'data'
     p1 = DomainCollection._resolve_path()
-    p2 = DomainCollection._resolve_path('data')
-    p3 = DomainCollection._resolve_path(Path('data'))
+    p2 = DomainCollection._resolve_path('data/domains.yml')
+    p3 = DomainCollection._resolve_path(Path('data') / 'domains.yml')
+    assert p1 == p2
     assert p2 == p3
 
 
@@ -128,5 +131,64 @@ def test_find_errors():
     assert error_ok
 
 
+def test_create():
+
+    idc = 'a_collection'
+    idd1 = 'a_domain_1'
+    idd2 = 'a_domain_2'
+    idd3 = 'a_domain_3'
+    ids1 = 'a_source_1'
+    ids2 = 'a_source_2'
+
+    col = DomainCollection(id=idc, name='Domain Collection Test')
+    d1 = col.create_domain(idd1)
+    d3 = col.create_domain(f'{idd2}{DOMAIN_DELIMITER}{idd3}')
+    d2 = col[idd2]
+    s1 = d1.create_source(ids1)
+    s2 = col.create_source(f'{idd2}{DOMAIN_DELIMITER}{idd3}{DOMAIN_DELIMITER}{ids2}')
+
+    assert len(col.domains) == 2
+    assert len(d2.domains) == 1
+    assert len(d3.sources) == 1
 
 
+def test_create_errors():
+
+    error_ok = False
+
+    idc = 'a_collection'
+
+    idd1 = 'a_domain_1'
+    ids1 = 'a_source_1'
+
+    col = DomainCollection(id=idc, name='Domain Collection Test')
+    col.create_domain(idd1)
+    col.create_source(ids1)
+
+    error_ok = False
+    try:
+        col.create_domain('')
+    except ValueError:
+        error_ok = True
+    assert error_ok
+
+    error_ok = False
+    try:
+        col.create_source('')
+    except ValueError:
+        error_ok = True
+    assert error_ok
+
+    error_ok = False
+    try:
+        col.create_domain(ids1)
+    except ValueError:
+        error_ok = True
+    assert error_ok
+
+    error_ok = False
+    try:
+        col.create_source(idd1)
+    except ValueError:
+        error_ok = True
+    assert error_ok
