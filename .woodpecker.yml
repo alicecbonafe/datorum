@@ -9,9 +9,7 @@ steps:
       - ruff check . --output-format=github
       - ruff format --check .
 
-      - mypy .
-      # - mypy --install-types --non-interactive
-      # - mypy . --check-untyped-defs
+      - mypy . --install-types --non-interactive --check-untyped-defs
     when:
       event: [pull_request, tag, manual]
 
