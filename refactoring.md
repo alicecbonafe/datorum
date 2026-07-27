@@ -82,8 +82,7 @@ TOTAL                                       888      0   100%
 
 - [x] `pyproject.toml`.
 - [x] Console entry point: `datorum = "datorum.cli:app"`.
-- [x] `LICENSE` — **Apache-2.0**.
-  having once this is open to external contributors).
+- [x] `LICENSE` — **Apache-2.0**
 - [x] `README.md`.
 - [ ] A minimal local CI check (a `pre-commit` config or a simple `make check`
   running lint + tests) is enough for now — the hosted CI setup (Codeberg
@@ -93,6 +92,8 @@ TOTAL                                       888      0   100%
 
 **Deliverable:** `pip install -e .` gives a working `datorum` command,
 lint/tests are easy to run locally, repo is presentable.
+
+> Deliverable ok, CI waiting for CodeBerg's onboarding.
 
 ---
 
@@ -115,6 +116,11 @@ top of.
 
 **Deliverable:** all reads/writes of `domains.json` go through one class;
 `scrap`/`chunk` behave exactly as before.
+
+> Dropped the `Topic` data structure and made `Domain` recursive.
+> Changed persisted file to YAML.
+> All data can be accessed, stored and loaded using `DomainCollection`.
+> All changes integrated and all tests implemented.
 
 ---
 
