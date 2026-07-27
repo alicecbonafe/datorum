@@ -39,7 +39,9 @@ class MDXScraper(BaseScraper):
             try:
                 raw = self._fetch(_url)
             except requests.HTTPError as e:
-                print(f"  skip({e.response.status_code}): {_local}")
+                print(
+                    f"  skip({e.response.status_code if e.response else ''}): {_local}"
+                )
                 continue
 
             chunks.append(f"\n{'#' * heading_level} {_title}\n")

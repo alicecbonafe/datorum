@@ -20,9 +20,9 @@ steps:
       - echo "🧪 Rodando Mypy (Verificador de Tipos)..."
       - echo "========================================"
       - mypy --install-types --non-interactive
-      - mypy . --ignore-missing-imports
+      - mypy . --check-untyped-defs
     when:
-      event: [push, pull_request, manual]
+      event: [pull_request, tag, manual]
 
   test:
     image: python:3.14-slim
@@ -31,4 +31,4 @@ steps:
       - pip install -e .[test]
       - pytest --cov=. --cov-fail-under=100 -v
     when:
-      event: [push, pull_request, manual]
+      event: [pull_request, tag, manual]

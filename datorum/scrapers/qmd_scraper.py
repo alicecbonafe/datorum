@@ -71,7 +71,9 @@ class QMDScraper(BaseScraper):
             try:
                 raw = self._fetch(self._raw_url(local))
             except requests.HTTPError as e:
-                print(f"  skip({e.response.status_code}): {local}")
+                print(
+                    f"  skip({e.response.status_code if e.response else ''}): {local}"
+                )
                 continue
 
             chunks.append(f"\n{'#' * heading_level} {title}\n")

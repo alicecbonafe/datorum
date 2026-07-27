@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from . import GeneralConfig
 from .domains import DomainCollection, Source
+from .exceptions import ScraperException, ChunkerException
 from .providers.inference import InferenceProvider, InferenceRequest
 from .scrapers import registry
 
@@ -47,7 +48,12 @@ def app():
 
     match command:
         case "scrape":
-            scraper = registry[source.scraper]()
+            if source.scraper is None:
+                raise ScraperException(f"Source doesn't define a scraper")
+            if source.url is None:
+                raise ScraperException(f"Source doesn't define an URL")
+
+            scraper = registry[source.scraper]()  # type: ignore[abstract]
             source.source_path.parent.mkdir(parents=True, exist_ok=True)
             scraper.scrape_from(source.url, source.source_path, **source.scraper_args)
         case "chunk":
@@ -58,8 +64,16 @@ def app():
             with source.source_path.open("r", encoding="utf-8") as f:
                 user_prompt = f.read()
 
+            chunker_model = (
+                GeneralConfig["CHUNKER_MODEL"]
+                if "CHUNKER_MODEL" in GeneralConfig
+                else GeneralConfig["MODEL"]
+            )
+            if not chunker_model:
+                raise ChunkerException("Model not defined")
+
             request = InferenceRequest(
-                model=GeneralConfig["CHUNKER_MODEL"],
+                model=chunker_model,
                 system_instructions=system_instructions,
                 user_prompt=user_prompt,
                 temperature=0.7,
@@ -75,7 +89,7 @@ def app():
             chunks_path.parent.mkdir(parents=True, exist_ok=True)
             print(f"Saving as {chunks_path!s}...")
             with chunks_path.open("w", encoding="utf-8") as f:
-                f.write(response)
+                f.write(response or "")
             print("Done!")
 
 

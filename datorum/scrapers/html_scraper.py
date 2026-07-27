@@ -147,7 +147,7 @@ class IndexedHTMLScraper(BasicHTMLScraper):
         seen = {url}
         page_urls = []
         for a in index_soup.find_all("a", href=True):
-            href = a["href"].split("#", 1)[0]  # drop in-page anchor targets
+            href = str(a["href"]).split("#", 1)[0]  # drop in-page anchor targets
             if not self._is_same_folder_link(href):
                 continue
             page_url = urljoin(url, href)
@@ -167,7 +167,11 @@ class IndexedHTMLScraper(BasicHTMLScraper):
             try:
                 page_doc = super().extract(page_url, **kwargs)
             except requests.HTTPError as e:
-                print(f"  skip({e.response.status_code}): {page_url}")
+                print(
+                    f"  skip({e.response.status_code if e.response else ''}): {
+                        page_url
+                    }"
+                )
                 continue
             chunks.append(page_doc.body)
             print(f"  fetched: {page_url}")

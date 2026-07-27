@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
+from datorum.exceptions import InferenceException
 from datorum.providers.inference import InferenceProvider, InferenceRequest
 
 TEST_RESULT = "This is a mocked reply from the assistant."
@@ -38,7 +39,6 @@ def mocked_server(httpserver):
 def test_inference_provider_call(mocked_server):
 
     request = InferenceRequest(
-        provider="test",
         model="mocked-model",
         system_instructions="You are a friendly chatbot.",
         user_prompt="Extract data from text.",
@@ -69,7 +69,6 @@ def test_inference_provider_load():
 
 def test_inference_structured_output(mocked_server):
     request = InferenceRequest(
-        provider="test",
         model="mocked-model",
         system_instructions="Return JSON.",
         user_prompt="Data",
@@ -90,4 +89,32 @@ def test_inference_structured_output(mocked_server):
         mock_parse.return_value.choices = [mock_choice]
 
         output = provider.generate(request)
-        assert '{"result": "success"}' in output
+        assert output is not None and '{"result": "success"}' in output
+
+
+def test_inference_structured_output_error(mocked_server):
+    request = InferenceRequest(
+        model="mocked-model",
+        system_instructions="Return JSON.",
+        user_prompt="Data",
+        response_schema=DummySchema,
+    )
+
+    provider = InferenceProvider(
+        provider="test",
+        api_key=MOCKED_API_KEY,
+        base_url=mocked_server.url_for("/v1"),
+    )
+
+    with patch.object(provider.client.beta.chat.completions, "parse") as mock_parse:
+        mock_choice = MagicMock()
+        mock_choice.message.parsed = None
+        mock_parse.return_value.choices = [mock_choice]
+
+        error_ok = False
+        try:
+            output = provider.generate(request)
+            raise Exception(type(output))
+        except InferenceException:
+            error_ok = True
+        assert error_ok

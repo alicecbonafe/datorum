@@ -433,7 +433,9 @@ def test_planalto_process_elements_empty_text():
     scraper = PlanaltoBRScraper()
     # A string of spaces will pass BS4's existence check but fail _clean_text
     soup = BeautifulSoup("<p>   </p>", "html.parser")
-    result = scraper._process_elements([soup.find("p")])
+    tag = soup.find("p")
+    if tag is not None:
+        result = scraper._process_elements([tag])
 
     assert result == []
 

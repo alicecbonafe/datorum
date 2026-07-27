@@ -53,7 +53,7 @@ class ArxivHTMLScraper(BaseArxivScraper):
         # 2. Restore LaTeX from MathML
         # LaTeXML typically leaves the raw TeX in the 'alttext' attribute of <math> tags
         for math in main_content.find_all("math"):
-            alttext = math.get("alttext", "")
+            alttext = str(math.get("alttext", ""))
             if alttext:
                 display = math.get("display", "inline")
                 # Block equations
@@ -67,7 +67,7 @@ class ArxivHTMLScraper(BaseArxivScraper):
 
         # 3. Format Links (keeping text and href)
         for a in main_content.find_all("a"):
-            href = a.get("href", "")
+            href = str(a.get("href", ""))
             link_text = a.get_text(" ", strip=True)
             if href.startswith("#"):
                 a.replace_with(link_text)

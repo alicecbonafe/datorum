@@ -219,7 +219,8 @@ class DomainCollection(Domain):
 
     @classmethod
     def load(cls, file_path: str | Path | None = None):
-        file_path = cls._resolve_path(file_path)
+        if not isinstance(file_path, Path):
+            file_path = cls._resolve_path(file_path)
 
         with file_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -229,11 +230,12 @@ class DomainCollection(Domain):
 
     @classmethod
     def _resolve_path(cls, file_path: str | Path | None = None) -> Path:
+        resolved: Path
         if file_path is None:
-            file_path = Path(GeneralConfig.get("DATA_DIR", "data")) / "domains.yml"
-        elif type(file_path) == str:
-            file_path = Path(file_path)
-        return file_path
+            resolved = Path(str(GeneralConfig.get("DATA_DIR", "data"))) / "domains.yml"
+        else:
+            resolved = Path(file_path)
+        return resolved
 
     @property
     def path(self) -> Path:

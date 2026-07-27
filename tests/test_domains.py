@@ -89,7 +89,7 @@ def test_find():
     assert type(_d4) == type(d4)
     assert _s1.id == s1.id
     assert _s2.id == s2.id
-    assert _s2.parent.id == d4.id
+    assert _s2.parent and _s2.parent.id == d4.id
     assert f"{idd2}{DOMAIN_DELIMITER}{ids1}" in _col
     assert _col.get("") == _col
     assert len(_all_sources) == 2
@@ -118,7 +118,7 @@ def test_find_errors():
     col.domains.append(d1)
     col.domains.append(d1_clone)
     col.domains.append(d2)
-    d1.domains.append(s1)
+    d1.sources.append(s1)
 
     try:
         col[f"{idd2}{DOMAIN_DELIMITER}{idd1}"]
@@ -152,7 +152,7 @@ def test_create():
     s2 = col.create_source(f"{idd2}{DOMAIN_DELIMITER}{idd3}{DOMAIN_DELIMITER}{ids2}")
 
     assert len(col.domains) == 2
-    assert len(d2.domains) == 1
+    assert isinstance(d2, Domain) and len(d2.domains) == 1
     assert len(d3.sources) == 1
 
 

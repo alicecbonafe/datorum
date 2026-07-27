@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from datorum.scrapers import (
@@ -9,7 +11,7 @@ from datorum.scrapers import (
 
 
 class ConcreteScraper(BaseScraper):
-    def extract(self, url: str) -> ScrapedDocument:
+    def extract(self, url: str, **kwargs: Any) -> ScrapedDocument:
         return ScrapedDocument(
             title=f"Scraped: {url}",
             license="Apache-2.0",

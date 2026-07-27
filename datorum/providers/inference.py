@@ -1,9 +1,15 @@
-# datorum/providers/inference.py
+from typing import List
 
 from openai import OpenAI
+from openai.types.chat import (
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+    ParsedChatCompletion,
+)
 from pydantic import BaseModel, Field
 
 from .. import GeneralConfig
+from ..exceptions import InferenceException
 
 
 class InferenceRequest(BaseModel):
@@ -41,26 +47,42 @@ class InferenceProvider:
 
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
-    def generate(self, request: InferenceRequest) -> str:
+    def generate(self, request: InferenceRequest) -> str | None:
 
-        messages = [
-            {"role": "system", "content": request.system_instructions},
-            {"role": "user", "content": request.user_prompt},
-        ]
-
-        request_kwargs = {
-            "model": request.model,
-            "messages": messages,
-            "temperature": request.temperature,
-            "top_p": request.top_p,
-            "max_tokens": request.max_tokens,
+        system_instructions: ChatCompletionSystemMessageParam = {
+            "role": "system",
+            "content": request.system_instructions,
         }
+        user_message: ChatCompletionUserMessageParam = {
+            "role": "user",
+            "content": request.user_prompt,
+        }
+        messages: List[
+            ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
+        ] = [
+            system_instructions,
+            user_message,
+        ]
 
         if request.response_schema is not None:
             completion = self.client.beta.chat.completions.parse(
-                **request_kwargs, response_format=request.response_schema
+                model=request.model,
+                messages=messages,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                max_tokens=request.max_tokens,
+                response_format=request.response_schema,
             )
-            return completion.choices[0].message.parsed.model_dump_json(indent=2)
+            parsed = completion.choices[0].message.parsed
+            if parsed is None:
+                raise InferenceException("Invalid response from inference model")
+            return parsed.model_dump_json(indent=2)
 
-        completion = self.client.chat.completions.create(**request_kwargs)
+        completion = self.client.chat.completions.parse(
+            model=request.model,
+            messages=messages,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            max_tokens=request.max_tokens,
+        )
         return completion.choices[0].message.content

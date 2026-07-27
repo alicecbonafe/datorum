@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 import pytest
 
 from datorum.exceptions import ScraperException
@@ -314,6 +316,6 @@ def test_qmd_scraper_sidebar_list():
     assert entries == ["intro.qmd"]
 
     # Test when sidebar is an empty list
-    quarto_yaml_empty = {"website": {"sidebar": []}}
+    quarto_yaml_empty: Dict[str, Any] = {"website": {"sidebar": []}}
     entries_empty = scraper._sidebar_entries(quarto_yaml_empty)
     assert entries_empty == []
