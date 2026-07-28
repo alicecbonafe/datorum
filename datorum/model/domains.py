@@ -6,14 +6,14 @@ from typing import Any, Optional
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
-from . import GeneralConfig
-from .exceptions import InvalidIdentifierException, OrphanSourceException
+from .base import BaseDatorumModel, BaseDatorumPersistentModel
+from ..exceptions import InvalidIdentifierException, OrphanSourceException
 
 DOMAIN_DELIMITER = "."
 ID_PATTERN = r"^\w+$"
 
 
-class BaseNode(BaseModel):
+class BaseNode(BaseDatorumModel):
     id: str
     name: str | None = None
     description: str | None = None
@@ -210,45 +210,10 @@ class Domain(BaseNode):
         return self
 
 
-class DomainCollection(Domain):
+class DomainCollection(Domain, BaseDatorumPersistentModel):
     sources_dir: str = Field(default="sources")
     chunks_dir: str = Field(default="chunks")
 
-    _path: Path | None = PrivateAttr(default=None)
-
-    @classmethod
-    def load(cls, file_path: str | Path | None = None):
-        if not isinstance(file_path, Path):
-            file_path = cls._resolve_path(file_path)
-
-        with file_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        instance = cls.model_validate(data)
-        instance._path = file_path
-        return instance
-
-    @classmethod
-    def _resolve_path(cls, file_path: str | Path | None = None) -> Path:
-        resolved: Path
-        if file_path is None:
-            resolved = Path(str(GeneralConfig.get("DATA_DIR", "data"))) / "domains.yml"
-        else:
-            resolved = Path(file_path)
-        return resolved
-
-    @property
-    def path(self) -> Path:
-        return self._path if self._path is not None else self._resolve_path()
-
     @property
     def data_dir(self) -> Path:
-        return self.path.parent
-
-    def save(self, file_path: str | Path | None = None):
-        if file_path is not None:
-            self._path = self._resolve_path(file_path)
-
-        data = self.model_dump(mode="python")
-
-        with self.path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, sort_keys=False)
+        return self.filepath.parent

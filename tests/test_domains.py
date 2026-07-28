@@ -1,22 +1,13 @@
 from pathlib import Path
 
 from datorum import GeneralConfig
-from datorum.domains import (
+from datorum.model.domains import (
     DOMAIN_DELIMITER,
     Domain,
     DomainCollection,
     Source,
 )
 from datorum.exceptions import InvalidIdentifierException, OrphanSourceException
-
-
-def test_resolve_path():
-    GeneralConfig["DATA_DIR"] = "data"
-    p1 = DomainCollection._resolve_path()
-    p2 = DomainCollection._resolve_path("data/domains.yml")
-    p3 = DomainCollection._resolve_path(Path("data") / "domains.yml")
-    assert p1 == p2
-    assert p2 == p3
 
 
 def test_persistence(tmp_path: Path):

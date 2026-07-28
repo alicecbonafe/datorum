@@ -108,7 +108,7 @@ be independently useful (better error messages, self-documenting).
 
 ---
 
-## 6. Phase 4 (marked for review) — Config system: user config files instead of `.env`
+## 6. Phase 4 (w/ phase 6) — Config system: user config files instead of `.env`
 
 - New module `datorum/config/`. Config is layered, lowest to highest
   priority: **built-in defaults → user config file → environment variables
@@ -206,8 +206,6 @@ With phases 2–5 in place, the CLI itself is mostly wiring.
     `providers:` block in config.
   - `datorum config {init,edit,show,migrate-env}`
   - `datorum secrets {set,rm,list}`
-- All mutating commands go through `DomainsRepository`'s atomic save —
-  no more hand-edited `domains.json`.
 
 **Deliverable:** everything that currently requires opening
 `data/domains.json` in a text editor is a CLI command.
@@ -245,26 +243,14 @@ agent's prompt design now.
 
 ---
 
-## 10. Phase 8 — Code quality pass (continuous, closed out here)
+## 10. Phase 8 — Code quality pass (continuous)
 
-Some of this happens incidentally in earlier phases; this phase is the
-sweep to make it consistent everywhere:
+**Checklist**
 
-- `print()` → `logging`, with `-v/--verbose` on the CLI controlling level.
-- Exception hierarchy: `DatorumError` base, `SourceNotFoundError`,
-  `ScraperError`, `ConfigError`, `SecretBackendError` — replacing the bare
-  `Exception`/`ValueError` raises scattered today.
-- Docstring pass for public classes/methods (the scrapers already have
-  good docstrings in places — `ArchiveOrgScraper`, `QMDScraper` — extend
-  that standard to everything).
-- `mypy` in CI once the phase-3 typed params make the codebase mostly
-  typed anyway.
-- Expand the phase-0 test suite to cover the new modules
-  (`DomainsRepository`, config layering, secret backends, CLI commands via
-  Typer's `CliRunner`).
-
-**Deliverable:** consistent logging/errors/typing/tests across the whole
-package, not just the new modules.
+- [ ] Application logging
+- [ ] Public API docstrings
+- [ ] Test cases
+- [ ] Lint
 
 ---
 

@@ -1,6 +1,6 @@
 # Datorum
 
-An AI agent specialized in context engineering.
+Tool box and agent manager for context engineering.
 
 
 ## Goal
