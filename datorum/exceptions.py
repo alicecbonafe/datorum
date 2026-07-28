@@ -16,6 +16,9 @@ class OrphanSourceException(DatorumModelException): ...
 class InvalidIdentifierException(DatorumModelException): ...
 
 
+class KeyStoreException(DatorumModelException): ...
+
+
 # SERVICE
 
 

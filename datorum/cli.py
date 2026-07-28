@@ -1,121 +1,56 @@
 import argparse
+import logging
 from pathlib import Path
 
 from pydantic import BaseModel, Field, PrivateAttr
-
-from .model.config import GeneralConfig
-from .model.domains import DomainCollection, Domain, Source
-from .exceptions import ChunkerException, ScraperException
-from .providers.inference import InferenceProvider, InferenceRequest
-from .scrapers import registry
-
-
-class Chunk(BaseModel):
-    id: str = Field(description="Composed id for this chunk")
-    content: str = Field(description="Chunk text content")
-    section_path: str = Field(description="Section path")
-    chunk_type: str = Field(description="A meaningful classifier")
-    related: list[str] = Field(
-        description="IDs of related chunks", default_factory=list
-    )
-    metadata: list[str] = Field(
-        description="Relevant classifiers", default_factory=list
-    )
-
-
-class ChunkedDocument(BaseModel):
-    title: str = Field(description="Document title")
-    tags: list[str] = Field(description="Meaningful tags", default_factory=list)
-    chunks: list[Chunk] = Field(
-        description="List of semantic splited chunks", default_factory=list
-    )
-
-
-def _app():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data-path", help="Path to the data directory.")
-    parser.add_argument("command", help="Command name", choices=["scrape", "chunk"])
-    parser.add_argument("source_id", help="ID of the source to scrape")
-    args = parser.parse_args()
-    datapath_str: str | None = args.data_path
-    command: str = args.command
-    source_id: str = args.source_id
-
-    datapath: Path
-    if datapath_str is None:
-        datapath = Path(GeneralConfig["DATA_DIR"])
-    else:
-        GeneralConfig["DATA_DIR"] = datapath_str
-        datapath = Path(datapath_str)
-
-    domain_collection = DomainCollection.load(datapath / 'domains.yml')
-    source: Source = domain_collection[source_id]
-
-    match command:
-        case "scrape":
-            if source.scraper is None:
-                raise ScraperException("Source doesn't define a scraper")
-            if source.url is None:
-                raise ScraperException("Source doesn't define an URL")
-
-            scraper = registry[source.scraper]()  # type: ignore[abstract]
-            source.source_path.parent.mkdir(parents=True, exist_ok=True)
-            scraper.scrape_from(source.url, source.source_path, **source.scraper_args)
-        case "chunk":
-            system_file = domain_collection.data_dir / "instructions.md"
-
-            with system_file.open("r", encoding="utf-8") as f:
-                system_instructions = f.read()
-            with source.source_path.open("r", encoding="utf-8") as f:
-                user_prompt = f.read()
-
-            chunker_model = (
-                GeneralConfig["CHUNKER_MODEL"]
-                if "CHUNKER_MODEL" in GeneralConfig
-                else GeneralConfig["MODEL"]
-            )
-            if not chunker_model:
-                raise ChunkerException("Model not defined")
-
-            request = InferenceRequest(
-                model=chunker_model,
-                system_instructions=system_instructions,
-                user_prompt=user_prompt,
-                temperature=0.7,
-                max_tokens=65536,
-                response_schema=ChunkedDocument,
-            )
-
-            print(f"Generating chunks for {source.full_id}...")
-
-            response = InferenceProvider.load("chunker").generate(request)
-
-            chunks_path = source.chunks_path
-            chunks_path.parent.mkdir(parents=True, exist_ok=True)
-            print(f"Saving as {chunks_path!s}...")
-            with chunks_path.open("w", encoding="utf-8") as f:
-                f.write(response or "")
-            print("Done!")
-
-
-import logging
 import typer
 
-
 from . import configure_logging, get_logger
+from .model.config import GeneralConfig
+from .model.domains import DomainCollection, Domain, Source
 
 
 APP_NAME = "datorum"
 
 DEFAULT_PATH = Path(typer.get_app_dir(APP_NAME))
 
+
 app = typer.Typer()
 
+
 config_app = typer.Typer(help="Configuration commands")
+
+config_provider_app = typer.Typer(help="Provider configuration commands")
+config_provider_model_app = typer.Typer(help="Provider model configuration commands")
+config_provider_app.add_typer(config_provider_model_app, name="provider")
+config_app.add_typer(config_provider_app, name="provider")
+
+config_role_app = typer.Typer(help="Role configuration commands")
+config_app.add_typer(config_role_app, name="role")
+
+config_agent_app = typer.Typer(help="Agent configuration commands")
+config_agent_alias_app = typer.Typer(help="Agent alias configuration commands")
+config_agent_app.add_typer(config_agent_alias_app, name="alias")
+config_app.add_typer(config_agent_app, name="agent")
+
 app.add_typer(config_app, name="config")
 
+
 domain_app = typer.Typer(help="Domain related commands")
+
+source_app = typer.Typer(help="Source related commands")
+domain_app.add_typer(source_app, name="source")
+
 app.add_typer(domain_app, name="domain")
+
+
+scraper_app = typer.Typer(help="Scraper commands")
+app.add_typer(scraper_app, name="scraper")
+
+
+chunker_app = typer.Typer(help="Chunker commands")
+app.add_typer(chunker_app, name="chunker")
+
 
 class GlobalState(BaseModel):
 
@@ -153,8 +88,7 @@ def main(
         DEFAULT_PATH, "--config-dir",
         help="Directory containing config and API keys"),
     non_iteractive: bool = typer.Option(
-        False, "--non-interactive",
-        help="Stop asking permission")
+        False, "--non-interactive",)
 ):
     """Datorum: tool box and agent manager for context engineering."""
     gstate = GlobalState(
@@ -171,11 +105,17 @@ def main(
         log_level = logging.DEBUG
     configure_logging(log_level)
 
+# CONFIG COMMANDS #############################################################
+
 @config_app.command("init")
 def config_init(
     ctx: typer.Context,
     data_dir: Path,
-    force: bool = False
+    *,
+    log_file: Path | None = None,
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="Overwrite if config file already exists."),
 ):
     """Create the initial config file."""
     gstate: GlobalState = ctx.obj
@@ -186,9 +126,232 @@ def config_init(
 
     gstate.config_dir.mkdir(parents=True, exist_ok=True)
     data_full_path: Path = data_dir.absolute()
-    gstate._config = GeneralConfig(data_dir = data_full_path)
-    gstate._config.save(gstate.config_dir / 'config.yml')
+    gstate._config = GeneralConfig(
+        data_dir = data_full_path,
+        log_file = log_file,
+    )
+    config_file = gstate.config_dir / 'config.yml'
+    gstate._config.save(config_file)
+    print(f"Default config file stored at {str(config_file)}")
 
+@config_app.command("get")
+def config_get(
+    ctx: typer.Context,
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all basic properties."
+    ),
+): ...
+
+@config_app.command("set")
+def config_set(
+    ctx: typer.Context,
+    data_dir: Path | None = typer.Option(
+        None, "--data-dir",
+        help="Path for the data directory."),
+    log_file: Path | None = typer.Option(
+        None, "--log-file",
+        help="Path for the log file."),
+): ...
+
+@config_app.command("connect-os-keychain")
+def config_connect_os_keychain(
+    ctx: typer.Context,
+    service: str = typer.Argument(help="Keychain namespace."),
+    migrate: bool = typer.Option(
+        False, "--migrate", "-m",
+        help="Migrate store keys, if any."),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="If migrate is off, set force to true for overwriting the configuration (will raise exception otherwise)."),
+): ...
+
+@config_app.command("create-encrypted-file")
+def config_create_encrypted_file(
+    ctx: typer.Context,
+    file_path: Path = typer.Argument(help="Path to the encrypted file."),
+    iterations: int | None = typer.Argument(
+        None, help="Key derivation iterations."),
+    migrate: bool = typer.Option(
+        False, "--migrate", "-m",
+        help="Migrate store keys, if any."),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="If 'migrate' is off, set 'force' to true for overwriting the configuration (will raise exception otherwise)."),
+): ...
+
+@config_provider_app.command("list")
+def config_provider_list(
+    ctx: typer.Context,
+): ...
+
+@config_provider_app.command("get")
+def config_provider_get(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all basic properties."
+    ),
+): ...
+
+@config_provider_app.command("set")
+def config_provider_set(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+    base_url: str | None = typer.Option(
+        None, "--base-url",
+        help="API endpoint base URL (required if the provider is not created yet)"),
+    description: str | None = typer.Option(
+        None, "--description",
+        help="A helpful description for this provider."),
+    default_model: str | None = typer.Option(
+        None, "--default-model",
+        help="Fallback when no model is selected."),
+): ...
+
+@config_provider_app.command("del")
+def config_provider_del(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all properties."
+    ),
+): ...
+
+@config_provider_app.command("set-key")
+def config_provider_set_key(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+): ...
+
+@config_provider_model_app.command("list")
+def config_provider_model_list(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+): ...
+
+@config_provider_model_app.command("add")
+def config_provider_model_add(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+    models: list[str] = typer.Argument(help="Models to add"),
+): ...
+
+@config_provider_model_app.command("drop")
+def config_provider_model_drop(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Provider ID."),
+    models: list[str] = typer.Argument(help="Models to drop"),
+): ...
+
+@config_role_app.command("list")
+def config_role_list(
+    ctx: typer.Context,
+): ...
+
+@config_role_app.command("get")
+def config_role_get(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Role ID."),
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all properties."
+    ),
+): ...
+
+@config_role_app.command("set")
+def config_role_set(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Role ID."),
+    type: str | None = typer.Option(
+        None, "--type",
+        help="Type for this role (only used for new roles)."),
+    description: str | None = typer.Option(
+        None, "--description",
+        help="A helpful description for this role."),
+    temperature: float | None = typer.Option(
+        None, "--temperature",
+        help="Temperature (only for inference roles)."),
+    top_p: float | None = typer.Option(
+        None, "--top-p",
+        help="Top P (only for inference roles)."),
+    max_tokens: int | None = typer.Option(
+        None, "--max-tokens",
+        help="Max generated tokens (only for inference roles)."),
+    dimensions: int | None = typer.Option(
+        None, "--dimensions",
+        help="Requested vector size, if the model supports truncation (only for embedding roles)."),
+    batch_size: int | None = typer.Option(
+        None, "--batch-size",
+        help="Chunks per embedding request (only for embedding roles)."),
+): ...
+
+@config_role_app.command("set-instructions-template")
+def config_role_set_instructions_template(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Role ID."),
+): ...
+
+@config_role_app.command("del")
+def config_role_del(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Role ID."),
+): ...
+
+@config_agent_app.command("list")
+def config_agent_list(
+    ctx: typer.Context,
+): ...
+
+@config_agent_app.command("get")
+def config_agent_get(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all properties."
+    ),
+): ...
+
+@config_agent_app.command("set")
+def config_agent_set(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+    provider: str | None = typer.Option(
+        None, "--provider",
+        help="Provider ID for this agent."),
+    role: str | None = typer.Option(
+        None, "--role",
+        help="Role ID for this agent."),
+): ...
+
+@config_agent_app.command("del")
+def config_agent_del(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+    prop: str | None = typer.Argument(
+        None, help="Name of the property to retraive, omit will dump all basic properties."
+    ),
+): ...
+
+@config_agent_alias_app.command("list")
+def config_agent_alias_list(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+): ...
+
+@config_agent_alias_app.command("add")
+def config_agent_alias_add(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+    aliases: list[str] = typer.Argument(help="Aliases to add"),
+): ...
+
+@config_agent_alias_app.command("drop")
+def config_agent_alias_drop(
+    ctx: typer.Context,
+    id: str = typer.Argument(help="Agent ID."),
+    aliases: list[str] = typer.Argument(help="Aliases to drop"),
+): ...
+
+# DOMAIN COMMANDS #############################################################
 
 def _get_domain_or_exit(collection: DomainCollection, domain_id: str) -> Domain:
     """Resolve domain_id to a Domain node, or exit with an error."""
@@ -200,7 +363,6 @@ def _get_domain_or_exit(collection: DomainCollection, domain_id: str) -> Domain:
         typer.echo(f"'{domain_id}' is a source, not a domain.", err=True)
         raise typer.Exit(code=1)
     return node
-
 
 @domain_app.command("list")
 def domain_list(
@@ -225,7 +387,6 @@ def domain_list(
         for source in domain.sources:
             typer.echo(f"[source] {source.full_id}")
 
-
 @domain_app.command("get")
 def domain_get(
     ctx: typer.Context,
@@ -246,7 +407,6 @@ def domain_get(
         for _k, _v in domain.metadata.items():
             typer.echo(f"  {_k}: {_v}")
 
-
 @domain_app.command("set")
 def domain_set(ctx: typer.Context, domain_id: str, name: str, description: str | None = None):
     """Create or update a domain's name/description (creates missing parents too)."""
@@ -261,7 +421,6 @@ def domain_set(ctx: typer.Context, domain_id: str, name: str, description: str |
     collection.save()
     typer.echo(f"Domain '{domain.full_id}' saved.")
 
-
 @domain_app.command("get-metadata")
 def domain_get_metadata(ctx: typer.Context, domain_id: str, key: str):
     """Print a single metadata value for a domain."""
@@ -275,18 +434,19 @@ def domain_get_metadata(ctx: typer.Context, domain_id: str, key: str):
 
     typer.echo(domain.metadata[key])
 
-
 @domain_app.command("set-metadata")
-def domain_set_metadata(ctx: typer.Context, domain_id: str, key: str, value: str):
+def domain_set_metadata(ctx: typer.Context, domain_id: str, key: str, value: str | None = None):
     """Set a metadata key/value pair on a domain."""
     gstate: GlobalState = ctx.obj
     collection = gstate.domain_collection
     domain = _get_domain_or_exit(collection, domain_id)
 
-    domain.metadata[key] = value
+    if value is None:
+        del domain.metadata[key]
+    else:
+        domain.metadata[key] = value
     collection.save()
     typer.echo(f"Metadata '{key}' set on domain '{domain.full_id}'.")
-
 
 @domain_app.command("del")
 def domain_delete(ctx: typer.Context, domain_id: str, force: bool = False):
@@ -313,15 +473,68 @@ def domain_delete(ctx: typer.Context, domain_id: str, force: bool = False):
     collection.save()
     typer.echo(f"Domain '{domain.full_id}' deleted.")
 
+# SOURCE COMMANDS #############################################################
 
-source_app = typer.Typer(help="Source related commands")
-app.add_typer(source_app)
+@source_app.command("get")
+def source_get(
+    ctx: typer.Context,
+    source_id: str,
+    prop: str | None = None,
+): ...
 
-scraper_app = typer.Typer(help="Scraper commands")
-app.add_typer(scraper_app)
+@source_app.command("set")
+def source_set(
+    ctx: typer.Context,
+    source_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    url: str | None = None,
+    source_file: str | None = None,
+    chunks_file: str | None = None,
+    scraper: str | None = None,
+): ...
 
-chunker_app = typer.Typer(help="Chunker commands")
-app.add_typer(chunker_app)
+@source_app.command("get-metadata")
+def source_get_metadata(
+    ctx: typer.Context,
+    source_id: str,
+    key: str,
+): ...
+
+@source_app.command("set-metadata")
+def source_set_metadata(
+    ctx: typer.Context,
+    source_id: str,
+    key: str,
+    value: str | None = None,
+): ...
+
+# SCRAPE COMMANDS #############################################################
+
+@scraper_app.command("get")
+def scraper_get_arg(
+    ctx: typer.Context,
+    source_id: str,
+    key: str,
+): ...
+
+@scraper_app.command("set")
+def scraper_set_arg(
+    ctx: typer.Context,
+    source_id: str,
+    key: str,
+    value: str | None = None,
+): ...
+
+@scraper_app.command("run")
+def scraper_run(
+    ctx: typer.Context,
+    source_id: str,
+): ...
+
+# CHUNK COMMANDS ##############################################################
+
+
 
 
 if __name__ == "__main__":
