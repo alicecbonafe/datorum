@@ -18,7 +18,7 @@ from ..exceptions import InvalidIdentifierException, KeyStoreException
 
 
 class KeyStore(BaseDatorumModel):
-    """Interface class for safe key stores"""
+    """Interface class for safe key stores."""
 
     type: str
     _unlocked: bool = PrivateAttr(default=False)
@@ -147,9 +147,7 @@ class EncryptedFileStore(KeyStore):
 
 
 class AIServiceProvider(BaseDatorumModel):
-    """
-    OpenAI-compatible API service provider settings.
-    """
+    """OpenAI-compatible API service provider settings."""
 
     id: str
     base_url: str = Field(description="API endpoint base URL (usually ending in 'v1/')")
@@ -219,36 +217,8 @@ class EmbeddingRole(BaseRole):
     batch_size: int = Field(default=32, description="Chunks per embedding request")
 
 
-class Agent(BaseDatorumModel):
-    """Agent specific settings."""
-
-    id: str
-    provider_id: str
-    role_id: str
-
-    aliases: list[str] = Field(default_factory=list)
-
-    _config: Optional['GeneralConfig'] = PrivateAttr(default=None)
-
-    @property
-    def config(self) -> 'GeneralConfig':
-        if self._config is None:
-            raise ValueError("Config object not found")
-        return self._config
-
-    @property
-    def provider(self) -> AIServiceProvider:
-        return self.config.get_provider(self.provider_id)
-
-    @property
-    def role(self) -> InferenceRole:
-        return self.config.get_role(self.role_id)
-
-
 class GeneralConfig(BaseDatorumPersistentModel):
-    """
-    Daturum configuration data structure.
-    """
+    """Daturum configuration data structure."""
 
     data_dir: Path = Field(description="Path for the data directory.")
     log_file: Path | None = Field(default=None, description="Path for the log file.")
@@ -258,7 +228,6 @@ class GeneralConfig(BaseDatorumPersistentModel):
     roles: list[Annotated[Union[InferenceRole, EmbeddingRole], Field(discriminator="type")]] = Field(
         default_factory=list
     )
-    agents: list[Agent] = Field(default_factory=list)
 
     def get_provider(self, provider_id: str) -> AIServiceProvider:
         for provider in self.providers:
@@ -272,12 +241,6 @@ class GeneralConfig(BaseDatorumPersistentModel):
                 return role
         raise InvalidIdentifierException(f"No role with id '{role_id}'")
 
-    def get_agent(self, agent_id: str) -> Agent:
-        for agent in self.agents:
-            if agent.id == agent_id:
-                return agent
-        raise InvalidIdentifierException(f"No agent with id '{agent_id}'")
-
     def _validate_unique(self, ids: list[str]) -> None:
         if len(ids) != len(set(ids)):
             from collections import Counter
@@ -289,25 +252,9 @@ class GeneralConfig(BaseDatorumPersistentModel):
 
     @model_validator(mode="after")
     def _bind_providers_to_self(self) -> "GeneralConfig":
-        # Validate ID uniqueness
+
         self._validate_unique([p.id for p in self.providers])
         self._validate_unique([r.id for r in self.roles])
-        self._validate_unique([a.id for a in self.agents])
-
-        # Validate agents and set private attributes
-
-        provider_ids = {p.id for p in self.providers}
-        role_ids = {r.id for r in self.roles}
-        for agents in self.agents:
-            if agents.provider_id not in provider_ids:
-                raise InvalidIdentifierException(
-                    f"Alias '{agents.id}' references unknown provider '{agents.provider_id}'"
-                )
-            if agents.role_id not in role_ids:
-                raise InvalidIdentifierException(
-                    f"Alias '{agents.id}' references unknown role '{agents.role_id}'"
-                )
-            agents._config = self
 
         for provider in self.providers:
             provider._config = self

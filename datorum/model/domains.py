@@ -14,6 +14,7 @@ ID_PATTERN = r"^\w+$"
 
 
 class BaseNode(BaseDatorumModel):
+
     id: str
     name: str | None = None
     description: str | None = None
