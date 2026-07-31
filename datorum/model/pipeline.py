@@ -234,11 +234,12 @@ class PipeFlow(BaseDatorumPersistentModel):
 class PipelineCollection(BaseDatorumPersistentModel):
 
     pipelines: list[Pipeline] = Field(default_factory=list)
-    flows: list[PipeFlow] = Field(default_factory=list)
+    flow_files: list[str] = Field(default_factory=list)
     toolboxes: list[ToolBoxSettings] = Field(default_factory=list)
 
     _config: GeneralConfig | None = PrivateAttr(default=None)
     _domains: DomainCollection | None = PrivateAttr(default=None)
+    _pipeflows: list[PipeFlow] | None = PrivateAttr(default=None)
 
     @classmethod
     def load_pipelines(cls, config: GeneralConfig) -> PipelineCollection:
@@ -260,6 +261,15 @@ class PipelineCollection(BaseDatorumPersistentModel):
         if self._domains is None:
             raise ValueError("Domains not found")
         return self._domains
+
+    @property
+    def pipeflows(self) -> list[PipeFlow]:
+        if self._pipeflows is None:
+            self._pipeflows = [
+                PipeFlow.load(self.config.data_dir / flow_file)
+                for flow_file in self.flow_files
+            ]
+        return self._pipeflows
 
     @model_validator(mode="after")
     def _post_init_setup(self) -> "PipelineCollection":
