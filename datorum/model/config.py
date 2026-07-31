@@ -122,12 +122,12 @@ class EncryptedFileStore(KeyStore):
                 "salt": base64.b64encode(salt).decode(), "data": None,
             }))
             return salt
-        payload = json.loads(self.file_path.read_text())
+        payload = json.loads(self.file_path.read_text(encoding="utf-8"))
         return base64.b64decode(payload["salt"])
 
     def _load(self) -> dict[str, str]:
         self._ensure_unlocked()
-        payload = json.loads(self.file_path.read_text())
+        payload = json.loads(self.file_path.read_text(encoding="utf-8"))
         if not payload.get("data"):
             return {}
         try:
@@ -188,33 +188,18 @@ class AIServiceProvider(BaseDatorumModel):
         return self
 
 
-class BaseRole(BaseDatorumModel):
+class AgentRole(BaseDatorumModel):
     """Role based API call parameters."""
 
     type: str
     id: str
     description: str | None = None
     preferred_models: list[str] = Field(default_factory=list)
-
-
-class InferenceRole(BaseRole):
-    """Role based inference parameters."""
-
-    type: Literal["inference"] = "inference"
-    instructions_template: str = Field(default="")
+    system_instructions: str = Field(default="")
+    user_prompt: str = Field(default="")
     temperature: float = Field(default=0.5)
     top_p: float = Field(default=1.0)
     max_tokens: int = Field(default=4096)
-
-
-class EmbeddingRole(BaseRole):
-    """Role based embedding parameters."""
-
-    type: Literal["embedding"] = "embedding"
-    dimensions: int | None = Field(
-        default=None, description="Requested vector size, if the model supports truncation"
-    )
-    batch_size: int = Field(default=32, description="Chunks per embedding request")
 
 
 class GeneralConfig(BaseDatorumPersistentModel):
@@ -225,9 +210,7 @@ class GeneralConfig(BaseDatorumPersistentModel):
     key_store: OSKeychainStore | EncryptedFileStore | NoKeyStore = Field(default_factory=NoKeyStore, discriminator="type")
 
     providers: list[AIServiceProvider] = Field(default_factory=list)
-    roles: list[Annotated[Union[InferenceRole, EmbeddingRole], Field(discriminator="type")]] = Field(
-        default_factory=list
-    )
+    roles: list[AgentRole] = Field(default_factory=list)
 
     def get_provider(self, provider_id: str) -> AIServiceProvider:
         for provider in self.providers:
@@ -235,26 +218,26 @@ class GeneralConfig(BaseDatorumPersistentModel):
                 return provider
         raise InvalidIdentifierException(f"No provider with id '{provider_id}'")
 
-    def get_role(self, role_id: str) -> Union[InferenceRole, EmbeddingRole]:
+    def get_role(self, role_id: str) -> AgentRole:
         for role in self.roles:
             if role.id == role_id:
                 return role
         raise InvalidIdentifierException(f"No role with id '{role_id}'")
 
-    def _validate_unique(self, ids: list[str]) -> None:
+    def _validate_unique(self, field: str, ids: list[str]) -> None:
         if len(ids) != len(set(ids)):
             from collections import Counter
 
             duplicates = [id for id, count in Counter(ids).items() if count > 1]
             raise InvalidIdentifierException(
-                f"Duplicate child IDs found in ModelCollection: {duplicates}"
+                f"Duplicate child IDs found in 'GeneralConfig.{field}': {duplicates}"
             )
 
     @model_validator(mode="after")
     def _bind_providers_to_self(self) -> "GeneralConfig":
 
-        self._validate_unique([p.id for p in self.providers])
-        self._validate_unique([r.id for r in self.roles])
+        self._validate_unique("providers", [p.id for p in self.providers])
+        self._validate_unique("roles", [r.id for r in self.roles])
 
         for provider in self.providers:
             provider._config = self
