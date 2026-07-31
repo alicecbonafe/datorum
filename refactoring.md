@@ -13,8 +13,9 @@ This refactor has four goals, in the order they build on each other:
 1. **OSS-readiness** — packaging, docs, license, CI, tests.
 2. **Config overhaul** — user config files instead of `.env`, with encrypted
    API keys.
-3. **CLI expansion** — manage domains/topics/sources/providers from the
-   terminal, not by hand-editing JSON.
+3. **Migration from CLI to endpoints** — so it can serve any specialized frontend.
+   A small but complete app using NiceGUI will be create as reference GUI
+   implementation.
 4. **Decoupling for the scraper-routing agent** — give scrapers declared,
    introspectable parameters so a future local-model agent can pick a
    scraper and tune its args per task.
@@ -26,32 +27,25 @@ working — no long-lived broken branches.
 
 ## 1. Guiding principles
 
-- **Behavior-preserving first, restructure second.** Nothing changes what
-  `scrap`/`chunk` actually do until there's a safety net of characterization
-  tests to catch regressions.
-- **Data model before CLI.** The CLI additions in phase 4 (add/edit
-  domain/topic/source/provider) are only safe once `domains.json` is
-  accessed through one validated repository class instead of ad-hoc dict
-  traversal in `__main__.py`.
-- **Schema before agent.** The router agent (phase 5) needs scrapers to
-  declare their own parameters. That declaration is useful on its own
-  (validation, CLI help, docs) even before any agent exists, so it's built
-  as a general improvement, not agent-specific code.
+- **Behavior-preserving first, restructure second.** All functionalities
+  implemented (`scrap`/`chunk`) needs to be forged as tools and agents.
+- **Data model before GUI.** The endpoint construction is only save once
+  all data model is complete, including config, domains, and pipelines, as
+  well as all functionalities migrated for the tooling architecture.
 - **Secrets are a separate concern from config.** The config file should be
   safe to commit to a dotfiles repo or share as an example; it never holds
   raw key material, only references to entries in the secret store.
 
 ---
 
-## 2. Phase 0 (done) — Safety net
+## 2. Phase 0 (complete) — Safety net
 
 **Deliverable:** green test suite that pins current behavior, runnable
-locally from here on (a local `pre-commit`/`make check`, added in phase 1;
-hosted CI arrives in phase 9 alongside publishing).
+locally from here on.
 
 ---
 
-## 3. Phase 1 (done) — Packaging & OSS skeleton
+## 3. Phase 1 (complete) — Packaging & OSS skeleton
 
 - [x] `pyproject.toml`.
 - [x] Console entry point: `datorum = "datorum.cli:app"`.
@@ -65,7 +59,7 @@ lint/tests are easy to run locally, repo is presentable.
 
 ---
 
-## 4. Phase 2 (done) — Domain data model
+## 4. Phase 2 (complete) — Domain data model
 
 **Deliverable:** all reads/writes of `domains.yml` go through one class;
 `scrap`/`chunk` behave exactly as before.
@@ -95,11 +89,19 @@ Commom base for all Datorum use cases.
 
 ## 6. Phase 4 — Basic tools
 
+- FileManager
+- SiteScraper (must implement a strong `robots.txt` compliance)
+- GitBrowser
+- HTMLDocParser (selector based)
+- MatchDocParser (pattern based)
+- DirectDataConverter
+- VectorDBManager
+- SnippetRunner
 
 
 ---
 
-## 7. Phase 5 — Agent runner
+## 7. Phase 5 — Agent service and pipeline runner
 
 
 
