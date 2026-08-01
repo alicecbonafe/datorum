@@ -73,10 +73,14 @@ class EncryptedFileStore(KeyStore):
     """Encrypted local file key store."""
 
     type: Literal["encrypted_file"] = "encrypted_file"
-    file_path: Path = Field(description="Path to the encrypted file.")
+    encrypted_file: str = Field(description="Name to the encrypted file.")
     iterations: int = Field(600_000, ge=100_000, description="Key derivation iterations.")
 
     _fernet: Fernet | None = PrivateAttr(default=None)
+
+    @property
+    def encrypted_path(self) -> Path:
+        return self.settings_path / self.encrypted_file
 
     def load_key(self, provider_id: str) -> str:
         key = self._load().get(provider_id)
@@ -98,7 +102,7 @@ class EncryptedFileStore(KeyStore):
             return
 
         try:
-            password = password_provider(f"Password for {self.file_path.name}: ")
+            password = password_provider(f"Password for {self.encrypted_file}: ")
         except Exception as exc:
             raise KeyStoreException(f"Could not obtain key store password: {exc}") from exc
 
@@ -115,19 +119,19 @@ class EncryptedFileStore(KeyStore):
         self._unlocked = True
 
     def _read_or_create_salt(self) -> bytes:
-        if not self.file_path.exists():
-            self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.encrypted_path.exists():
+            self.encrypted_path.parent.mkdir(parents=True, exist_ok=True)
             salt = os.urandom(16)
-            self.file_path.write_text(json.dumps({
+            self.encrypted_path.write_text(json.dumps({
                 "salt": base64.b64encode(salt).decode(), "data": None,
             }))
             return salt
-        payload = json.loads(self.file_path.read_text(encoding="utf-8"))
+        payload = json.loads(self.encrypted_path.read_text(encoding="utf-8"))
         return base64.b64decode(payload["salt"])
 
     def _load(self) -> dict[str, str]:
         self._ensure_unlocked()
-        payload = json.loads(self.file_path.read_text(encoding="utf-8"))
+        payload = json.loads(self.encrypted_path.read_text(encoding="utf-8"))
         if not payload.get("data"):
             return {}
         try:
@@ -140,7 +144,7 @@ class EncryptedFileStore(KeyStore):
         self._ensure_unlocked()
         salt = self._read_or_create_salt()
         encrypted = self._fernet.encrypt(json.dumps(data).encode("utf-8"))
-        self.file_path.write_text(json.dumps({
+        self.encrypted_path.write_text(json.dumps({
             "salt": base64.b64encode(salt).decode(),
             "data": encrypted.decode("utf-8"),
         }))
@@ -158,14 +162,13 @@ class AIServiceProvider(BaseDatorumModel):
     default_model: str | None = Field(default=None)
     models: list[str] = Field(default_factory=list)
 
-    _config: Optional['GeneralConfig'] = PrivateAttr(default=None)
     _resolved_key: str | None = PrivateAttr(default=None)
 
     @property
     def config(self) -> 'GeneralConfig':
-        if self._config is None:
-            raise ValueError("Config not found")
-        return self._config
+        if isinstance(self.persistent, GeneralConfig):
+            return self.persistent
+        raise ValueError("Config not found")
 
     @property
     def api_key(self) -> str:
@@ -191,7 +194,6 @@ class AIServiceProvider(BaseDatorumModel):
 class AgentRole(BaseDatorumModel):
     """Role based API call parameters."""
 
-    type: str
     id: str
     description: str | None = None
     preferred_models: list[str] = Field(default_factory=list)
@@ -205,8 +207,7 @@ class AgentRole(BaseDatorumModel):
 class GeneralConfig(BaseDatorumPersistentModel):
     """Daturum configuration data structure."""
 
-    data_dir: Path = Field(description="Path for the data directory.")
-    log_file: Path | None = Field(default=None, description="Path for the log file.")
+    log_file: str | None = Field(default=None, description="Name for the log file.")
     key_store: OSKeychainStore | EncryptedFileStore | NoKeyStore = Field(default_factory=NoKeyStore, discriminator="type")
 
     providers: list[AIServiceProvider] = Field(default_factory=list)
@@ -238,9 +239,6 @@ class GeneralConfig(BaseDatorumPersistentModel):
 
         self._validate_unique("providers", [p.id for p in self.providers])
         self._validate_unique("roles", [r.id for r in self.roles])
-
-        for provider in self.providers:
-            provider._config = self
 
         return self
 

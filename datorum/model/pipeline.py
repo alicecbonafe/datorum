@@ -244,10 +244,10 @@ class PipelineCollection(BaseDatorumPersistentModel):
     @classmethod
     def load_pipelines(cls, config: GeneralConfig) -> PipelineCollection:
         instance: PipelineCollection = cls.load(
-            config.data_dir / "plumbing.yml")
+            config.settings_path / "plumbing.yml")
         instance._config = config
         instance._domains = DomainCollection.load(
-            config.data_dir / "domains.yml")
+            config.settings_path / "domains.yml")
         return instance
 
     @property
@@ -266,7 +266,7 @@ class PipelineCollection(BaseDatorumPersistentModel):
     def pipeflows(self) -> list[PipeFlow]:
         if self._pipeflows is None:
             self._pipeflows = [
-                PipeFlow.load(self.config.data_dir / flow_file)
+                PipeFlow.load(self.settings_path / flow_file)
                 for flow_file in self.flow_files
             ]
         return self._pipeflows
