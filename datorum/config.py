@@ -13,15 +13,27 @@ from typing import Literal, Optional, Annotated, Union
 import keyring
 from pydantic import Field, PrivateAttr, model_validator
 
-from .base import BaseDatorumModel, BaseDatorumPersistentModel
-from ..exceptions import InvalidIdentifierException, KeyStoreException
+from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from .exceptions import InvalidIdentifierException, KeyStoreException, NoFilePathException
 
 
-class KeyStore(BaseDatorumModel):
+class KeyStore(BaseDatorumSettings):
     """Interface class for safe key stores."""
 
     type: str
+
     _unlocked: bool = PrivateAttr(default=False)
+    _base_path: Path | None = PrivateAttr(default=None)
+
+    @property
+    def base_path(self) -> Path:
+        if self._base_path is None:
+            raise NoFilePathException("Base path for encrypted file store not defined")
+        return self._base_path
+
+    @base_path.setter
+    def base_path(self, value: Path):
+        self._base_path = value
 
     def unlock(self, password_provider: Callable[[str], str] | None = None) -> None:
         self._unlocked = True
@@ -80,7 +92,7 @@ class EncryptedFileStore(KeyStore):
 
     @property
     def encrypted_path(self) -> Path:
-        return self.settings_path / self.encrypted_file
+        return self.base_path / self.encrypted_file
 
     def load_key(self, provider_id: str) -> str:
         key = self._load().get(provider_id)
@@ -150,7 +162,7 @@ class EncryptedFileStore(KeyStore):
         }))
 
 
-class AIServiceProvider(BaseDatorumModel):
+class AIServiceProvider(BaseDatorumSettings):
     """OpenAI-compatible API service provider settings."""
 
     id: str
@@ -191,7 +203,7 @@ class AIServiceProvider(BaseDatorumModel):
         return self
 
 
-class AgentRole(BaseDatorumModel):
+class AgentRole(BaseDatorumSettings):
     """Role based API call parameters."""
 
     id: str
@@ -204,7 +216,7 @@ class AgentRole(BaseDatorumModel):
     max_tokens: int = Field(default=4096)
 
 
-class GeneralConfig(BaseDatorumPersistentModel):
+class GeneralConfig(BaseDatorumPersistentSettings):
     """Daturum configuration data structure."""
 
     log_file: str | None = Field(default=None, description="Name for the log file.")
@@ -241,4 +253,12 @@ class GeneralConfig(BaseDatorumPersistentModel):
         self._validate_unique("roles", [r.id for r in self.roles])
 
         return self
+
+
+
+
+
+
+
+
 

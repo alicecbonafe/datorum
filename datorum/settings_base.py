@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import yaml
 
-from ..exceptions import NoFilePathException, ConfigException
+from .exceptions import NoFilePathException, ConfigException
 
 
 class DatorumDumper(yaml.SafeDumper): ...
@@ -15,31 +15,19 @@ def represent_path(dumper, path):
 yaml.add_multi_representer(Path, represent_path, Dumper=DatorumDumper)
 
 
-class BaseDatorumModel(BaseModel):
+class BaseDatorumSettings(BaseModel):
 
-    _persistent: Optional["BaseDatorumPersistentModel"] = PrivateAttr(default=None)
+    _persistent: Optional["BaseDatorumPersistentSettings"] = PrivateAttr(default=None)
 
     @property
-    def persistent(self) -> "BaseDatorumPersistentModel":
+    def persistent(self) -> "BaseDatorumPersistentSettings":
         if self._persistent is None:
             raise ConfigException("Persistent model not defined")
         return self._persistent
 
-    @property
-    def workspace_path(self) -> Path:
-        return self.persistent.workspace_path
-
-    @property
-    def settings_path(self) -> Path:
-        return self.persistent.settings_path
-
-    @property
-    def persisted_path(self) -> Path:
-        return self.persistent.persisted_path
-
     def _set_persistent_recursive(
         self,
-        persistent_instance: "BaseDatorumPersistentModel",
+        persistent_instance: "BaseDatorumPersistentSettings",
         visited: set | None = None,
     ) -> None:
         if visited is None:
@@ -62,7 +50,7 @@ class BaseDatorumModel(BaseModel):
     def _set_persistent_recursive_in_list(
         self,
         data: list,
-        persistent_instance: "BaseDatorumPersistentModel",
+        persistent_instance: "BaseDatorumPersistentSettings",
         visited: set,
     ) -> None:
         obj_id = id(data)
@@ -80,7 +68,7 @@ class BaseDatorumModel(BaseModel):
     def _set_persistent_recursive_in_dict(
         self,
         data: dict,
-        persistent_instance: "BaseDatorumPersistentModel",
+        persistent_instance: "BaseDatorumPersistentSettings",
         visited: set,
     ) -> None:
         obj_id = id(data)
@@ -98,12 +86,12 @@ class BaseDatorumModel(BaseModel):
     def _propagate_persistent(
         self,
         value: any,
-        persistent_instance: "BaseDatorumPersistentModel",
+        persistent_instance: "BaseDatorumPersistentSettings",
         visited: set | None = None,
     ) -> None:
         if value is None:
             return
-        if isinstance(value, BaseDatorumModel):
+        if isinstance(value, BaseDatorumSettings):
             value._set_persistent_recursive(
                 persistent_instance=persistent_instance,
                 visited=visited
@@ -122,52 +110,39 @@ class BaseDatorumModel(BaseModel):
             )
 
 
-class BaseDatorumPersistentModel(BaseDatorumModel):
+class BaseDatorumPersistentSettings(BaseDatorumSettings):
 
-    _workspace_path: Path | None = PrivateAttr(default=None)
-    _settings_dir: str | None = PrivateAttr(default=None)
-    _persisted_file: str | None = PrivateAttr(default=None)
-
-    @classmethod
-    def load(cls, workspace_path: Path, persisted_file: str, settings_dir: str = ".datorum") -> 'BaseDatorumPersistentModel':
-        file_path = workspace_path / settings_dir / persisted_file
-        with file_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        instance = cls.model_validate(data)
-        instance._workspace_path = workspace_path
-        instance._settings_dir = settings_dir
-        instance._persisted_file = persisted_file
-        return instance
-
-    @property
-    def workspace_path(self) -> Path:
-        if self._workspace_path is None:
-            if self._persistent and self.persistent is not self:
-                return self.persistent.workspace_path
-            raise NoFilePathException("No file path defined for this object.")
-        return self._workspace_path
+    _settings_path: Path | None = PrivateAttr(default=None)
 
     @property
     def settings_path(self) -> Path:
-        return self.workspace_path / self._settings_dir
+        if self._settings_path is None:
+            raise NoFilePathException("Settings file path not defined.")
+        return self._settings_path
 
-    @property
-    def persisted_path(self) -> Path:
-        return self.settings_path / self._persisted_file
+    @settings_path.setter
+    def settings_path(self, value: Path):
+        self._settings_path = value
 
-    def save_as(self, workspace_path: Path, persisted_file: str, settings_dir: str = ".datorum"):
-        self._workspace_path = workspace_path
-        self._settings_dir = settings_dir
-        self._persisted_file = persisted_file
+    @classmethod
+    def load(cls, settings_path: Path) -> 'BaseDatorumPersistentSettings':
+        with settings_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        instance = cls.model_validate(data)
+        instance.settings_path = settings_path
+        return instance
+
+    def save_as(self, settings_path: Path):
+        self.settings_path = settings_path
         self.save()
 
     def save(self):
         data = self.model_dump(mode="python")
-        self.settings_path.mkdir(parents=True, exist_ok=True)
-        with self.persisted_path.open("w", encoding="utf-8") as f:
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.settings_path.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, sort_keys=False, Dumper=DatorumDumper)
 
     @model_validator(mode="after")
-    def _root_model(self) -> "BaseDatorumPersistentModel":
+    def _root_model(self) -> "BaseDatorumPersistentSettings":
         self._set_persistent_recursive(self)
         return self

@@ -1,19 +1,20 @@
 from pathlib import Path
 from typing import Optional
 
+import pytest
 from pydantic import Field
 
-from datorum.model.base import BaseDatorumModel, BaseDatorumPersistentModel
+from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
 from datorum.exceptions import NoFilePathException, ConfigException
 
 
-class MockedModel(BaseDatorumModel):
+class MockedModel(BaseDatorumSettings):
 
     another_model: Optional["MockedModel"] = None
     a_list: list["MockedModel"] = Field(default_factory=list)
     a_dict: dict[str, "MockedModel"] = Field(default_factory=dict)
 
-class MockedPersistentModel(BaseDatorumPersistentModel):
+class MockedPersistentModel(BaseDatorumPersistentSettings):
 
     a_file_path: Path
     a_text_content: str
@@ -23,8 +24,7 @@ class MockedPersistentModel(BaseDatorumPersistentModel):
 
 def test_persistence(tmp_path: Path):
     workspace_path = tmp_path / "workspace"
-    settings_dir = ".mocked_settings"
-    persisted_file = "mocked.yml"
+    settings_path = workspace_path / "mocked.yml"
 
     file_name = "test.txt"
     file_path = workspace_path / file_name
@@ -41,46 +41,29 @@ def test_persistence(tmp_path: Path):
         a_text_content=text_content,
         a_model=child_data1,
     )
-    data1.save_as(
-        workspace_path=workspace_path,
-        settings_dir=settings_dir,
-        persisted_file=persisted_file,
-    )
+    data1.save_as(settings_path=settings_path)
 
     data2: MockedPersistentModel = MockedPersistentModel.load(
-        workspace_path=workspace_path,
-        settings_dir=settings_dir,
-        persisted_file=persisted_file,
-    )
+        settings_path=settings_path)
 
     assert data2.a_file_path == Path(file_name)
     assert data2.a_text_content == text_content
-    assert data2.a_model.workspace_path == workspace_path
-    assert str(data2.a_model.settings_path).endswith(settings_dir)
-    assert str(data2.a_model.persisted_path).endswith(persisted_file)
+    assert data2.a_model.persistent.settings_path == settings_path
 
     file_content2 = (workspace_path / data2.a_file_path).read_text(encoding="utf-8")
     assert file_content == file_content2
 
 def test_exceptions():
     child_data = MockedModel()
-    error_ok = False
-    try:
+    with pytest.raises(ConfigException):
         assert child_data.persistent
-    except ConfigException:
-        error_ok = True
-    assert error_ok
 
     data = MockedPersistentModel(
         a_file_path=Path("test.yml"),
         a_text_content="test",
     )
-    error_ok = False
-    try:
-        assert data.workspace_path
-    except NoFilePathException:
-        error_ok = True
-    assert error_ok
+    with pytest.raises(NoFilePathException):
+        assert data.settings_path
 
 def test_special_cases():
     data1 = MockedModel()
@@ -130,7 +113,4 @@ def test_special_cases():
         a_text_content="text_content",
         a_persistent_model=data1,
     )
-
-    data2._workspace_path = Path(".")
-    assert data1.workspace_path is data2.workspace_path
 

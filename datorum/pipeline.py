@@ -7,20 +7,20 @@ from typing import Literal, Optional, Annotated, Union
 
 from pydantic import Field, PrivateAttr, model_validator
 
-from .base import BaseDatorumModel, BaseDatorumPersistentModel
+from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
 from .config import GeneralConfig, AgentRole, AIServiceProvider
-from .domains import DomainCollection
-from ..exceptions import InvalidIdentifierException
+from .domain import DomainCollection
+from .exceptions import InvalidIdentifierException
 
 
-class ToolBoxSettings(BaseDatorumModel):
+class ToolBoxSettings(BaseDatorumSettings):
 
     id: str
     toolbox: str
     settings: dict[str, any] = Field(default_factory=dict)
 
 
-class BasePipelineStep(BaseDatorumModel):
+class BasePipelineStep(BaseDatorumSettings):
 
     type: str
     id: str
@@ -157,7 +157,7 @@ class AgentStep(BasePipelineStep):
         return fallback
 
 
-class Pipeline(BaseDatorumModel):
+class Pipeline(BaseDatorumSettings):
 
     id: str
     description: str | None = None
@@ -206,7 +206,7 @@ class PipeFlowState(str, Enun):
     finished = "finished"
     crashed  = "crashed"
 
-class PipeFlow(BaseDatorumPersistentModel):
+class PipeFlow(BaseDatorumPersistentSettings):
 
     work_dir: Path
     pipeline: Pipeline
@@ -231,7 +231,7 @@ class PipeFlow(BaseDatorumPersistentModel):
         return self
 
 
-class PipelineCollection(BaseDatorumPersistentModel):
+class PipelineCollection(BaseDatorumPersistentSettings):
 
     pipelines: list[Pipeline] = Field(default_factory=list)
     flow_files: list[str] = Field(default_factory=list)

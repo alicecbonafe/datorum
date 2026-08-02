@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from datorum.model.base import BaseDatorumModel, BaseDatorumPersistentModel
-from datorum.model.config import (
+from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from datorum.config import (
     KeyStore,
     KeyStoreException,
     NoKeyStore,
@@ -19,7 +19,7 @@ from datorum.model.config import (
 from datorum.exceptions import InvalidIdentifierException
 
 
-class MockedPersistentModel(BaseDatorumPersistentModel):
+class MockedPersistentModel(BaseDatorumPersistentSettings):
 
     keystore: OSKeychainStore | EncryptedFileStore | None = None
 
@@ -103,8 +103,7 @@ def test_os_keychain_store(mocker: MockerFixture):
 
 def test_encrypted_file_store(tmp_path: Path, mocker: MockerFixture):
     workspace_path = tmp_path / "workspace"
-    settings_dir = "mocked_settings"
-    persistent_file = "mocked.yml"
+    settings_path = workspace_path / "mocked_settings" / "mocked.yml"
     encrypted_file = "encrypted.json"
     provider_id = "mocked_provider"
     encrypted_key = "file-secret"
@@ -115,16 +114,8 @@ def test_encrypted_file_store(tmp_path: Path, mocker: MockerFixture):
     )
     MockedPersistentModel(
         keystore=store,
-    ).save_as(
-        workspace_path=workspace_path,
-        settings_dir=settings_dir,
-        persisted_file=persistent_file
-    )
-    parent = MockedPersistentModel.load(
-        workspace_path=workspace_path,
-        settings_dir=settings_dir,
-        persisted_file=persistent_file
-    )
+    ).save_as(settings_path=settings_path)
+    parent = MockedPersistentModel.load(settings_path=settings_path)
     assert parent.keystore.encrypted_path.parent.parent == workspace_path
     assert str(parent.keystore.encrypted_path).endswith(encrypted_file)
 
@@ -216,7 +207,7 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
         default_model=default_model,
         models=models
     )
-    provider2._persistent = BaseDatorumPersistentModel()
+    provider2._persistent = BaseDatorumPersistentSettings()
     with pytest.raises(ValueError, match="Config not found"):
         config = provider2.config
 

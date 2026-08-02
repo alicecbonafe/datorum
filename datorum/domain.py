@@ -6,14 +6,14 @@ from typing import Any, Optional
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
-from .base import BaseDatorumModel, BaseDatorumPersistentModel
-from ..exceptions import InvalidIdentifierException, OrphanSourceException
+from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from .exceptions import InvalidIdentifierException, OrphanSourceException
 
 DOMAIN_DELIMITER = "."
 ID_PATTERN = r"^\w+$"
 
 
-class BaseNode(BaseDatorumModel):
+class BaseNode(BaseDatorumSettings):
 
     id: str
     name: str | None = None
@@ -211,7 +211,7 @@ class Domain(BaseNode):
         return self
 
 
-class DomainCollection(Domain, BaseDatorumPersistentModel):
+class DomainCollection(Domain, BaseDatorumPersistentSettings):
     sources_dir: str = Field(default="sources")
     chunks_dir: str = Field(default="chunks")
 

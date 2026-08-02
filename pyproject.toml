@@ -21,6 +21,7 @@ dependencies = [
     "requests>=2.34",
     "typer>=0.27",
     "keyring>=25.7",
+    "tomli_w>=1.2",
 ]
 
 [project.optional-dependencies]
