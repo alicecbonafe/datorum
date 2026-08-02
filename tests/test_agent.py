@@ -6,10 +6,10 @@ import pytest
 from pytest_mock import MockerFixture
 
 from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
-from datorum.config import (
+from datorum.agent import (
     AIServiceProvider,
     AgentRole,
-    GeneralConfig,
+    AIConfig,
 )
 from datorum.exceptions import InvalidIdentifierException
 
@@ -29,20 +29,9 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
         default_model=default_model,
         models=models
     )
-    config = GeneralConfig(
+    config = AIConfig(
         providers=[provider],
     )
-
-    provider2 = AIServiceProvider(
-        id=f"{provider_id}-2",
-        base_url=base_url,
-        description=description,
-        default_model=default_model,
-        models=models
-    )
-    provider2._persistent = BaseDatorumPersistentSettings()
-    with pytest.raises(ValueError, match="Config not found"):
-        config = provider2.config
 
     with pytest.raises(InvalidIdentifierException, match=r"^default_model '.*?' not in provider '.*?' models list$"):
         AIServiceProvider(
@@ -73,7 +62,7 @@ def test_general_config(tmp_path: Path):
         description="Mocked Role 2",
     )
 
-    config = GeneralConfig(
+    config = AIConfig(
         providers = [provider_1, provider_2],
         roles = [role_1, role_2],
     )
@@ -90,8 +79,8 @@ def test_general_config(tmp_path: Path):
 
     provider_1_copy_1 = copy(provider_1)
     provider_1_copy_2 = copy(provider_1)
-    with pytest.raises(InvalidIdentifierException, match=r"^Duplicate child IDs found in 'GeneralConfig.providers':.*?$"):
-        GeneralConfig(
+    with pytest.raises(InvalidIdentifierException, match=r"^Duplicate child IDs found in 'AIConfig.providers':.*?$"):
+        AIConfig(
             providers=[
                 provider_1,
                 provider_1_copy_1,

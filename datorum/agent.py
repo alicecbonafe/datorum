@@ -25,11 +25,7 @@ class AIServiceProvider(BaseDatorumSettings):
 
     _resolved_key: str | None = PrivateAttr(default=None)
 
-    @property
-    def config(self) -> 'GeneralConfig':
-        if isinstance(self.persistent, GeneralConfig):
-            return self.persistent
-        raise ValueError("Config not found")
+    # TODO Implement security backend calls
 
     # @property
     # def api_key(self) -> str:
@@ -44,7 +40,7 @@ class AIServiceProvider(BaseDatorumSettings):
     #     self.api_key_hint = f"{api_key[:7]}..."
 
     @model_validator(mode="after")
-    def _default_model_must_be_listed(self) -> "GeneralConfig":
+    def _default_model_must_be_listed(self) -> "AIConfig":
         if self.default_model is not None and self.models and self.default_model not in self.models:
             raise InvalidIdentifierException(
                 f"default_model '{self.default_model}' not in provider '{self.id}' models list"
@@ -65,10 +61,8 @@ class AgentRole(BaseDatorumSettings):
     max_tokens: int = Field(default=4096)
 
 
-class GeneralConfig(BaseDatorumPersistentSettings):
+class AIConfig(BaseDatorumSettings):
     """Daturum configuration data structure."""
-
-    log_file: str | None = Field(default=None, description="Name for the log file.")
 
     providers: list[AIServiceProvider] = Field(default_factory=list)
     roles: list[AgentRole] = Field(default_factory=list)
@@ -91,11 +85,11 @@ class GeneralConfig(BaseDatorumPersistentSettings):
 
             duplicates = [id for id, count in Counter(ids).items() if count > 1]
             raise InvalidIdentifierException(
-                f"Duplicate child IDs found in 'GeneralConfig.{field}': {duplicates}"
+                f"Duplicate child IDs found in 'AIConfig.{field}': {duplicates}"
             )
 
     @model_validator(mode="after")
-    def _bind_providers_to_self(self) -> "GeneralConfig":
+    def _bind_providers_to_self(self) -> "AIConfig":
 
         self._validate_unique("providers", [p.id for p in self.providers])
         self._validate_unique("roles", [r.id for r in self.roles])

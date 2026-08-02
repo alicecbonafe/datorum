@@ -8,7 +8,7 @@ from typing import Literal, Optional, Annotated, Union
 from pydantic import Field, PrivateAttr, model_validator
 
 from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
-from .config import GeneralConfig, AgentRole, AIServiceProvider
+from .config import AIConfig, AgentRole, AIServiceProvider
 from .domain import DomainCollection
 from .exceptions import InvalidIdentifierException
 
@@ -237,12 +237,12 @@ class PipelineCollection(BaseDatorumPersistentSettings):
     flow_files: list[str] = Field(default_factory=list)
     toolboxes: list[ToolBoxSettings] = Field(default_factory=list)
 
-    _config: GeneralConfig | None = PrivateAttr(default=None)
+    _config: AIConfig | None = PrivateAttr(default=None)
     _domains: DomainCollection | None = PrivateAttr(default=None)
     _pipeflows: list[PipeFlow] | None = PrivateAttr(default=None)
 
     @classmethod
-    def load_pipelines(cls, config: GeneralConfig) -> PipelineCollection:
+    def load_pipelines(cls, config: AIConfig) -> PipelineCollection:
         instance: PipelineCollection = cls.load(
             config.settings_path / "plumbing.yml")
         instance._config = config
@@ -251,7 +251,7 @@ class PipelineCollection(BaseDatorumPersistentSettings):
         return instance
 
     @property
-    def config(self) -> GeneralConfig:
+    def config(self) -> AIConfig:
         if self._config is None:
             raise ValueError("Config not found")
         return self._config
