@@ -7,162 +7,12 @@ from pytest_mock import MockerFixture
 
 from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
 from datorum.config import (
-    KeyStore,
-    KeyStoreException,
-    NoKeyStore,
-    OSKeychainStore,
-    EncryptedFileStore,
     AIServiceProvider,
     AgentRole,
     GeneralConfig,
 )
 from datorum.exceptions import InvalidIdentifierException
 
-
-class MockedPersistentModel(BaseDatorumPersistentSettings):
-
-    keystore: OSKeychainStore | EncryptedFileStore | None = None
-
-def test_keystore():
-    keystore = KeyStore(type="dummy")
-
-    assert not keystore._unlocked
-
-    error_ok = False
-    try:
-        keystore._ensure_unlocked()
-    except KeyStoreException:
-        error_ok = True
-    assert error_ok
-
-    keystore.unlock()
-    assert keystore._unlocked
-
-    error_ok = False
-    try:
-        keystore.load_key("test")
-    except NotImplementedError:
-        error_ok = True
-    assert error_ok
-
-    error_ok = False
-    try:
-        keystore.store_key("test", "secret")
-    except NotImplementedError:
-        error_ok = True
-    assert error_ok
-
-def test_no_keystore():
-    no_keystore = NoKeyStore()
-
-    error_ok = False
-    try:
-        no_keystore.unlock()
-    except KeyStoreException:
-        error_ok = True
-    assert error_ok
-
-    error_ok = False
-    try:
-        no_keystore.load_key("test")
-    except KeyStoreException:
-        error_ok = True
-    assert error_ok
-
-    error_ok = False
-    try:
-        no_keystore.store_key("test", "secret")
-    except KeyStoreException:
-        error_ok = True
-    assert error_ok
-
-def test_os_keychain_store(mocker: MockerFixture):
-    service = "mocked_keychain_service"
-    provider_id = "mocked_provider"
-    api_key = "***secret***"
-
-    store = OSKeychainStore(service=service)
-
-    mock_set = mocker.patch("keyring.set_password")
-    store.store_key(provider_id=provider_id, api_key=api_key)
-    mock_set.assert_called_once_with(service, provider_id, api_key)
-    
-    mock_get = mocker.patch("keyring.get_password", return_value=api_key)
-    api_key2 = store.load_key(provider_id=provider_id)
-    mock_get.assert_called_once_with(service, provider_id)
-    assert api_key == api_key2
-    
-    mock_get_error = mocker.patch("keyring.get_password", return_value=None)
-    error_ok = False
-    try:
-        store.load_key(provider_id=provider_id)
-    except KeyStoreException:
-        error_ok = True
-    mock_get_error.assert_called_once_with(service, provider_id)
-    assert error_ok
-
-def test_encrypted_file_store(tmp_path: Path, mocker: MockerFixture):
-    workspace_path = tmp_path / "workspace"
-    settings_path = workspace_path / "mocked_settings" / "mocked.yml"
-    encrypted_file = "encrypted.json"
-    provider_id = "mocked_provider"
-    encrypted_key = "file-secret"
-    api_key = "***secret***"
-
-    store = EncryptedFileStore(
-        encrypted_file=encrypted_file,
-    )
-    MockedPersistentModel(
-        keystore=store,
-    ).save_as(settings_path=settings_path)
-    parent = MockedPersistentModel.load(settings_path=settings_path)
-    assert parent.keystore.encrypted_path.parent.parent == workspace_path
-    assert str(parent.keystore.encrypted_path).endswith(encrypted_file)
-
-    assert not store._unlocked
-    store.unlock(password_provider = lambda message: encrypted_key)
-    assert store._unlocked
-    store.unlock()
-
-    error_ok = False
-    try:
-        store.load_key(provider_id=provider_id)
-    except KeyStoreException:
-        error_ok = True
-    assert error_ok
-
-    store.store_key(provider_id=provider_id, api_key=api_key)
-
-    file_content = store.encrypted_path.read_text(encoding="utf-8")
-    assert "salt" in file_content
-    assert "data" in file_content
-    assert api_key not in file_content
-
-    api_key_readed = store.load_key(provider_id=provider_id)
-    assert api_key_readed == api_key
-
-    error_ok = False
-    def password_error_provider(key: str) -> str:
-        raise Exception()
-    store._unlocked = False
-    with pytest.raises(KeyStoreException, match=r"^Could not obtain.*$"):
-        store.unlock(password_error_provider)
-
-    error_ok = False
-    def password_empty_provider(key: str) -> str:
-        return ""
-    store._unlocked = False
-    with pytest.raises(KeyStoreException, match="Key store password cannot be empty"):
-        store.unlock(password_empty_provider)
-
-    mocker.patch.object(
-        store._fernet,
-        'decrypt',
-        side_effect=InvalidToken("Mocked error")
-    )
-    store._unlocked = True
-    with pytest.raises(KeyStoreException, match="Wrong password, or the key store file is corrupted"):
-        store._load()
 
 def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
     provider_id = "mocked-provider"
@@ -182,23 +32,6 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
     config = GeneralConfig(
         providers=[provider],
     )
-
-    mocked = mocker.patch.object(
-        type(config.key_store),
-        "store_key"
-    )
-    provider.api_key = api_key
-    mocked.assert_called_once_with(provider_id, api_key)
-
-    mocked = mocker.patch.object(
-        type(config.key_store),
-        "load_key",
-        return_value=api_key,
-    )
-    provider._resolved_key = None
-    resolved = provider.api_key
-    mocked.assert_called_once_with(provider_id)
-    assert resolved == api_key
 
     provider2 = AIServiceProvider(
         id=f"{provider_id}-2",

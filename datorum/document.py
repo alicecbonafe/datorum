@@ -337,9 +337,9 @@ class DocumentReference(BaseDatorumSettings):
         handler.serializer(data, doc_path)
         return doc_path
 
-    def copy_to(self, target: "Document", base_path: Path | None = None) -> "Document":
-        if base_path is not None:
-            self._base_path = base_path
+    def copy_to(self, target: "Document") -> "Document":
+        if self.doc_model != target.doc_model:
+            raise DocumentFormatException(f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'")
 
         src_path = self.doc_path
         if not src_path.exists():
@@ -349,7 +349,10 @@ class DocumentReference(BaseDatorumSettings):
 
         if dst_path != src_path:
             dst_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_path, dst_path)            
+            if self.doc_type == target.doc_type:
+                shutil.copy2(src_path, dst_path)
+            else:
+                target.save(self.load())
 
         return target
 
@@ -364,7 +367,7 @@ class DocumentContext(BaseDatorumSettings):
     @property
     def base_path(self) -> Path:
         if self._base_path is None:
-            raise NoFilePathException(f"Base path for '{self.id}' not defined")
+            raise NoFilePathException("Base path for this context was not defined")
         return self._base_path
 
     @base_path.setter
