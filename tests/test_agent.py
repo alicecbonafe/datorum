@@ -1,11 +1,9 @@
 from copy import copy
-from cryptography.fernet import Fernet, InvalidToken
 from pathlib import Path
 
 import pytest
 from pytest_mock import MockerFixture
 
-from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
 from datorum.agent import (
     AIServiceProvider,
     AgentRole,
@@ -14,6 +12,7 @@ from datorum.agent import (
 from datorum.exceptions import InvalidIdentifierException
 
 
+@pytest.mark.depends(on=["tests/test_base_settings.py"])
 def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
     provider_id = "mocked-provider"
     base_url = "http://mocked.local/v1"
@@ -42,6 +41,7 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
             models=["anything", "but", "the", "default", "module"]
         )
 
+@pytest.mark.depends(on=["test_ai_service_provider"])
 def test_general_config(tmp_path: Path):
     provider_1 = AIServiceProvider(
         id="provider-1",

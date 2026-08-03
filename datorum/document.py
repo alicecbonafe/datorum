@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Optional, Callable
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 import json
 import shutil
@@ -224,7 +224,7 @@ def simple_toml_reader(file_path: Path) -> dict:
 
 
 # ======================================================
-# | Document definition
+# | Settings
 # ======================================================
 
 
@@ -236,7 +236,13 @@ class DocumentReference(BaseDatorumSettings):
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    _base_path: Path | None = PrivateAttr(default=None)
+    _context: Optional["DocumentContext"] = PrivateAttr(default=None)
+
+    @property
+    def context(self) -> "DocumentContext":
+        if self._context is None:
+            raise ValueError(f"Document '{self.id}' is out of context")
+        return self._context
 
     @property
     def registry_doc_type(self) -> DocumentType:
@@ -263,13 +269,7 @@ class DocumentReference(BaseDatorumSettings):
 
     @property
     def base_path(self) -> Path:
-        if self._base_path is None:
-            raise NoFilePathException(f"Base path for '{self.id}' not defined")
-        return self._base_path
-
-    @base_path.setter
-    def base_path(self, value: Path):
-        self._base_path = value
+        return self.context.base_path
 
     @property
     def name(self) -> str:
@@ -300,10 +300,7 @@ class DocumentReference(BaseDatorumSettings):
 
         return doc_path
 
-    def load(self, base_path: Path | None = None) -> Any:
-        if base_path is not None:
-            self._base_path = base_path
-
+    def load(self) -> Any:
         doc_path = self.doc_path
         if not doc_path.exists():
             raise DocumentNotFoundException(f"Document '{self.id}' not found at '{doc_path}'")
@@ -315,10 +312,7 @@ class DocumentReference(BaseDatorumSettings):
             )
         return handler.deserializer(doc_path)
 
-    def save(self, data: Any, base_path: Path | None = None) -> Path:
-        if base_path is not None:
-            self._base_path = base_path
-
+    def save(self, data: Any) -> Path:
         expected_type = self.registry_doc_model.clazz
         if not isinstance(data, expected_type):
             raise TypeError(
@@ -359,6 +353,7 @@ class DocumentReference(BaseDatorumSettings):
 
 class DocumentContext(BaseDatorumSettings):
 
+    id: str
     documents: dict[str, DocumentReference] = Field(default_factory=dict)
     domain_metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -367,14 +362,12 @@ class DocumentContext(BaseDatorumSettings):
     @property
     def base_path(self) -> Path:
         if self._base_path is None:
-            raise NoFilePathException("Base path for this context was not defined")
+            return self.settings_path.parent
         return self._base_path
 
     @base_path.setter
     def base_path(self, value: Path):
         self._base_path = value
-        for document in self.documents.values():
-            document.base_path = value
 
     def get_document(self, id: str) -> DocumentReference | None:
         return self.documents.get(id)
@@ -386,7 +379,7 @@ class DocumentContext(BaseDatorumSettings):
             doc_model=doc_model,
         )
         self.documents[id] = document
-        document.base_path = self.base_path
+        document._context = self
         return document
 
     def drop_document(self, id: str, remove_file: bool = False):
@@ -396,3 +389,8 @@ class DocumentContext(BaseDatorumSettings):
                 doc_path.unlink()
         del self.documents[id]
 
+    @model_validator(mode="after")
+    def _set_context(self) -> "DocumentContext":
+        for document in self.documents.values():
+            document._context = self
+        return self

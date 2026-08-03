@@ -20,9 +20,11 @@ from datorum.exceptions import (
     UnknownDataModelException,
     NoFilePathException,
     DocumentNotFoundException,
+    ConfigException,
 )
 
 
+@pytest.mark.depends(on=["tests/test_base_settings.py"])
 def test_registry(tmp_path: Path):
     doc_type = "text/test"
     doc_extentions = ["tst", "test"]
@@ -77,6 +79,7 @@ def test_registry(tmp_path: Path):
     @doc_model(id="mocked-model-2", doc_type="application/yaml")
     class MockedModel2: ...
 
+@pytest.mark.depends(on=["test_registry"])
 def test_defaults(tmp_path: Path):
     text_file = tmp_path / "mocked.txt"
     json_file = tmp_path / "mocked.json"
@@ -118,11 +121,17 @@ def test_defaults(tmp_path: Path):
     assert yaml_data == data
     assert toml_data == data
 
+@pytest.mark.depends(on=["test_defaults"])
 def test_document_reference(tmp_path: Path):
     text_content = "Mocked Data!!!"
 
-    document = DocumentReference(id="domain_1.domain_2.mocked_doc")
-    document.base_path = tmp_path
+    document_id = "domain_1.domain_2.mocked_doc"
+    document = DocumentReference(id=document_id)
+    context: DocumentContext = DocumentContext.model_validate({"id": "mocked-context", "documents": {document_id: document}})
+    assert document_id in context.documents
+    context.base_path = tmp_path
+
+    assert document.base_path == tmp_path
 
     assert document.registry_doc_type.id == "text/plain"
     assert document.registry_doc_model.id == "text"
@@ -136,14 +145,13 @@ def test_document_reference(tmp_path: Path):
     assert str(doc_path).endswith(".txt")
 
     assert not doc_path.exists()
-    document.save(text_content, tmp_path)
+    document.save(text_content)
     assert doc_path.exists()
 
-    text_content_1 = document.load(tmp_path)
+    text_content_1 = document.load()
     assert text_content == text_content_1
 
-    document_2 = DocumentReference(id="domain_3.mocked_doc")
-    document_2.base_path = tmp_path
+    document_2 = context.create_document(id="domain_3.mocked_doc")
     document.copy_to(document_2)
     text_content_2 = document_2.load()
     assert text_content == text_content_2
@@ -164,10 +172,10 @@ def test_document_reference(tmp_path: Path):
     with pytest.raises(DocumentFormatException):
         assert document_error.registry_doc_handler
 
-    with pytest.raises(NoFilePathException):
+    with pytest.raises(ValueError, match=r"out of context$"):
         assert document_error.base_path
 
-    document_error.base_path = tmp_path
+    document_error._context = context
     register_doc_type("not/found", [".none"])
     with pytest.raises(DocumentNotFoundException):
         document_error.load()
@@ -199,19 +207,17 @@ def test_document_reference(tmp_path: Path):
         a_text: str
         a_list: list[str] = Field(default_factory=list)
 
-    document_1 = DocumentReference(
+    document_1 = context.create_document(
         id="domain_1.mocked",
         doc_type="application/json",
         doc_model=MockedModel.__name__
     )
-    document_1.base_path = tmp_path / "test_1"
 
-    document_2 = DocumentReference(
+    document_2 = context.create_document(
         id="domain_1.mocked",
         doc_type="application/yaml",
         doc_model=MockedModel.__name__
     )
-    document_2.base_path = tmp_path / "test_2"
 
     model_1 = MockedModel(a_text = text_content)
     document_1.save(model_1)
@@ -227,15 +233,15 @@ def test_document_reference(tmp_path: Path):
     with pytest.raises(DocumentNotFoundException):
         document_1.copy_to(document_2)
 
+@pytest.mark.depends(on=["test_document_reference"])
 def test_document_context(tmp_path: Path):
-    context_1 = DocumentContext()
+    context_1 = DocumentContext(id="context-1")
 
-    with pytest.raises(NoFilePathException):
+    with pytest.raises(ConfigException):
         assert context_1.base_path
 
     document_1_id = "domain.document"
-    document_1 = DocumentContext(id=document_1_id)
-    context_1.documents[document_1_id] = document_1
+    document_1 = context_1.create_document(id=document_1_id)
     assert context_1.get_document(document_1_id) is document_1
 
     context_1.base_path = tmp_path / "context_1_files"

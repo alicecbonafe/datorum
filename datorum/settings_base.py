@@ -25,6 +25,10 @@ class BaseDatorumSettings(BaseModel):
             raise ConfigException("Persistent model not defined")
         return self._persistent
 
+    @property
+    def settings_path(self) -> Path:
+        return self.persistent.settings_path
+
     def _set_persistent_recursive(
         self,
         persistent_instance: "BaseDatorumPersistentSettings",

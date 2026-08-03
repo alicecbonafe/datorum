@@ -65,6 +65,8 @@ def test_exceptions():
     with pytest.raises(NoFilePathException):
         assert data.settings_path
 
+@pytest.mark.depends(
+    on=["test_persistence", "test_exceptions"])
 def test_special_cases():
     data1 = MockedModel()
     data1.another_model = data1
