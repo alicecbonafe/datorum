@@ -21,7 +21,7 @@ from .wiring import (
     ResourcePort,
     CustomPort,
 )
-from .exceptions import InvalidIdentifierException
+from .exceptions import InvalidIdentifierException, ToolBoxException
 
 
 _SKIP_PARAMS = {"self", "cls"}
@@ -32,12 +32,12 @@ _SKIP_PARAMS = {"self", "cls"}
 # ======================================================
 
 def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
-    signature = inspect.signature(func)
     try:
+        signature = inspect.signature(func)
         hints = get_type_hints(func, include_extras=True)
-    except NameError as exc:
-        raise TypeError(
-            f"Could not resolve type hints for tool '{func.__qualname__}': {exc}"
+    except TypeError as exc:
+        raise ToolBoxException(
+            f"Could not resolve type hints for function '{func}': {exc}"
         ) from exc
 
     fields: dict[str, tuple[Any, Any]] = {}
@@ -49,7 +49,7 @@ def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
             continue # skips *args and **kwargs
 
         if name not in hints:
-            raise TypeError(
+            raise ToolBoxException(
                 f"Tool '{func.__qualname__}' parameter '{name}' has no type "
                 "annotation; every tool parameter must be typed."
             )
@@ -89,9 +89,15 @@ def _first_typed_param(callable_obj: Callable, expected: type) -> tuple[str, Any
     """First non-skip, non-*args/**kwargs param of `callable_obj` whose annotation matches `expected`."""
     try:
         type_hints = get_type_hints(callable_obj)
-    except NameError:
+    except TypeError:
         type_hints = {}
-    for p in inspect.signature(callable_obj).parameters.values():
+
+    try:
+        params = inspect.signature(callable_obj).parameters
+    except TypeError:
+        raise ToolBoxException("Argument is not callable")
+
+    for p in params.values():
         if p.name in _SKIP_PARAMS:
             continue
         if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
@@ -106,8 +112,7 @@ def _coerce_to_dict(data: Any) -> dict:
         return data.model_dump(mode="python")
     if isinstance(data, dict):
         return data
-    raise TypeError(f"Expected a dict or BaseModel, got {type(data).__name__}")
-
+    raise ToolBoxException(f"Expected a dict or BaseModel, got {type(data).__name__}")
 
 def _resolve_call_args(
     callable_obj: Callable,
@@ -159,6 +164,10 @@ class FunctionDefinition(BaseModel):
     def parameters_model(self) -> Optional[type[BaseModel]]:
         return self._parameters_model
 
+    @parameters_model.setter
+    def parameters_model(self, value: type[BaseModel]):
+        self._parameters_model = value
+
     @classmethod
     def from_params_model(
         cls, name: str, description: str,
@@ -171,7 +180,7 @@ class FunctionDefinition(BaseModel):
         else:
             schema = {"type": "object", "properties": {}, "additionalProperties": False}
         instance = cls(name=name, description=description, parameters=schema)
-        instance._parameters_model = params_model
+        instance.parameters_model = params_model
         return instance
 
 
@@ -187,8 +196,12 @@ class ToolDefinition(BaseModel):
     def returns(self) -> type[BaseModel] | type[str]:
         return self._returns
 
+    @returns.setter
+    def returns(self, value: type[BaseModel] | type[str]):
+        self._returns = value
 
-class AttributeWire(BaseModel):
+
+class AttributeExposure(BaseModel):
 
     attr_name: str
     
@@ -209,7 +222,7 @@ class ToolBoxDefinition(BaseModel):
     settings_attr: str | None = None
 
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)
-    attributes: dict[str, AttributeWire] = Field(default_factory=dict)
+    attributes: dict[str, AttributeExposure] = Field(default_factory=dict)
 
     _clazz: type | None = PrivateAttr(default=None)
     _settings_type: type[BaseModel] | type[dict] = PrivateAttr(default=dict)
@@ -217,28 +230,36 @@ class ToolBoxDefinition(BaseModel):
     @property
     def clazz(self) -> type:
         if self._clazz is None:
-            raise ValueError("Class not defined for this toolbox")
+            raise ToolBoxException(f"ToolBox '{self.id}' has no defined clazz")
         return self._clazz
+
+    @clazz.setter
+    def clazz(self, value: type):
+        self._clazz = value
 
     @property
     def settings_type(self) -> type[BaseModel] | type[dict]:
         return self._settings_type
 
+    @settings_type.setter
+    def settings_type(self, value: type[BaseModel] | type[dict]):
+        self._settings_type = value
+
     def create_toolbox(self, settings: Any = None) -> Any:
-        _toolbox: Any = None
+        result: Any = None
 
         if settings is None or self.settings_attr is not None:
-            _toolbox = self.clazz()
+            result = self.clazz()
         else:
             init_method = getattr(self.clazz, "__init__", object.__init__)
             args, kwargs = _resolve_call_args(init_method, settings, self.settings_type)
-            _toolbox = self.clazz(*args, **kwargs)
+            result = self.clazz(*args, **kwargs)
 
         if settings is not None and self.settings_attr is not None:
-            setattr(_toolbox, self.settings_attr, settings)
+            setattr(result, self.settings_attr, settings)
 
         def run_tool(tool_name: str, params: Any = None):
-            tool_method = getattr(_toolbox, tool_name)
+            tool_method = getattr(result, tool_name)
             tool_def: ToolDefinition = tool_method._tool_def
 
             if params is not None and tool_def.function.parameters_model is not None:
@@ -247,9 +268,9 @@ class ToolBoxDefinition(BaseModel):
 
             return tool_method()
 
-        setattr(_toolbox, "run_tool", run_tool)
+        setattr(result, "run_tool", run_tool)
 
-        return _toolbox
+        return result
 
 
 # ======================================================
@@ -287,7 +308,7 @@ def toolbox(
             id=name or cls.__qualname__,
             settings_attr=settings_attr,
         )
-        toolbox_def._clazz=cls
+        toolbox_def.clazz=cls
         toolbox_def._settings_type=settings_type
         ToolBoxRegistry[toolbox_def.id] = toolbox_def
 
@@ -298,7 +319,7 @@ def toolbox(
 
         type_hints = get_type_hints(cls)
         for exp_attr in exp_attrs:
-            toolbox_def.attributes[exp_attr] = AttributeWire(attr_name=exp_attr)
+            toolbox_def.attributes[exp_attr] = AttributeExposure(attr_name=exp_attr)
             if exp_attr in type_hints:
                 toolbox_def.attributes[exp_attr].attr_type = type_hints[exp_attr]
 

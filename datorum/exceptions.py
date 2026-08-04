@@ -34,6 +34,9 @@ class InvalidIdentifierException(DatorumModelException): ...
 class KeyStoreException(DatorumModelException): ...
 
 
+class ToolBoxException(DatorumModelException): ...
+
+
 # SERVICE
 
 
