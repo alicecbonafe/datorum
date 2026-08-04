@@ -71,7 +71,7 @@ lint/tests are easy to run locally, repo is presentable.
 
 ---
 
-## 5. Phase 3 (current) — Full settings model
+## 5. Phase 3 (complete) — Full settings model
 
 Commom base for all Datorum use cases.
 
@@ -82,49 +82,41 @@ Commom base for all Datorum use cases.
 - Context binding model
 
 - [x] Coding
-- [ ] Testing
-- [ ] Styling
+- [x] Testing
+- [x] Styling
 
 ---
 
-## 6. Phase 4 — Runners for tools, agents and pipelines
-
-
-
----
-
-## 7. Phase 3 — Basic tools
-
-- FileManager
-- SiteScraper (must implement a strong `robots.txt` compliance)
-- GitBrowser
-- HTMLDocParser (selector based)
-- MatchDocParser (pattern based)
-- DirectDataConverter
-- VectorDBManager
-- SnippetRunner
-
-
----
-
-## 8. Phase 6 — FastAPI endpoints
+## 6. Phase 4 — Workers for tools, agents and pipelines
 
 
 
 ---
 
-## 9. Phase 7 — Reference GUI implementation (NiceGUI)
+## 7. Phase 5 — API exposure and documentation
 
 
 
 ---
 
-## 10. Phase 8 — Documentation
+## 8. Phase 6 — Refactoring conclusion
 
-
+- [ ] Alpha release
+- [ ] GitHub mirror
+- [ ] PyPi publishing
 
 ---
 
-## 11. Phase 9 — First release
+## 9. Post-refactoring roadmap
 
-
+- User Guide in reST
+- Basic tools:
+  - FileManager
+  - SiteScraper (must implement a strong `robots.txt` compliance)
+  - GitBrowser
+  - HTMLDocParser (selector based)
+  - MatchDocParser (pattern based)
+  - DirectDataConverter
+  - VectorDBManager
+  - SnippetRunner
+- **Workbench** (as separated project)
