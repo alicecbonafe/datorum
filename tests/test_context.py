@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 import pytest
 
-from datorum.document import (
+from datorum.context import (
     DOC_TYPES, DOC_MODELS, DOC_HANDLERS,
     DocumentModel,
     DocumentHandler,

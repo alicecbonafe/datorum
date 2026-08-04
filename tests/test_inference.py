@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from datorum.agent import (
+from datorum.inference import (
     AIServiceProvider,
     AgentRole,
     AIConfig,

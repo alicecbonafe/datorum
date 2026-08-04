@@ -8,7 +8,7 @@ from datorum.exceptions import (
     InvalidIdentifierException,
     ToolBoxException,
 )
-from datorum.toolbox import (
+from datorum.tooling import (
     _params_model_from_signature,
     _unwrap_optional,
     _hint_matches,

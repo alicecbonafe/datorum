@@ -9,8 +9,8 @@ from pydantic import Field, PrivateAttr, model_validator
 
 from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
 from .wiring import InputPort, OutputPort, LivePort, ResourcePort
-from .agent import AIConfig, AgentRole, AIServiceProvider
-from .document import DocumentContext
+from .inference import AIConfig, AgentRole, AIServiceProvider
+from .context import DocumentContext
 from .exceptions import InvalidIdentifierException
 
 

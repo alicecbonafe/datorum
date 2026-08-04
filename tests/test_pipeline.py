@@ -16,8 +16,8 @@ from datorum.pipeline import (
 
 @pytest.mark.depends(on=[
     "tests/test_wiring.py",
-    "tests/test_agent.py",
-    "tests/test_document.py"])
+    "tests/test_inference.py",
+    "tests/test_context.py"])
 def test_validators():
     pipeline: Pipeline = Pipeline.model_validate({
         "id": "mocked-pipeline-1",
