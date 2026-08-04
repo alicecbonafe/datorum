@@ -1,23 +1,20 @@
-from pathlib import Path
-from typing import Any, Optional, Callable
-
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
-
 import json
 import shutil
-import tomllib
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, Optional
+
 import tomli_w
+import tomllib
 import yaml
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from .settings import BaseDatorumSettings
 from .exceptions import (
-    NoFilePathException,
-    DocumentNotFoundException,
-    DocumentNotLoadedException,
-    UnknownDataModelException,
     DocumentFormatException,
+    DocumentNotFoundException,
+    UnknownDataModelException,
 )
-
+from .settings import BaseDatorumSettings
 
 # ======================================================
 # | Classes
@@ -39,15 +36,15 @@ class DocumentHandler(BaseModel):
     doc_type: str
     doc_model: str
 
-    _serializer: Optional[Callable] = PrivateAttr(default=None)
-    _deserializer: Optional[callable] = PrivateAttr(default=None)
+    _serializer: Callable | None = PrivateAttr(default=None)
+    _deserializer: callable | None = PrivateAttr(default=None)
 
     @property
     def id(self) -> tuple[str, str]:
         return (self.doc_type, self.doc_model)
 
     @property
-    def serializer(self) -> Optional[Callable]:
+    def serializer(self) -> Callable | None:
         return self._serializer
 
     @serializer.setter
@@ -55,11 +52,11 @@ class DocumentHandler(BaseModel):
         self._serializer = value
 
     @property
-    def deserializer(self) -> Optional[Callable]:
+    def deserializer(self) -> Callable | None:
         return self._deserializer
 
     @deserializer.setter
-    def deserializer(self, value: Optional[Callable]):
+    def deserializer(self, value: Callable | None):
         self._deserializer = value
 
 
@@ -331,7 +328,7 @@ class DocumentReference(BaseDatorumSettings):
         handler.serializer(data, doc_path)
         return doc_path
 
-    def copy_to(self, target: "Document") -> "Document":
+    def copy_to(self, target: "DocumentReference") -> "DocumentReference":
         if self.doc_model != target.doc_model:
             raise DocumentFormatException(f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'")
 

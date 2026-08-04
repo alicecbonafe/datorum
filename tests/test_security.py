@@ -1,17 +1,17 @@
 from datetime import timedelta
 from pathlib import Path
 
-from pydantic import BaseModel
 import pytest
 
 from datorum.exceptions import (
     ConfigException,
 )
 from datorum.security import (
+    LocalVaultBackend,
     get_security_backend,
     set_security_backend,
-    LocalVaultBackend,
 )
+
 
 class DummyBackend:
     def create_vault(self, username: str, password: str): ...

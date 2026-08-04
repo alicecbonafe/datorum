@@ -1,8 +1,6 @@
 from pathlib import Path
 
-import pytest
-
-from datorum import get_logger, configure_logging
+from datorum import configure_logging, get_logger
 
 
 def test_logging(tmp_path: Path):

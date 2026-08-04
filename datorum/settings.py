@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import yaml
+from pydantic import BaseModel, PrivateAttr, model_validator
 
-from .exceptions import NoFilePathException, ConfigException
+from .exceptions import ConfigException, NoFilePathException
 
 
 class DatorumDumper(yaml.SafeDumper): ...
@@ -43,7 +43,7 @@ class BaseDatorumSettings(BaseModel):
 
         self._persistent = persistent_instance
 
-        for field_name, _ in self.__class__.model_fields.items():
+        for field_name in self.__class__.model_fields:
             value = getattr(self, field_name)
             self._propagate_persistent(
                 value=value,

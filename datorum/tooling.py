@@ -1,28 +1,23 @@
-from enum import Enum
 import inspect
-from logging import Logger
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
     Literal,
-    Optional,
     Union,
     get_args,
     get_origin,
     get_type_hints,
 )
 
-from pydantic import BaseModel, Field, PrivateAttr, create_model, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, create_model
 
-from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
+from .exceptions import ToolBoxException
+from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 from .wiring import (
-    InputPort,
-    OutputPort,
-    ResourcePort,
     CustomPort,
+    InputPort,
+    ResourcePort,
 )
-from .exceptions import InvalidIdentifierException, ToolBoxException
-
 
 _SKIP_PARAMS = {"self", "cls"}
 
@@ -158,10 +153,10 @@ class FunctionDefinition(BaseModel):
         default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
     )
 
-    _parameters_model: Optional[type[BaseModel]] = PrivateAttr(default=None)
+    _parameters_model: type[BaseModel] | None = PrivateAttr(default=None)
 
     @property
-    def parameters_model(self) -> Optional[type[BaseModel]]:
+    def parameters_model(self) -> type[BaseModel] | None:
         return self._parameters_model
 
     @parameters_model.setter
@@ -268,7 +263,7 @@ class ToolBoxDefinition(BaseModel):
 
             return tool_method()
 
-        setattr(result, "run_tool", run_tool)
+        result.run_tool = run_tool
 
         return result
 
@@ -300,9 +295,9 @@ def toolbox(
     *,
     name: str | None = None,
     settings_attr: str | None = None,
-    expose: list[str] = [],
+    expose: list[str] | None = None,
 ):
-    exp_attrs = [*expose]
+    exp_attrs = [*expose] if expose is not None else []
     def decorator(cls):
         toolbox_def = ToolBoxDefinition(
             id=name or cls.__qualname__,
@@ -312,7 +307,7 @@ def toolbox(
         toolbox_def._settings_type=settings_type
         ToolBoxRegistry[toolbox_def.id] = toolbox_def
 
-        for attr_name, attr_value in vars(cls).items():
+        for attr_value in vars(cls).values():
             if hasattr(attr_value, "_tool_def"):
                 tool_def: ToolDefinition = attr_value._tool_def
                 toolbox_def.tools[tool_def.name] = tool_def

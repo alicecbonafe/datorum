@@ -1,29 +1,25 @@
-from pathlib import Path
-from typing import Optional
 
-from pydantic import BaseModel
 import pytest
+from pydantic import BaseModel
 
 from datorum.exceptions import (
-    InvalidIdentifierException,
     ToolBoxException,
 )
 from datorum.tooling import (
-    _params_model_from_signature,
-    _unwrap_optional,
-    _hint_matches,
-    _first_typed_param,
-    _coerce_to_dict,
-    _resolve_call_args,
-    FunctionDefinition,
-    ToolDefinition,
     AttributeExposure,
+    FunctionDefinition,
     ToolBoxDefinition,
     ToolBoxRegistry,
+    ToolDefinition,
+    _coerce_to_dict,
+    _first_typed_param,
+    _hint_matches,
+    _params_model_from_signature,
+    _resolve_call_args,
+    _unwrap_optional,
     tool,
     toolbox,
 )
-
 
 
 def test_helpers():
@@ -48,7 +44,7 @@ def test_helpers():
         _params_model_from_signature(lambda no_hint: no_hint + 1)
 
     # _unwrap_optional
-    assert _unwrap_optional(Optional[str]) == str
+    assert _unwrap_optional(str | None) == str
     assert _unwrap_optional(str) == str
 
     # _hint_matches
@@ -130,7 +126,7 @@ def test_classes():
 
     class MockedToolBox1:
         def tool_1(self, param_1: str, param_2: str | None = None) -> str:
-            return f"{param_1}[{param_2 or ""}]"
+            return f"{param_1}[{param_2 or ''}]"
 
     class MockedToolBox2:
         def __init__(self, settings: dict):
@@ -172,13 +168,13 @@ def test_classes():
     assert issubclass(attr_exp_1.attr_type, BaseModel)
 
     # ToolBoxDefinition
-    function_3 = FunctionDefinition(
+    FunctionDefinition(
         name=function_name,
         description=function_descr,
     )
     tb_def_1 = ToolBoxDefinition(id=toolbox_definition_id_1)
     tb_def_1.clazz = MockedToolBox1
-    setattr(MockedToolBox1.tool_1, "_tool_def", tool_def_1)
+    MockedToolBox1.tool_1._tool_def = tool_def_1
 
     toolbox_instance_1 = tb_def_1.create_toolbox()
 
@@ -194,7 +190,7 @@ def test_classes():
         name=tool_definition_name,
         function=function_2
     )
-    setattr(MockedToolBox2.tool_2, "_tool_def", tool_def_2)
+    MockedToolBox2.tool_2._tool_def = tool_def_2
 
     toolbox_instance_2 = tb_def_2.create_toolbox({
         "any_key": "any-value"
@@ -209,7 +205,7 @@ def test_classes():
     tb_def_3.clazz = MockedToolBox3
     tb_def_3.settings_attr = "settings"
     tb_def_3.settings_type = dict
-    setattr(MockedToolBox3.tool_3, "_tool_def", tool_def_2)
+    MockedToolBox3.tool_3._tool_def = tool_def_2
 
     toolbox_instance_3 = tb_def_3.create_toolbox({
         "any_key": "any-other-value"

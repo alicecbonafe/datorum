@@ -1,26 +1,27 @@
 from pathlib import Path
 
-from pydantic import BaseModel, Field
 import pytest
+from pydantic import BaseModel, Field
 
 from datorum.context import (
-    DOC_TYPES, DOC_MODELS, DOC_HANDLERS,
-    DocumentModel,
+    DOC_HANDLERS,
+    DOC_MODELS,
+    DOC_TYPES,
+    DocumentContext,
     DocumentHandler,
+    DocumentModel,
+    DocumentReference,
+    doc_model,
+    find_handlers,
+    get_or_create_handler,
     register_doc_type,
     register_pydantic_based_handler,
-    get_or_create_handler,
-    find_handlers,
-    doc_model,
-    DocumentReference,
-    DocumentContext
 )
 from datorum.exceptions import (
-    DocumentFormatException,
-    UnknownDataModelException,
-    NoFilePathException,
-    DocumentNotFoundException,
     ConfigException,
+    DocumentFormatException,
+    DocumentNotFoundException,
+    UnknownDataModelException,
 )
 
 
@@ -35,7 +36,7 @@ def test_registry(tmp_path: Path):
     class PydanticBasedModel(BaseModel):
         var_test: str = ""
 
-    registry_doc_type = register_doc_type(
+    register_doc_type(
         id=doc_type,
         extentions=doc_extentions
     )

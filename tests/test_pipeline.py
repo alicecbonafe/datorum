@@ -1,4 +1,3 @@
-from pathlib import Path
 
 import pytest
 
@@ -8,8 +7,8 @@ from datorum.exceptions import (
 from datorum.pipeline import (
     BasePipelineStep,
     HumanInteractionStep,
-    Pipeline,
     PipeFlow,
+    Pipeline,
     PipelineCollection,
 )
 

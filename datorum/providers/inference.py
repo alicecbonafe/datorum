@@ -24,9 +24,9 @@ class InferenceRequest(BaseModel):
 class InferenceProvider:
     @classmethod
     def load(
-        cls, provider: str = "", config: dict = {}
+        cls, provider: str = "", config: dict | None = None
     ) -> "InferenceProvider":
-
+        config = config or {}
         provider = provider.strip()
         prefix = f"{provider.upper()}_" if provider else ""
         base_url = config[f"{prefix}BASE_URL"]

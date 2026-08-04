@@ -1,12 +1,10 @@
-from pathlib import Path
 
-from pydantic import BaseModel, Field
 import pytest
 
 from datorum.wiring import (
     ResourceFactoryRegistry,
-    register_resource_factory,
     get_resource,
+    register_resource_factory,
     resource_factory,
 )
 

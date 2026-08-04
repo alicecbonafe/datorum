@@ -1,14 +1,12 @@
+from collections.abc import Callable
 from enum import Enum
-from pathlib import Path
 from typing import (
     Annotated,
     Any,
-    Callable,
     Literal,
-    Union,
 )
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from .settings import BaseDatorumSettings
 
@@ -105,13 +103,7 @@ class CustomPort(BasePort):
 
     port_type: Literal["custom"] = "custom"
     bind: Annotated[
-        Union[
-            DocumentBind,
-            DocumentRawBind,
-            DocumentPathBind,
-            DomainPathBind,
-            ResourceBind,
-        ], Field(discriminator="bind_type")
+        DocumentBind | DocumentRawBind | DocumentPathBind | DomainPathBind | ResourceBind, Field(discriminator="bind_type")
     ] | None = None
     attribute_name: str
 

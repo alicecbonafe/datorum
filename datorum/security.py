@@ -3,12 +3,11 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Protocol, Optional
+from typing import Protocol
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
 from pydantic import BaseModel, Field, PrivateAttr
 
 from .exceptions import ConfigException
@@ -41,10 +40,9 @@ class SecurityBackend(Protocol):
     def set_metadata(self, token: str, metadata_key: str, metadata_value: str): ...
 
 
-_global_security_backend: Optional[SecurityBackend] = None
+_global_security_backend: SecurityBackend | None = None
 
 def get_security_backend() -> SecurityBackend:
-    global _global_security_backend
     if _global_security_backend is None:
         raise ConfigException("Security backend not found")
     return _global_security_backend
@@ -70,6 +68,9 @@ class LocalVault(BaseModel):
     data: str | None = None
 
 
+def now_factory():
+    return datetime.now().astimezone()
+
 class LocalVaultSession(BaseModel):
 
     token: str
@@ -77,8 +78,8 @@ class LocalVaultSession(BaseModel):
     vault_path: Path
     idle_ttl: int = 60
     absolute_ttl: int = 1440
-    created_at: datetime = Field(default_factory=datetime.now)
-    last_seen_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=now_factory)
+    last_seen_at: datetime = Field(default_factory=now_factory)
 
     _fernet: Fernet | None = PrivateAttr(default=None)
 
@@ -102,7 +103,7 @@ class LocalVaultSession(BaseModel):
 
     @property
     def is_alive(self) -> bool:
-        now = datetime.now()
+        now = datetime.now().astimezone()
         expires_at = self.expires_at
         if expires_at is not None and now > expires_at:
             return False

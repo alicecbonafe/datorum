@@ -4,12 +4,12 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
+from datorum.exceptions import InvalidIdentifierException
 from datorum.inference import (
-    AIServiceProvider,
     AgentRole,
     AIConfig,
+    AIServiceProvider,
 )
-from datorum.exceptions import InvalidIdentifierException
 
 
 @pytest.mark.depends(on=["tests/test_base_settings.py"])
@@ -19,7 +19,7 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
     description = "Mocked provider description"
     default_model = "mocked-model-1"
     models = ["mocked-model-2", default_model]
-    api_key = "***secret***"
+    # api_key = "***secret***"
 
     provider = AIServiceProvider(
         id=provider_id,
@@ -28,7 +28,7 @@ def test_ai_service_provider(tmp_path: Path, mocker: MockerFixture):
         default_model=default_model,
         models=models
     )
-    config = AIConfig(
+    AIConfig(
         providers=[provider],
     )
 

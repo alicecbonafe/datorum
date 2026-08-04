@@ -1,17 +1,13 @@
 from collections import Counter
 from datetime import datetime
 from enum import Enum
-import json
-from pathlib import Path
-from typing import Literal, Optional, Annotated, Union
+from typing import Annotated, Literal, Optional, Union
 
 from pydantic import Field, PrivateAttr, model_validator
 
-from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
-from .wiring import InputPort, OutputPort, LivePort, ResourcePort
-from .inference import AIConfig, AgentRole, AIServiceProvider
-from .context import DocumentContext
 from .exceptions import InvalidIdentifierException
+from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
+from .wiring import InputPort, LivePort, OutputPort, ResourcePort
 
 
 class BasePipelineStep(BaseDatorumSettings):
@@ -69,16 +65,10 @@ class Pipeline(BaseDatorumSettings):
     description: str | None = None
 
     steps: list[Annotated[
-        Union[
-            HumanInteractionStep,
-            ToolStep,
-            AgentStep,
-        ], Field(discriminator="type")]
+        HumanInteractionStep | ToolStep | AgentStep, Field(discriminator="type")]
     ] = Field(default_factory=list)
 
-    _parent: Optional[Union[
-        "PipelineCollection", "PipeFlow"
-    ]] = PrivateAttr(default=None)
+    _parent: Union["PipelineCollection", "PipeFlow"] | None = PrivateAttr(default=None)
 
     @property
     def parent(self) -> Union["PipelineCollection", "PipeFlow"]:

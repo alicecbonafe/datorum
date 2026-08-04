@@ -1,8 +1,6 @@
 import logging
-import os
 import sys
 from pathlib import Path
-
 
 _PACKAGE_LOGGER_NAME = "datorum"
 
