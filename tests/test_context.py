@@ -36,10 +36,7 @@ def test_registry(tmp_path: Path):
     class PydanticBasedModel(BaseModel):
         var_test: str = ""
 
-    register_doc_type(
-        id=doc_type,
-        extentions=doc_extentions
-    )
+    register_doc_type(id=doc_type, extentions=doc_extentions)
 
     assert DOC_TYPES[doc_type].extentions == doc_extentions
 
@@ -51,7 +48,10 @@ def test_registry(tmp_path: Path):
         doc_model=PydanticBasedModel.__name__,
     )
 
-    assert ("application/json", PydanticBasedModel.__name__) == registry_pydantic_handler.id
+    assert (
+        "application/json",
+        PydanticBasedModel.__name__,
+    ) == registry_pydantic_handler.id
 
     obj1 = PydanticBasedModel(var_test=content_test)
     registry_pydantic_handler.serializer(obj1, doc_path)
@@ -62,23 +62,27 @@ def test_registry(tmp_path: Path):
 
     with pytest.raises(DocumentFormatException, match=r"^No dict serializer.*?$"):
         register_pydantic_based_handler(
-            model_type=PydanticBasedModel,
-            doc_type=doc_type
+            model_type=PydanticBasedModel, doc_type=doc_type
         )
 
     assert len(find_handlers()) > 3
     assert len(find_handlers(doc_type=doc_type)) == 0
-    assert len(find_handlers(
-        doc_model=PydanticBasedModel.__name__)) == 3
-    assert len(find_handlers(
-        doc_type="application/json",
-        doc_model=PydanticBasedModel.__name__)) == 1
+    assert len(find_handlers(doc_model=PydanticBasedModel.__name__)) == 3
+    assert (
+        len(
+            find_handlers(
+                doc_type="application/json", doc_model=PydanticBasedModel.__name__
+            )
+        )
+        == 1
+    )
 
     @doc_model(id="mocked-model-1", doc_type="application/json")
     class MockedModel1(BaseModel): ...
 
     @doc_model(id="mocked-model-2", doc_type="application/yaml")
     class MockedModel2: ...
+
 
 @pytest.mark.depends(on=["test_registry"])
 def test_defaults(tmp_path: Path):
@@ -87,10 +91,7 @@ def test_defaults(tmp_path: Path):
     yaml_file = tmp_path / "mocked.yaml"
     toml_file = tmp_path / "mocked.toml"
 
-    data = {
-        "test1": "some value",
-        "test2": 10
-    }
+    data = {"test1": "some value", "test2": 10}
 
     assert not text_file.exists()
     assert not json_file.exists()
@@ -122,13 +123,16 @@ def test_defaults(tmp_path: Path):
     assert yaml_data == data
     assert toml_data == data
 
+
 @pytest.mark.depends(on=["test_defaults"])
 def test_document_reference(tmp_path: Path):
     text_content = "Mocked Data!!!"
 
     document_id = "domain_1.domain_2.mocked_doc"
     document = DocumentReference(id=document_id)
-    context: DocumentContext = DocumentContext.model_validate({"id": "mocked-context", "documents": {document_id: document}})
+    context: DocumentContext = DocumentContext.model_validate(
+        {"id": "mocked-context", "documents": {document_id: document}}
+    )
     assert document_id in context.documents
     context.base_path = tmp_path
 
@@ -158,11 +162,8 @@ def test_document_reference(tmp_path: Path):
     assert text_content == text_content_2
 
     document_error = DocumentReference(
-        id="mocked_err",
-        doc_type="not/found",
-        doc_model="missing"
+        id="mocked_err", doc_type="not/found", doc_model="missing"
     )
-
 
     with pytest.raises(DocumentFormatException):
         assert document_error.registry_doc_type
@@ -191,9 +192,7 @@ def test_document_reference(tmp_path: Path):
         document_error.load()
 
     DOC_MODELS["missing"] = DocumentModel(
-        id="missing",
-        clazz=DocumentModel,
-        default_doc_type="not/found"
+        id="missing", clazz=DocumentModel, default_doc_type="not/found"
     )
     with pytest.raises(TypeError):
         document_error.save(text_content)
@@ -201,7 +200,6 @@ def test_document_reference(tmp_path: Path):
     DOC_MODELS["missing"].clazz = str
     with pytest.raises(DocumentFormatException):
         document_error.save(text_content)
-
 
     @doc_model(id="mocked")
     class MockedModel(BaseModel):
@@ -211,16 +209,16 @@ def test_document_reference(tmp_path: Path):
     document_1 = context.create_document(
         id="domain_1.mocked",
         doc_type="application/json",
-        doc_model=MockedModel.__name__
+        doc_model=MockedModel.__name__,
     )
 
     document_2 = context.create_document(
         id="domain_1.mocked",
         doc_type="application/yaml",
-        doc_model=MockedModel.__name__
+        doc_model=MockedModel.__name__,
     )
 
-    model_1 = MockedModel(a_text = text_content)
+    model_1 = MockedModel(a_text=text_content)
     document_1.save(model_1)
     document_1.copy_to(document_2)
     model_2: MockedModel = document_2.load()
@@ -233,6 +231,7 @@ def test_document_reference(tmp_path: Path):
     document_1.doc_path.unlink()
     with pytest.raises(DocumentNotFoundException):
         document_1.copy_to(document_2)
+
 
 @pytest.mark.depends(on=["test_document_reference"])
 def test_document_context(tmp_path: Path):

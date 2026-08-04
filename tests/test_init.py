@@ -18,4 +18,3 @@ def test_logging(tmp_path: Path):
     file_content = log_file.read_text(encoding="utf-8")
     assert log_name in file_content
     assert log_msg in file_content
-

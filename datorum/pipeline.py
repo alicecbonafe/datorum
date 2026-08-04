@@ -11,22 +11,20 @@ from .wiring import InputPort, LivePort, OutputPort, ResourcePort
 
 
 class BasePipelineStep(BaseDatorumSettings):
-
     type: str
     id: str
     description: str | None = None
 
-    _pipeline: Optional['Pipeline'] = PrivateAttr(default=None)
+    _pipeline: Optional["Pipeline"] = PrivateAttr(default=None)
 
     @property
-    def pipeline(self) -> 'Pipeline':
+    def pipeline(self) -> "Pipeline":
         if self._pipeline is None:
             raise ValueError("Pipeline not found")
         return self._pipeline
 
 
 class HumanInteractionStep(BasePipelineStep):
-
     type: Literal["human"] = "human"
     message: str
 
@@ -37,7 +35,6 @@ class HumanInteractionStep(BasePipelineStep):
 
 
 class ToolStep(BasePipelineStep):
-
     type: Literal["tool"] = "tool"
 
     toolbox_setup_id: str
@@ -47,7 +44,6 @@ class ToolStep(BasePipelineStep):
 
 
 class AgentStep(BasePipelineStep):
-
     type: Literal["agent"] = "agent"
     provider_id: str
     role_id: str
@@ -60,12 +56,13 @@ class AgentStep(BasePipelineStep):
 
 
 class Pipeline(BaseDatorumSettings):
-
     id: str
     description: str | None = None
 
-    steps: list[Annotated[
-        HumanInteractionStep | ToolStep | AgentStep, Field(discriminator="type")]
+    steps: list[
+        Annotated[
+            HumanInteractionStep | ToolStep | AgentStep, Field(discriminator="type")
+        ]
     ] = Field(default_factory=list)
 
     _parent: Union["PipelineCollection", "PipeFlow"] | None = PrivateAttr(default=None)
@@ -94,15 +91,14 @@ class Pipeline(BaseDatorumSettings):
 
 
 class PipeFlowState(str, Enum):
-
     planning = "planning"
-    started  = "started"
-    paused   = "paused"
+    started = "started"
+    paused = "paused"
     finished = "finished"
-    crashed  = "crashed"
+    crashed = "crashed"
+
 
 class PipeFlow(BaseDatorumPersistentSettings):
-
     pipeline: Pipeline
 
     state: PipeFlowState = PipeFlowState.planning
@@ -118,14 +114,15 @@ class PipeFlow(BaseDatorumPersistentSettings):
 
 
 class PipelineCollection(BaseDatorumPersistentSettings):
-
     pipelines: list[Pipeline] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _post_init_setup(self) -> "PipelineCollection":
         pipeline_ids = [pipeline.id for pipeline in self.pipelines]
         if len(pipeline_ids) != len(set(pipeline_ids)):
-            duplicates = [id for id, count in Counter(pipeline_ids).items() if count > 1]
+            duplicates = [
+                id for id, count in Counter(pipeline_ids).items() if count > 1
+            ]
             raise InvalidIdentifierException(
                 f"Duplicate pipeline IDs found in pipeline collection: {duplicates}"
             )

@@ -1,4 +1,3 @@
-
 from pydantic import Field, PrivateAttr, model_validator
 
 from .exceptions import InvalidIdentifierException
@@ -35,7 +34,11 @@ class AIServiceProvider(BaseDatorumSettings):
 
     @model_validator(mode="after")
     def _default_model_must_be_listed(self) -> "AIConfig":
-        if self.default_model is not None and self.models and self.default_model not in self.models:
+        if (
+            self.default_model is not None
+            and self.models
+            and self.default_model not in self.models
+        ):
             raise InvalidIdentifierException(
                 f"default_model '{self.default_model}' not in provider '{self.id}' models list"
             )
@@ -89,12 +92,3 @@ class AIConfig(BaseDatorumSettings):
         self._validate_unique("roles", [r.id for r in self.roles])
 
         return self
-
-
-
-
-
-
-
-
-

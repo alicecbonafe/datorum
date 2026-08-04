@@ -16,14 +16,18 @@ from datorum.security import (
 class DummyBackend:
     def create_vault(self, username: str, password: str): ...
     def drop_vault(self, username: str, password: str): ...
-    def change_vault_password(self, username: str, old_password: str, new_password: str): ...
-    def open_vault(self, username: str, password: str) -> str: ... # return token
+    def change_vault_password(
+        self, username: str, old_password: str, new_password: str
+    ): ...
+    def open_vault(self, username: str, password: str) -> str: ...  # return token
     def is_token_valid(self, token: str) -> bool: ...
     def list_key_names(self, token: str) -> list[str]: ...
     def load_key(self, token: str, key_name: str) -> str: ...
     def store_key(self, token: str, key_name: str, key_value: str) -> str: ...
     def drop_key(self, token: str, key_name: str): ...
-    def get_metadata(self, token: str, metadata_key: str | None = None) -> dict[str, str] | str: ...
+    def get_metadata(
+        self, token: str, metadata_key: str | None = None
+    ) -> dict[str, str] | str: ...
     def set_metadata(self, token: str, metadata_key: str, metadata_value: str): ...
 
 
@@ -50,8 +54,7 @@ def test_local_vault(tmp_path: Path):
     metadata_missing_key = "meta_missing"
 
     local_vault = LocalVaultBackend(
-        base_path=tmp_path,
-        file_name_template="/{username}.json"
+        base_path=tmp_path, file_name_template="/{username}.json"
     )
 
     local_vault.create_vault(
@@ -68,17 +71,11 @@ def test_local_vault(tmp_path: Path):
     assert local_vault.is_token_valid(token=token)
     assert len(local_vault.list_key_names(token=token)) == 0
 
-    local_vault.store_key(
-        token=token,
-        key_name=key_name,
-        key_value=api_key
-    )
+    local_vault.store_key(token=token, key_name=key_name, key_value=api_key)
     assert len(local_vault.list_key_names(token=token)) == 1
     assert api_key not in (tmp_path / f"{username}.json").read_text(encoding="utf-8")
 
-    api_key_loaded = local_vault.load_key(
-        token=token, key_name=key_name
-    )
+    api_key_loaded = local_vault.load_key(token=token, key_name=key_name)
     assert api_key == api_key_loaded
 
     local_vault.drop_key(token=token, key_name=key_name)
@@ -88,15 +85,10 @@ def test_local_vault(tmp_path: Path):
     with pytest.raises(ConfigException, match=r"Key '.*?' not found"):
         local_vault.drop_key(token=token, key_name=key_name)
 
-    local_vault.store_key(
-        token=token,
-        key_name=key_name,
-        key_value=api_key
-    )
+    local_vault.store_key(token=token, key_name=key_name, key_value=api_key)
     assert len(local_vault.list_key_names(token=token)) == 1
     local_vault._sessions[token].vault.data = None
     assert len(local_vault.list_key_names(token=token)) == 0
-
 
     assert len(local_vault.get_metadata(token=token).keys()) == 0
     local_vault.set_metadata(
@@ -115,7 +107,10 @@ def test_local_vault(tmp_path: Path):
         metadata_key=metadata_2_key,
         metadata_value=metadata_alt_value,
     )
-    assert local_vault.get_metadata(token=token, metadata_key=metadata_2_key) == metadata_alt_value
+    assert (
+        local_vault.get_metadata(token=token, metadata_key=metadata_2_key)
+        == metadata_alt_value
+    )
 
     with pytest.raises(ConfigException, match=r"Metadata key '.*?' not found"):
         local_vault.get_metadata(token=token, metadata_key=metadata_missing_key)
@@ -163,9 +158,7 @@ def test_local_vault(tmp_path: Path):
     )
     assert len(local_vault._sessions) == 1
     local_vault.change_vault_password(
-        username=username,
-        old_password=password,
-        new_password=password_alt
+        username=username, old_password=password, new_password=password_alt
     )
     assert len(local_vault._sessions) == 0
     with pytest.raises(ConfigException, match="Invalid username or password"):
@@ -174,9 +167,7 @@ def test_local_vault(tmp_path: Path):
             password=password,
         )
     local_vault.change_vault_password(
-        username=username,
-        old_password=password_alt,
-        new_password=password
+        username=username, old_password=password_alt, new_password=password
     )
 
     assert len(local_vault._sessions) == 0

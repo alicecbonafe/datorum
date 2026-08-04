@@ -26,6 +26,7 @@ _SKIP_PARAMS = {"self", "cls"}
 # | Helpers
 # ======================================================
 
+
 def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
     try:
         signature = inspect.signature(func)
@@ -40,8 +41,11 @@ def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
     for name, param in signature.parameters.items():
         if name in _SKIP_PARAMS:
             continue
-        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
-            continue # skips *args and **kwargs
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue  # skips *args and **kwargs
 
         if name not in hints:
             raise ToolBoxException(
@@ -54,10 +58,11 @@ def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
         fields[name] = (annotation, default)
 
     if not fields:
-        return None # zero-arg tool
+        return None  # zero-arg tool
 
     model_name = "".join(part.title() for part in func.__name__.split("_")) + "Params"
     return create_model(model_name, __base__=BaseModel, **fields)
+
 
 def _unwrap_optional(hint: Any) -> Any:
     """X | None / Optional[X] -> X. Leaves anything else untouched."""
@@ -66,6 +71,7 @@ def _unwrap_optional(hint: Any) -> Any:
         if len(non_none) == 1:
             return non_none[0]
     return hint
+
 
 def _hint_matches(hint: Any, expected: type) -> bool:
     """Check if is subclass, safe against Optional[...] and generic aliases like dict[str, Any]."""
@@ -80,7 +86,10 @@ def _hint_matches(hint: Any, expected: type) -> bool:
     except TypeError:
         return False
 
-def _first_typed_param(callable_obj: Callable, expected: type) -> tuple[str, Any] | None:
+
+def _first_typed_param(
+    callable_obj: Callable, expected: type
+) -> tuple[str, Any] | None:
     """First non-skip, non-*args/**kwargs param of `callable_obj` whose annotation matches `expected`."""
     try:
         type_hints = get_type_hints(callable_obj)
@@ -102,12 +111,14 @@ def _first_typed_param(callable_obj: Callable, expected: type) -> tuple[str, Any
             return p.name, _unwrap_optional(hint)
     return None
 
+
 def _coerce_to_dict(data: Any) -> dict:
     if isinstance(data, BaseModel):
         return data.model_dump(mode="python")
     if isinstance(data, dict):
         return data
     raise ToolBoxException(f"Expected a dict or BaseModel, got {type(data).__name__}")
+
 
 def _resolve_call_args(
     callable_obj: Callable,
@@ -145,12 +156,16 @@ def _resolve_call_args(
 # | Classes
 # ======================================================
 
-class FunctionDefinition(BaseModel):
 
+class FunctionDefinition(BaseModel):
     name: str
     description: str
     parameters: dict[str, Any] = Field(
-        default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        }
     )
 
     _parameters_model: type[BaseModel] | None = PrivateAttr(default=None)
@@ -165,8 +180,7 @@ class FunctionDefinition(BaseModel):
 
     @classmethod
     def from_params_model(
-        cls, name: str, description: str,
-        params_model: type[BaseModel] | None
+        cls, name: str, description: str, params_model: type[BaseModel] | None
     ) -> "FunctionDefinition":
         if params_model is not None:
             schema = params_model.model_json_schema()
@@ -180,7 +194,6 @@ class FunctionDefinition(BaseModel):
 
 
 class ToolDefinition(BaseModel):
-
     name: str
     type: Literal["function"] = "function"
     function: FunctionDefinition
@@ -197,9 +210,8 @@ class ToolDefinition(BaseModel):
 
 
 class AttributeExposure(BaseModel):
-
     attr_name: str
-    
+
     _attr_type: type | None = PrivateAttr(default=None)
 
     @property
@@ -212,7 +224,6 @@ class AttributeExposure(BaseModel):
 
 
 class ToolBoxDefinition(BaseModel):
-
     id: str
     settings_attr: str | None = None
 
@@ -258,7 +269,9 @@ class ToolBoxDefinition(BaseModel):
             tool_def: ToolDefinition = tool_method._tool_def
 
             if params is not None and tool_def.function.parameters_model is not None:
-                args, kwargs = _resolve_call_args(tool_method, params, tool_def.function.parameters_model)
+                args, kwargs = _resolve_call_args(
+                    tool_method, params, tool_def.function.parameters_model
+                )
                 return tool_method(*args, **kwargs)
 
             return tool_method()
@@ -283,10 +296,11 @@ def tool(params: type[BaseModel] | None = None, *, name: str | None = None):
                 name=name or func.__name__,
                 description=(func.__doc__ or "").strip(),
                 params_model=params or _params_model_from_signature(func),
-            )
+            ),
         )
         func._tool_def._returns = get_type_hints(func).get("return")
         return func
+
     return decorator
 
 
@@ -298,13 +312,14 @@ def toolbox(
     expose: list[str] | None = None,
 ):
     exp_attrs = [*expose] if expose is not None else []
+
     def decorator(cls):
         toolbox_def = ToolBoxDefinition(
             id=name or cls.__qualname__,
             settings_attr=settings_attr,
         )
-        toolbox_def.clazz=cls
-        toolbox_def._settings_type=settings_type
+        toolbox_def.clazz = cls
+        toolbox_def._settings_type = settings_type
         ToolBoxRegistry[toolbox_def.id] = toolbox_def
 
         for attr_value in vars(cls).values():
@@ -319,6 +334,7 @@ def toolbox(
                 toolbox_def.attributes[exp_attr].attr_type = type_hints[exp_attr]
 
         return cls
+
     return decorator
 
 
@@ -326,8 +342,8 @@ def toolbox(
 # | Settings
 # ======================================================
 
-class ToolBoxSetUp(BaseDatorumSettings):
 
+class ToolBoxSetUp(BaseDatorumSettings):
     id: str
     toolbox_id: str
 
@@ -340,5 +356,4 @@ class ToolBoxSetUp(BaseDatorumSettings):
 
 
 class ToolBoxCollection(BaseDatorumPersistentSettings):
-
     toolboxes: list[ToolBoxSetUp] = Field(default_factory=list)

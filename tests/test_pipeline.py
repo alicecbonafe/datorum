@@ -1,4 +1,3 @@
-
 import pytest
 
 from datorum.exceptions import (
@@ -13,21 +12,22 @@ from datorum.pipeline import (
 )
 
 
-@pytest.mark.depends(on=[
-    "tests/test_wiring.py",
-    "tests/test_inference.py",
-    "tests/test_context.py"])
+@pytest.mark.depends(
+    on=["tests/test_wiring.py", "tests/test_inference.py", "tests/test_context.py"]
+)
 def test_validators():
-    pipeline: Pipeline = Pipeline.model_validate({
-        "id": "mocked-pipeline-1",
-        "steps": [
-            {
-                "type": "human",
-                "id": "step-1-human",
-                "message": "Agent waiting for approval.",
-            }
-        ],
-    })
+    pipeline: Pipeline = Pipeline.model_validate(
+        {
+            "id": "mocked-pipeline-1",
+            "steps": [
+                {
+                    "type": "human",
+                    "id": "step-1-human",
+                    "message": "Agent waiting for approval.",
+                }
+            ],
+        }
+    )
 
     assert pipeline.steps[0].id == "step-1-human"
     assert pipeline.steps[0].pipeline is pipeline
@@ -35,17 +35,16 @@ def test_validators():
     pipeflow = PipeFlow(pipeline=pipeline)
     assert pipeline.parent is pipeflow
 
-    collection = PipelineCollection(pipelines=[
-        pipeline
-    ])
+    collection = PipelineCollection(pipelines=[pipeline])
     assert pipeline.parent is collection
+
 
 @pytest.mark.depends(on=["test_validators"])
 def test_errors():
     step = BasePipelineStep(type="unknown", id="mocked-step")
     with pytest.raises(ValueError, match="Pipeline not found"):
         assert step.pipeline
-    
+
     pipeline = Pipeline(id="mocked-pipeline")
     with pytest.raises(ValueError, match=r"Pipeline '.*?' has no parent"):
         assert pipeline.parent

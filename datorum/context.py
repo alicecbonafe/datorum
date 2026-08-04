@@ -20,19 +20,19 @@ from .settings import BaseDatorumSettings
 # | Classes
 # ======================================================
 
-class DocumentType(BaseModel):
 
+class DocumentType(BaseModel):
     id: str
     extentions: list[str] = Field(default_factory=list)
 
-class DocumentModel(BaseModel):
 
+class DocumentModel(BaseModel):
     id: str
     clazz: type
     default_doc_type: str = Field(default="application/json")
 
-class DocumentHandler(BaseModel):
 
+class DocumentHandler(BaseModel):
     doc_type: str
     doc_model: str
 
@@ -68,14 +68,16 @@ DOC_TYPES: dict[str, DocumentType] = {}
 DOC_MODELS: dict[str, DocumentModel] = {}
 DOC_HANDLERS: dict[str, DocumentHandler] = {}
 
+
 def register_doc_type(id: str, extentions: list[str]) -> DocumentType:
     doc_type = DocumentType(id=id, extentions=extentions)
     DOC_TYPES[id] = doc_type
     return doc_type
 
+
 def register_pydantic_based_handler(
     model_type: type[BaseModel],
-    doc_type: str | None = None, # None == all (json, yaml, toml)
+    doc_type: str | None = None,  # None == all (json, yaml, toml)
     doc_model: str | None = None,
 ):
     model_id = doc_model or model_type.__name__
@@ -86,13 +88,23 @@ def register_pydantic_based_handler(
         default_doc_type=doc_type or "application/json",
     )
 
-    doc_types = [doc_type] if doc_type is not None else [
-        "application/json", "application/yaml", "application/toml",
-    ]
+    doc_types = (
+        [doc_type]
+        if doc_type is not None
+        else [
+            "application/json",
+            "application/yaml",
+            "application/toml",
+        ]
+    )
 
     for dt in doc_types:
         dict_handler = DOC_HANDLERS.get((dt, "dict"))
-        if dict_handler is None or dict_handler.serializer is None or dict_handler.deserializer is None:
+        if (
+            dict_handler is None
+            or dict_handler.serializer is None
+            or dict_handler.deserializer is None
+        ):
             raise DocumentFormatException(
                 f"No dict serializer/deserializer registered for doc_type '{dt}' "
                 f"(register a dict handler before wrapping it for a model)"
@@ -101,16 +113,19 @@ def register_pydantic_based_handler(
         def _make_serializer(dict_writer):
             def _serialize(data: BaseModel, file_path: Path):
                 dict_writer(data.model_dump(mode="json"), file_path)
+
             return _serialize
 
         def _make_deserializer(dict_reader, model_cls):
             def _deserialize(file_path: Path) -> BaseModel:
                 return model_cls.model_validate(dict_reader(file_path))
+
             return _deserialize
 
         handler = get_or_create_handler(doc_type=dt, doc_model=model_id)
         handler.serializer = _make_serializer(dict_handler.serializer)
         handler.deserializer = _make_deserializer(dict_handler.deserializer, model_type)
+
 
 def get_or_create_handler(doc_type: str, doc_model: str) -> DocumentHandler:
     id = (doc_type, doc_model)
@@ -121,7 +136,10 @@ def get_or_create_handler(doc_type: str, doc_model: str) -> DocumentHandler:
         )
     return DOC_HANDLERS[id]
 
-def find_handlers(doc_type: str | None = None, doc_model: str | None = None) -> list[DocumentHandler]:
+
+def find_handlers(
+    doc_type: str | None = None, doc_model: str | None = None
+) -> list[DocumentHandler]:
     if doc_type is None and doc_model is None:
         return list(DOC_HANDLERS.values())
     if doc_type is None:
@@ -136,6 +154,7 @@ def find_handlers(doc_type: str | None = None, doc_model: str | None = None) -> 
 # | Decorators
 # ======================================================
 
+
 def doc_model(id: str, doc_type: str | None = None):
     def decorator(cls):
         if issubclass(cls, BaseModel):
@@ -145,24 +164,30 @@ def doc_model(id: str, doc_type: str | None = None):
             )
         else:
             DOC_MODELS[id] = DocumentModel(
-                id=id, clazz=cls,
+                id=id,
+                clazz=cls,
                 default_doc_type=doc_type or "application/json",
             )
         return cls
+
     return decorator
+
 
 def serializer(doc_type: str, doc_model: str):
     def decorator(func):
-        get_or_create_handler(
-            doc_type=doc_type, doc_model=doc_model).serializer = func
+        get_or_create_handler(doc_type=doc_type, doc_model=doc_model).serializer = func
         return func
+
     return decorator
+
 
 def deserializer(doc_type: str, doc_model: str):
     def decorator(func):
         get_or_create_handler(
-            doc_type=doc_type, doc_model=doc_model).deserializer = func
+            doc_type=doc_type, doc_model=doc_model
+        ).deserializer = func
         return func
+
     return decorator
 
 
@@ -179,9 +204,11 @@ register_doc_type("application/toml", ["toml"])
 DOC_MODELS["text"] = DocumentModel(id="text", clazz=str)
 DOC_MODELS["dict"] = DocumentModel(id="dict", clazz=dict)
 
+
 @serializer(doc_type="text/plain", doc_model="text")
 def simple_text_writer(data: str, file_path: Path):
     file_path.write_text(data, encoding="utf-8")
+
 
 @deserializer(doc_type="text/plain", doc_model="text")
 def simple_text_reader(file_path: Path) -> str:
@@ -193,31 +220,35 @@ def simple_json_writer(data: dict, file_path: Path):
     text = json.dumps(data, indent=2, ensure_ascii=False)
     file_path.write_text(text)
 
+
 @deserializer(doc_type="application/json", doc_model="dict")
 def simple_json_reader(file_path: Path) -> dict:
     text = file_path.read_text(encoding="utf-8")
     return json.loads(text)
+
 
 @serializer(doc_type="application/yaml", doc_model="dict")
 def simple_yaml_writer(data: dict, file_path: Path):
     text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
     file_path.write_text(text)
 
+
 @deserializer(doc_type="application/yaml", doc_model="dict")
 def simple_yaml_reader(file_path: Path) -> dict:
     text = file_path.read_text(encoding="utf-8")
     return yaml.safe_load(text) or {}
+
 
 @serializer(doc_type="application/toml", doc_model="dict")
 def simple_toml_writer(data: dict, file_path: Path):
     text = tomli_w.dumps(data)
     file_path.write_text(text)
 
+
 @deserializer(doc_type="application/toml", doc_model="dict")
 def simple_toml_reader(file_path: Path) -> dict:
     text = file_path.read_text(encoding="utf-8")
     return tomllib.loads(text)
-
 
 
 # ======================================================
@@ -226,7 +257,6 @@ def simple_toml_reader(file_path: Path) -> dict:
 
 
 class DocumentReference(BaseDatorumSettings):
-
     id: str
     doc_type: str = "text/plain"
     doc_model: str = "text"
@@ -246,14 +276,18 @@ class DocumentReference(BaseDatorumSettings):
         try:
             return DOC_TYPES[self.doc_type]
         except KeyError:
-            raise DocumentFormatException(f"Unknown doc_type '{self.doc_type}'") from None
+            raise DocumentFormatException(
+                f"Unknown doc_type '{self.doc_type}'"
+            ) from None
 
     @property
     def registry_doc_model(self) -> DocumentModel:
         try:
             return DOC_MODELS[self.doc_model]
         except KeyError:
-            raise UnknownDataModelException(f"Unknown doc_model '{self.doc_model}'") from None
+            raise UnknownDataModelException(
+                f"Unknown doc_model '{self.doc_model}'"
+            ) from None
 
     @property
     def registry_doc_handler(self) -> DocumentHandler:
@@ -300,7 +334,9 @@ class DocumentReference(BaseDatorumSettings):
     def load(self) -> Any:
         doc_path = self.doc_path
         if not doc_path.exists():
-            raise DocumentNotFoundException(f"Document '{self.id}' not found at '{doc_path}'")
+            raise DocumentNotFoundException(
+                f"Document '{self.id}' not found at '{doc_path}'"
+            )
 
         handler = self.registry_doc_handler
         if handler.deserializer is None:
@@ -330,11 +366,15 @@ class DocumentReference(BaseDatorumSettings):
 
     def copy_to(self, target: "DocumentReference") -> "DocumentReference":
         if self.doc_model != target.doc_model:
-            raise DocumentFormatException(f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'")
+            raise DocumentFormatException(
+                f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'"
+            )
 
         src_path = self.doc_path
         if not src_path.exists():
-            raise DocumentNotFoundException(f"Document '{self.id}' not found at '{src_path}'")
+            raise DocumentNotFoundException(
+                f"Document '{self.id}' not found at '{src_path}'"
+            )
 
         dst_path = target.doc_path
 
@@ -349,7 +389,6 @@ class DocumentReference(BaseDatorumSettings):
 
 
 class DocumentContext(BaseDatorumSettings):
-
     id: str
     documents: dict[str, DocumentReference] = Field(default_factory=dict)
     domain_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -369,7 +408,9 @@ class DocumentContext(BaseDatorumSettings):
     def get_document(self, id: str) -> DocumentReference | None:
         return self.documents.get(id)
 
-    def create_document(self, id: str, doc_type: str = "text/plain", doc_model: str = "text"):
+    def create_document(
+        self, id: str, doc_type: str = "text/plain", doc_model: str = "text"
+    ):
         document = DocumentReference(
             id=id,
             doc_type=doc_type,

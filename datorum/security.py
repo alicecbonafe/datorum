@@ -14,12 +14,13 @@ from .exceptions import ConfigException
 
 
 class SecurityBackend(Protocol):
-
     def create_vault(self, username: str, password: str): ...
 
     def drop_vault(self, username: str, password: str): ...
 
-    def change_vault_password(self, username: str, old_password: str, new_password: str): ...
+    def change_vault_password(
+        self, username: str, old_password: str, new_password: str
+    ): ...
 
     def open_vault(self, username: str, password: str) -> str: ...
 
@@ -35,17 +36,21 @@ class SecurityBackend(Protocol):
 
     def drop_key(self, token: str, key_name: str): ...
 
-    def get_metadata(self, token: str, metadata_key: str | None = None) -> dict[str, str] | str: ...
+    def get_metadata(
+        self, token: str, metadata_key: str | None = None
+    ) -> dict[str, str] | str: ...
 
     def set_metadata(self, token: str, metadata_key: str, metadata_value: str): ...
 
 
 _global_security_backend: SecurityBackend | None = None
 
+
 def get_security_backend() -> SecurityBackend:
     if _global_security_backend is None:
         raise ConfigException("Security backend not found")
     return _global_security_backend
+
 
 def set_security_backend(backend: SecurityBackend):
     global _global_security_backend
@@ -58,7 +63,6 @@ _VERIFIER_PLAINTEXT = b"vault-verify"
 
 
 class LocalVault(BaseModel):
-
     username: str
     metadata: dict[str, str] = Field(default_factory=dict)
 
@@ -71,8 +75,8 @@ class LocalVault(BaseModel):
 def now_factory():
     return datetime.now().astimezone()
 
-class LocalVaultSession(BaseModel):
 
+class LocalVaultSession(BaseModel):
     token: str
     vault: LocalVault
     vault_path: Path
@@ -87,17 +91,15 @@ class LocalVaultSession(BaseModel):
     def expires_at(self) -> datetime | None:
         if self.idle_ttl > 0:
             if self.absolute_ttl > 0:
-                idle_expires = self.last_seen_at + timedelta(
-                    minutes=self.idle_ttl)
+                idle_expires = self.last_seen_at + timedelta(minutes=self.idle_ttl)
                 absolute_expires = self.created_at + timedelta(
-                    minutes=self.absolute_ttl)
+                    minutes=self.absolute_ttl
+                )
                 return min(idle_expires, absolute_expires)
             else:
-                return self.last_seen_at + timedelta(
-                    minutes=self.idle_ttl)
+                return self.last_seen_at + timedelta(minutes=self.idle_ttl)
         elif self.absolute_ttl > 0:
-            return self.created_at + timedelta(
-                minutes=self.absolute_ttl)
+            return self.created_at + timedelta(minutes=self.absolute_ttl)
         else:
             return None
 
@@ -112,10 +114,10 @@ class LocalVaultSession(BaseModel):
 
 
 class LocalVaultBackend:
-
     file_name_template: str = "vaults/{username}.json"
 
-    def __init__(self,
+    def __init__(
+        self,
         base_path: Path,
         iterations: int = 600_000,
         idle_ttl: int = 60,
@@ -205,7 +207,9 @@ class LocalVaultBackend:
         for t in stale:
             self._sessions.pop(t, None)
 
-    def change_vault_password(self, username: str, old_password: str, new_password: str):
+    def change_vault_password(
+        self, username: str, old_password: str, new_password: str
+    ):
         token = self.open_vault(username, old_password)
         session = self._sessions.pop(token)
         keys = self._decrypt_keys(session)
@@ -290,7 +294,9 @@ class LocalVaultBackend:
         del keys[key_name]
         self._encrypt_keys(session, keys)
 
-    def get_metadata(self, token: str, metadata_key: str | None = None) -> dict[str, str] | str:
+    def get_metadata(
+        self, token: str, metadata_key: str | None = None
+    ) -> dict[str, str] | str:
         session = self._get_session(token)
         if metadata_key is None:
             return dict(session.vault.metadata)

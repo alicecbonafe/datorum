@@ -12,7 +12,6 @@ from .settings import BaseDatorumSettings
 
 
 class TargetConnector(str, Enum):
-
     TOOLBOX_SETTINGS = "toolbox-settings"
     TOOLBOX_ATTRIBUTE = "toolbox-attribute"
     TOOL_PARAMETER = "tool-parameter"
@@ -27,84 +26,83 @@ class TargetConnector(str, Enum):
 
 
 class DocumentConnector(str, Enum):
-
     DATA = "data"
     PATH = "path"
     RAW = "raw"
 
 
 class BaseBind(BaseDatorumSettings):
-
     bind_type: str
 
 
 class BaseDocumentBind(BaseBind):
-
     document_id: str
     context_id: str | None = None
 
 
 class DocumentBind(BaseDocumentBind):
-
     bind_type: Literal["document"] = "document"
 
 
 class DocumentRawBind(BaseDocumentBind):
-
     bind_type: Literal["document-raw"] = "document-raw"
 
 
 class DocumentPathBind(BaseDocumentBind):
-
     bind_type: Literal["document-path"] = "document-path"
 
 
 class DomainPathBind(BaseBind):
-
     bind_type: Literal["domain"] = "domain"
     domain_id: str
     context_id: str | None = None
 
 
 class ResourceBind(BaseBind):
-
     bind_type: Literal["resource"] = "resource"
     resource_id: str
     target_alias: str
 
 
 class BasePort(BaseDatorumSettings):
-
     port_type: str
     bind: BaseBind | None
 
-class InputPort(BasePort):
 
+class InputPort(BasePort):
     port_type: Literal["input"] = "input"
     bind: DocumentBind | None = None
 
-class OutputPort(BasePort):
 
+class OutputPort(BasePort):
     port_type: Literal["output"] = "output"
     bind: DocumentBind | None = None
 
-class LivePort(BasePort):
 
+class LivePort(BasePort):
     port_type: Literal["live"] = "live"
     bind: DocumentBind | None = None
 
-class ResourcePort(BasePort):
 
+class ResourcePort(BasePort):
     port_type: Literal["resource"] = "resource"
     bind: ResourceBind | None = None
     attribute_name: str | None = None
 
-class CustomPort(BasePort):
 
+class CustomPort(BasePort):
     port_type: Literal["custom"] = "custom"
-    bind: Annotated[
-        DocumentBind | DocumentRawBind | DocumentPathBind | DomainPathBind | ResourceBind, Field(discriminator="bind_type")
-    ] | None = None
+    bind: (
+        Annotated[
+            DocumentBind
+            | DocumentRawBind
+            | DocumentPathBind
+            | DomainPathBind
+            | ResourceBind,
+            Field(discriminator="bind_type"),
+        ]
+        | None
+    ) = None
     attribute_name: str
 
 
@@ -129,4 +127,5 @@ def resource_factory(resource_id: str):
     def decorator(func):
         register_resource_factory(resource_id, func)
         return func
+
     return decorator

@@ -1,4 +1,3 @@
-
 import pytest
 from pydantic import BaseModel
 
@@ -27,7 +26,9 @@ def test_helpers():
         required_text: str
         optional_int: int | None = None
 
-    def mocked_func_1(self, required_text: str, optional_int: int | None = None, **kwargs):
+    def mocked_func_1(
+        self, required_text: str, optional_int: int | None = None, **kwargs
+    ):
         return f"{required_text}: {optional_int or -1}"
 
     # _params_model_from_signature
@@ -38,7 +39,9 @@ def test_helpers():
     assert set(fields_1.keys()) == set(fields_2.keys())
     assert _params_model_from_signature(lambda: "Ok") is None
 
-    with pytest.raises(ToolBoxException, match=r"^Could not resolve type hints for.*?$"):
+    with pytest.raises(
+        ToolBoxException, match=r"^Could not resolve type hints for.*?$"
+    ):
         _params_model_from_signature("error")
     with pytest.raises(ToolBoxException, match=r"^Tool .*? has no type annotation.*?$"):
         _params_model_from_signature(lambda no_hint: no_hint + 1)
@@ -54,11 +57,14 @@ def test_helpers():
     assert not _hint_matches(mocked_model_2, "mocked")
 
     class mocke_model_3(mocked_model_1): ...
+
     assert _hint_matches(mocke_model_3, mocked_model_1)
 
     # _first_typed_param
     assert _first_typed_param(mocked_func_1, mocked_model_1) is None
+
     def mocked_func_2(arg_1: mocked_model_1): ...
+
     param = _first_typed_param(mocked_func_2, mocked_model_1)
     assert param is not None
     assert param[0] == "arg_1"
@@ -80,33 +86,30 @@ def test_helpers():
 
     # _resolve_call_args
     assert _resolve_call_args(
-        callable_obj=mocked_func_1,
-        data = None,
-        model_type=mocked_model_1) == ((), {})
+        callable_obj=mocked_func_1, data=None, model_type=mocked_model_1
+    ) == ((), {})
 
     assert _resolve_call_args(
-        callable_obj=mocked_func_1,
-        data = {},
-        model_type=mocked_model_1) == ((), {})
+        callable_obj=mocked_func_1, data={}, model_type=mocked_model_1
+    ) == ((), {})
 
     assert _resolve_call_args(
-        callable_obj=mocked_func_2,
-        data=data_1_model,
-        model_type=mocked_model_1) == ((data_1_model,), {})
+        callable_obj=mocked_func_2, data=data_1_model, model_type=mocked_model_1
+    ) == ((data_1_model,), {})
 
     args_2 = _resolve_call_args(
         callable_obj=mocked_func_2,
         data={"required_text": "Mocked Test!!!"},
-        model_type=mocked_model_1
+        model_type=mocked_model_1,
     )
     assert isinstance(args_2[0][0], mocked_model_1)
     assert args_2[0][0].required_text == "Mocked Test!!!"
 
     def mocked_func_3(a_dict: dict): ...
+
     args_1 = _resolve_call_args(
-        callable_obj=mocked_func_3,
-        data=data_1_model,
-        model_type=dict)
+        callable_obj=mocked_func_3, data=data_1_model, model_type=dict
+    )
     assert args_1[0][0]["required_text"] == data_1_model.required_text
 
 
@@ -131,23 +134,23 @@ def test_classes():
     class MockedToolBox2:
         def __init__(self, settings: dict):
             self.settings = settings
-        def tool_2(self):...
+
+        def tool_2(self): ...
 
     class MockedToolBox3:
         def __init__(self):
             self.settings = {}
-        def tool_3(self):...
+
+        def tool_3(self): ...
 
     # FunctionDefinition
     function_1 = FunctionDefinition.from_params_model(
-        name=function_name, description=function_descr,
-        params_model=MockedClass1
+        name=function_name, description=function_descr, params_model=MockedClass1
     )
     assert function_1.parameters_model is MockedClass1
 
     function_2 = FunctionDefinition.from_params_model(
-        name=function_name, description=function_descr,
-        params_model=None
+        name=function_name, description=function_descr, params_model=None
     )
     assert function_2.parameters_model is None
     assert "properties" in function_2.parameters
@@ -155,10 +158,7 @@ def test_classes():
     assert len(function_2.parameters["properties"]) == 0
 
     # ToolDefinition
-    tool_def_1 = ToolDefinition(
-        name=tool_definition_name,
-        function=function_1
-    )
+    tool_def_1 = ToolDefinition(name=tool_definition_name, function=function_1)
     tool_def_1.returns = MockedClass1
     assert issubclass(tool_def_1.returns, BaseModel)
 
@@ -186,15 +186,10 @@ def test_classes():
     tb_def_2 = ToolBoxDefinition(id=toolbox_definition_id_2)
     tb_def_2.clazz = MockedToolBox2
 
-    tool_def_2 = ToolDefinition(
-        name=tool_definition_name,
-        function=function_2
-    )
+    tool_def_2 = ToolDefinition(name=tool_definition_name, function=function_2)
     MockedToolBox2.tool_2._tool_def = tool_def_2
 
-    toolbox_instance_2 = tb_def_2.create_toolbox({
-        "any_key": "any-value"
-    })
+    toolbox_instance_2 = tb_def_2.create_toolbox({"any_key": "any-value"})
 
     assert hasattr(toolbox_instance_2, "run_tool")
     assert toolbox_instance_2.settings["any_key"] == "any-value"
@@ -207,9 +202,7 @@ def test_classes():
     tb_def_3.settings_type = dict
     MockedToolBox3.tool_3._tool_def = tool_def_2
 
-    toolbox_instance_3 = tb_def_3.create_toolbox({
-        "any_key": "any-other-value"
-    })
+    toolbox_instance_3 = tb_def_3.create_toolbox({"any_key": "any-other-value"})
 
     assert hasattr(toolbox_instance_3, "run_tool")
     assert toolbox_instance_3.settings["any_key"] == "any-other-value"
@@ -226,6 +219,7 @@ def test_decorators():
     @toolbox(name=toolbox_name, expose=["exposed_attr"])
     class MockedToolBox:
         exposed_attr: dict
+
         @tool()
         def mocked_tool(self, param_1: str):
             return f"[{param_1}]"

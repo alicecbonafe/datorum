@@ -9,14 +9,15 @@ from .exceptions import ConfigException, NoFilePathException
 
 class DatorumDumper(yaml.SafeDumper): ...
 
+
 def represent_path(dumper, path):
     return dumper.represent_str(str(path))
+
 
 yaml.add_multi_representer(Path, represent_path, Dumper=DatorumDumper)
 
 
 class BaseDatorumSettings(BaseModel):
-
     _persistent: Optional["BaseDatorumPersistentSettings"] = PrivateAttr(default=None)
 
     @property
@@ -97,25 +98,19 @@ class BaseDatorumSettings(BaseModel):
             return
         if isinstance(value, BaseDatorumSettings):
             value._set_persistent_recursive(
-                persistent_instance=persistent_instance,
-                visited=visited
+                persistent_instance=persistent_instance, visited=visited
             )
         elif isinstance(value, list):
             self._set_persistent_recursive_in_list(
-                data=value,
-                persistent_instance=persistent_instance,
-                visited=visited
+                data=value, persistent_instance=persistent_instance, visited=visited
             )
         elif isinstance(value, dict):
             self._set_persistent_recursive_in_dict(
-                data=value,
-                persistent_instance=persistent_instance,
-                visited=visited
+                data=value, persistent_instance=persistent_instance, visited=visited
             )
 
 
 class BaseDatorumPersistentSettings(BaseDatorumSettings):
-
     _settings_path: Path | None = PrivateAttr(default=None)
 
     @property
@@ -129,7 +124,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         self._settings_path = value
 
     @classmethod
-    def load(cls, settings_path: Path) -> 'BaseDatorumPersistentSettings':
+    def load(cls, settings_path: Path) -> "BaseDatorumPersistentSettings":
         with settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         instance = cls.model_validate(data)

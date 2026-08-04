@@ -9,13 +9,12 @@ from datorum.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class MockedModel(BaseDatorumSettings):
-
     another_model: Optional["MockedModel"] = None
     a_list: list["MockedModel"] = Field(default_factory=list)
     a_dict: dict[str, "MockedModel"] = Field(default_factory=dict)
 
-class MockedPersistentModel(BaseDatorumPersistentSettings):
 
+class MockedPersistentModel(BaseDatorumPersistentSettings):
     a_file_path: Path
     a_text_content: str
     a_model: MockedModel | None = None
@@ -44,7 +43,8 @@ def test_persistence(tmp_path: Path):
     data1.save_as(settings_path=settings_path)
 
     data2: MockedPersistentModel = MockedPersistentModel.load(
-        settings_path=settings_path)
+        settings_path=settings_path
+    )
 
     assert data2.a_file_path == Path(file_name)
     assert data2.a_text_content == text_content
@@ -52,6 +52,7 @@ def test_persistence(tmp_path: Path):
 
     file_content2 = (workspace_path / data2.a_file_path).read_text(encoding="utf-8")
     assert file_content == file_content2
+
 
 def test_exceptions():
     child_data = MockedModel()
@@ -65,8 +66,8 @@ def test_exceptions():
     with pytest.raises(NoFilePathException):
         assert data.settings_path
 
-@pytest.mark.depends(
-    on=["test_persistence", "test_exceptions"])
+
+@pytest.mark.depends(on=["test_persistence", "test_exceptions"])
 def test_special_cases():
     data1 = MockedModel()
     data1.another_model = data1
@@ -115,4 +116,3 @@ def test_special_cases():
         a_text_content="text_content",
         a_persistent_model=data1,
     )
-

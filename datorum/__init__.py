@@ -13,8 +13,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def configure_logging(
-    level: int = logging.WARNING,
-    log_file: Path | None = None
+    level: int = logging.WARNING, log_file: Path | None = None
 ) -> None:
     """Call one, from the entrypoint."""
     logger = logging.getLogger(_PACKAGE_LOGGER_NAME)
