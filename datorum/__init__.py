@@ -35,5 +35,4 @@ def configure_logging(
     else:
         handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(formatter)
-    logger.addHandler(handler
-)
+    logger.addHandler(handler)
