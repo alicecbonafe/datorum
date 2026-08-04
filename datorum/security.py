@@ -22,7 +22,9 @@ class SecurityBackend(Protocol):
 
     def change_vault_password(self, username: str, old_password: str, new_password: str): ...
 
-    def open_vault(self, username: str, password: str) -> str: ... # return token
+    def open_vault(self, username: str, password: str) -> str: ...
+
+    def close_vault(self, token: str) -> str: ...
 
     def is_token_valid(self, token: str) -> bool: ...
 
@@ -81,18 +83,28 @@ class LocalVaultSession(BaseModel):
     _fernet: Fernet | None = PrivateAttr(default=None)
 
     @property
-    def expires_at(self) -> datetime:
-        idle_expires = self.last_seen_at + timedelta(
-            minutes=self.idle_ttl)
-        absolute_expires = self.created_at + timedelta(
-            minutes=self.absolute_ttl)
-        return min(idle_expires, absolute_expires)
+    def expires_at(self) -> datetime | None:
+        if self.idle_ttl > 0:
+            if self.absolute_ttl > 0:
+                idle_expires = self.last_seen_at + timedelta(
+                    minutes=self.idle_ttl)
+                absolute_expires = self.created_at + timedelta(
+                    minutes=self.absolute_ttl)
+                return min(idle_expires, absolute_expires)
+            else:
+                return self.last_seen_at + timedelta(
+                    minutes=self.idle_ttl)
+        elif self.absolute_ttl > 0:
+            return self.created_at + timedelta(
+                minutes=self.absolute_ttl)
+        else:
+            return None
 
     @property
     def is_alive(self) -> bool:
         now = datetime.now()
         expires_at = self.expires_at
-        if now > expires_at:
+        if expires_at is not None and now > expires_at:
             return False
         self.last_seen_at = now
         return True
@@ -100,11 +112,14 @@ class LocalVaultSession(BaseModel):
 
 class LocalVaultBackend:
 
+    file_name_template: str = "vaults/{username}.json"
+
     def __init__(self,
         base_path: Path,
         iterations: int = 600_000,
         idle_ttl: int = 60,
         absolute_ttl: int = 1440,
+        file_name_template: str | None = None,
     ):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
@@ -113,10 +128,16 @@ class LocalVaultBackend:
         self.absolute_ttl = absolute_ttl
         self._sessions: dict[str, LocalVaultSession] = {}
 
+        if file_name_template is not None:
+            self.file_name_template = file_name_template
+
     # -- internal helpers ---------------------------------------------
 
     def _vault_path(self, username: str) -> Path:
-        return self.base_path / f"{username}.vault.json"
+        file_name = self.file_name_template.format(username=username).strip()
+        while file_name.startswith("/"):
+            file_name = file_name[1:]
+        return self.base_path / file_name
 
     def _derive_key(self, password: str, salt: bytes, iterations: int) -> bytes:
         kdf = PBKDF2HMAC(
@@ -227,6 +248,11 @@ class LocalVaultBackend:
         session._fernet = fernet
         self._sessions[token] = session
         return token
+
+    def close_vault(self, token: str):
+        if token in self._sessions:
+            self._sessions[token]._fernet = None
+            del self._sessions[token]
 
     def is_token_valid(self, token: str) -> bool:
         session = self._sessions.get(token)
