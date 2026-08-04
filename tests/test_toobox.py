@@ -225,6 +225,7 @@ def test_classes():
 @pytest.mark.depends(on="test_classes")
 def test_decorators():
     toolbox_name = "mocked-toolbox"
+    tool_value = "any-value"
 
     @toolbox(name=toolbox_name, expose=["exposed_attr"])
     class MockedToolBox:
@@ -237,3 +238,7 @@ def test_decorators():
     assert ToolBoxRegistry[toolbox_name].clazz is MockedToolBox
     assert "exposed_attr" in ToolBoxRegistry[toolbox_name].attributes
     assert hasattr(MockedToolBox.mocked_tool, "_tool_def")
+
+    toolbox_1 = ToolBoxRegistry[toolbox_name].create_toolbox()
+    result_1 = toolbox_1.run_tool("mocked_tool", {"param_1": tool_value})
+    assert result_1 == f"[{tool_value}]"
