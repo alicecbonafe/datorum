@@ -1,6 +1,6 @@
 # Datorum
 
-Um agente de IA especializado em engenharia de contexto.
+Caixa de ferramentas e gerenciador de agentes para engenharia de contexto.
 
 
 ## Objetivo

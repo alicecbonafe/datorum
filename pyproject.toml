@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datorum"
-version = "0.1.0a1.dev1"
+version = "0.1.0a1.dev3"
 description = "Context engineering AI agent."
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,6 +20,8 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.34",
     "typer>=0.27",
+    "keyring>=25.7",
+    "tomli_w>=1.2",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +29,7 @@ dev = [
     "pytest>=9.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
+    "pytest-depends>=1.0",
     "ruff>=0.16",
     "mypy>=2.3",
 ]
@@ -34,11 +37,13 @@ test = [
     "pytest>=9.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
+    "pytest-depends>=1.0",
 ]
 lint = [
     "pytest>=9.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
+    "pytest-depends>=1.0",
     "ruff>=0.16",
     "mypy>=2.3",
 ]
