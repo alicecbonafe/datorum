@@ -71,7 +71,7 @@ lint/tests are easy to run locally, repo is presentable.
 
 ---
 
-## 5. Phase 3 (current) — Configuration, pipeline data model and tooling basic engine
+## 5. Phase 3 (current) — Full settings model
 
 Commom base for all Datorum use cases.
 
@@ -79,7 +79,7 @@ Commom base for all Datorum use cases.
   security and agent roles.
 - Data classes for pipeline steps (human, tool and agent) with shared toolboxes
   definitions, separated files for execution control.
-- Basic tooling engine, with basic toolbox abstract class and tool method decorator.
+- Context binding model
 
 - [x] Coding
 - [ ] Testing
@@ -87,7 +87,13 @@ Commom base for all Datorum use cases.
 
 ---
 
-## 6. Phase 4 — Basic tools
+## 6. Phase 4 — Runners for tools, agents and pipelines
+
+
+
+---
+
+## 7. Phase 3 — Basic tools
 
 - FileManager
 - SiteScraper (must implement a strong `robots.txt` compliance)
@@ -97,12 +103,6 @@ Commom base for all Datorum use cases.
 - DirectDataConverter
 - VectorDBManager
 - SnippetRunner
-
-
----
-
-## 7. Phase 5 — Agent service and pipeline runner
-
 
 
 ---
