@@ -54,6 +54,8 @@ def test_registry(tmp_path: Path):
     ) == registry_pydantic_handler.id
 
     obj1 = PydanticBasedModel(var_test=content_test)
+    assert registry_pydantic_handler.serializer is not None
+    assert registry_pydantic_handler.deserializer is not None
     registry_pydantic_handler.serializer(obj1, doc_path)
     obj2 = registry_pydantic_handler.deserializer(doc_path)
 
@@ -102,6 +104,15 @@ def test_defaults(tmp_path: Path):
     json_handler = DOC_HANDLERS[("application/json", "dict")]
     yaml_handler = DOC_HANDLERS[("application/yaml", "dict")]
     toml_handler = DOC_HANDLERS[("application/toml", "dict")]
+
+    assert text_handler.serializer is not None
+    assert json_handler.serializer is not None
+    assert yaml_handler.serializer is not None
+    assert toml_handler.serializer is not None
+    assert text_handler.deserializer is not None
+    assert json_handler.deserializer is not None
+    assert yaml_handler.deserializer is not None
+    assert toml_handler.deserializer is not None
 
     text_handler.serializer(str(data), text_file)
     json_handler.serializer(data, json_file)

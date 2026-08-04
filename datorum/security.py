@@ -24,7 +24,7 @@ class SecurityBackend(Protocol):
 
     def open_vault(self, username: str, password: str) -> str: ...
 
-    def close_vault(self, token: str) -> str: ...
+    def close_vault(self, token: str): ...
 
     def is_token_valid(self, token: str) -> bool: ...
 
@@ -86,6 +86,12 @@ class LocalVaultSession(BaseModel):
     last_seen_at: datetime = Field(default_factory=now_factory)
 
     _fernet: Fernet | None = PrivateAttr(default=None)
+
+    @property
+    def fernet(self) -> Fernet:
+        if self._fernet is None:
+            raise ConfigException("Fernet not found")
+        return self._fernet
 
     @property
     def expires_at(self) -> datetime | None:
@@ -170,10 +176,10 @@ class LocalVaultBackend:
     def _decrypt_keys(self, session: LocalVaultSession) -> dict[str, str]:
         if not session.vault.data:
             return {}
-        return json.loads(session._fernet.decrypt(session.vault.data.encode()).decode())
+        return json.loads(session.fernet.decrypt(session.vault.data.encode()).decode())
 
     def _encrypt_keys(self, session: LocalVaultSession, keys: dict[str, str]):
-        session.vault.data = session._fernet.encrypt(json.dumps(keys).encode()).decode()
+        session.vault.data = session.fernet.encrypt(json.dumps(keys).encode()).decode()
         self._save_vault(session.vault)
 
     # -- SecurityBackend protocol ---------------------------------------
@@ -238,7 +244,8 @@ class LocalVaultBackend:
         fernet = Fernet(key)
 
         try:
-            fernet.decrypt(vault.verifier.encode())
+            assert vault.verifier is not None
+            fernet.decrypt((vault.verifier).encode())
         except InvalidToken:
             raise ConfigException("Invalid username or password")
 

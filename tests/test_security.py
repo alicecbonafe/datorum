@@ -14,21 +14,45 @@ from datorum.security import (
 
 
 class DummyBackend:
-    def create_vault(self, username: str, password: str): ...
-    def drop_vault(self, username: str, password: str): ...
+    def create_vault(self, username: str, password: str):
+        raise NotImplementedError("Dummy BackEnd")
+
+    def drop_vault(self, username: str, password: str):
+        raise NotImplementedError("Dummy BackEnd")
+
     def change_vault_password(
         self, username: str, old_password: str, new_password: str
-    ): ...
-    def open_vault(self, username: str, password: str) -> str: ...  # return token
-    def is_token_valid(self, token: str) -> bool: ...
-    def list_key_names(self, token: str) -> list[str]: ...
-    def load_key(self, token: str, key_name: str) -> str: ...
-    def store_key(self, token: str, key_name: str, key_value: str) -> str: ...
-    def drop_key(self, token: str, key_name: str): ...
+    ):
+        raise NotImplementedError("Dummy BackEnd")
+
+    def open_vault(self, username: str, password: str) -> str:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def close_vault(self, token: str):
+        raise NotImplementedError("Dummy BackEnd")
+
+    def is_token_valid(self, token: str) -> bool:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def list_key_names(self, token: str) -> list[str]:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def load_key(self, token: str, key_name: str) -> str:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def store_key(self, token: str, key_name: str, key_value: str) -> str:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def drop_key(self, token: str, key_name: str):
+        raise NotImplementedError("Dummy BackEnd")
+
     def get_metadata(
         self, token: str, metadata_key: str | None = None
-    ) -> dict[str, str] | str: ...
-    def set_metadata(self, token: str, metadata_key: str, metadata_value: str): ...
+    ) -> dict[str, str] | str:
+        raise NotImplementedError("Dummy BackEnd")
+
+    def set_metadata(self, token: str, metadata_key: str, metadata_value: str):
+        raise NotImplementedError("Dummy BackEnd")
 
 
 def test_registry():
@@ -90,7 +114,7 @@ def test_local_vault(tmp_path: Path):
     local_vault._sessions[token].vault.data = None
     assert len(local_vault.list_key_names(token=token)) == 0
 
-    assert len(local_vault.get_metadata(token=token).keys()) == 0
+    assert len(local_vault.get_metadata(token=token)) == 0
     local_vault.set_metadata(
         token=token,
         metadata_key=metadata_1_key,
@@ -101,7 +125,7 @@ def test_local_vault(tmp_path: Path):
         metadata_key=metadata_2_key,
         metadata_value=metadata_2_value,
     )
-    assert len(local_vault.get_metadata(token=token).keys()) == 2
+    assert len(local_vault.get_metadata(token=token)) == 2
     local_vault.set_metadata(
         token=token,
         metadata_key=metadata_2_key,
@@ -115,8 +139,11 @@ def test_local_vault(tmp_path: Path):
     with pytest.raises(ConfigException, match=r"Metadata key '.*?' not found"):
         local_vault.get_metadata(token=token, metadata_key=metadata_missing_key)
 
+    session_1 = local_vault._sessions[token]
     local_vault.close_vault(token=token)
     assert not local_vault.is_token_valid(token=token)
+    with pytest.raises(ConfigException, match="Fernet not found"):
+        assert session_1.fernet
 
     local_vault.idle_ttl = 0
     token = local_vault.open_vault(

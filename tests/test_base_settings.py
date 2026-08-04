@@ -48,6 +48,7 @@ def test_persistence(tmp_path: Path):
 
     assert data2.a_file_path == Path(file_name)
     assert data2.a_text_content == text_content
+    assert data2.a_model is not None
     assert data2.a_model.persistent.settings_path == settings_path
 
     file_content2 = (workspace_path / data2.a_file_path).read_text(encoding="utf-8")
@@ -82,7 +83,7 @@ def test_special_cases():
 
     data1 = MockedModel()
     list1 = [data1]
-    list1.append(list1)
+    list1.append(list1)  # type: ignore[arg-type]
     data1.a_list = list1
 
     data2 = MockedPersistentModel(
@@ -95,7 +96,7 @@ def test_special_cases():
 
     data1 = MockedModel()
     dict1 = {"data1": data1}
-    dict1["dict1"] = dict1
+    dict1["dict1"] = dict1  # type: ignore[assignment]
     data1.a_dict = dict1
 
     data2 = MockedPersistentModel(
@@ -106,13 +107,13 @@ def test_special_cases():
 
     assert data2 is data1.a_dict["data1"].persistent
 
-    data1 = MockedPersistentModel(
+    MockedPersistentModel(
         a_file_path=Path("test.txt"),
         a_text_content="text_content",
     )
 
-    data2 = MockedPersistentModel(
+    MockedPersistentModel(
         a_file_path=Path("test.txt"),
         a_text_content="text_content",
-        a_persistent_model=data1,
+        a_persistent_model=data2,
     )

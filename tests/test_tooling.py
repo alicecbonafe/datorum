@@ -33,6 +33,7 @@ def test_helpers():
 
     # _params_model_from_signature
     mocked_model_2 = _params_model_from_signature(mocked_func_1)
+    assert mocked_model_2 is not None
     fields_1 = mocked_model_1.model_fields
     fields_2 = mocked_model_2.model_fields
 
@@ -42,7 +43,7 @@ def test_helpers():
     with pytest.raises(
         ToolBoxException, match=r"^Could not resolve type hints for.*?$"
     ):
-        _params_model_from_signature("error")
+        _params_model_from_signature("error")  # type: ignore[arg-type]
     with pytest.raises(ToolBoxException, match=r"^Tool .*? has no type annotation.*?$"):
         _params_model_from_signature(lambda no_hint: no_hint + 1)
 
@@ -54,7 +55,7 @@ def test_helpers():
     assert not _hint_matches(None, mocked_model_1)
     assert not _hint_matches("mocked", mocked_model_1)
     assert not _hint_matches(mocked_model_2, mocked_model_1)
-    assert not _hint_matches(mocked_model_2, "mocked")
+    assert not _hint_matches(mocked_model_2, "mocked")  # type: ignore[arg-type]
 
     class mocke_model_3(mocked_model_1): ...
 
@@ -71,7 +72,7 @@ def test_helpers():
     assert param[1] == mocked_model_1
 
     with pytest.raises(ToolBoxException, match="Argument is not callable"):
-        _first_typed_param("", mocked_model_1)
+        _first_typed_param("", mocked_model_1)  # type: ignore[arg-type]
 
     # _coerce_to_dict
     data_1 = {"required_text": "Mocked Text!!!", "optional_int": 100}
@@ -165,6 +166,7 @@ def test_classes():
     # AttributeExposure
     attr_exp_1 = AttributeExposure(attr_name=attribute_name)
     attr_exp_1.attr_type = MockedClass1
+    assert attr_exp_1.attr_type is not None
     assert issubclass(attr_exp_1.attr_type, BaseModel)
 
     # ToolBoxDefinition
@@ -174,7 +176,7 @@ def test_classes():
     )
     tb_def_1 = ToolBoxDefinition(id=toolbox_definition_id_1)
     tb_def_1.clazz = MockedToolBox1
-    MockedToolBox1.tool_1._tool_def = tool_def_1
+    MockedToolBox1.tool_1._tool_def = tool_def_1  # type: ignore[attr-defined]
 
     toolbox_instance_1 = tb_def_1.create_toolbox()
 
@@ -187,7 +189,7 @@ def test_classes():
     tb_def_2.clazz = MockedToolBox2
 
     tool_def_2 = ToolDefinition(name=tool_definition_name, function=function_2)
-    MockedToolBox2.tool_2._tool_def = tool_def_2
+    MockedToolBox2.tool_2._tool_def = tool_def_2  # type: ignore[attr-defined]
 
     toolbox_instance_2 = tb_def_2.create_toolbox({"any_key": "any-value"})
 
@@ -200,7 +202,7 @@ def test_classes():
     tb_def_3.clazz = MockedToolBox3
     tb_def_3.settings_attr = "settings"
     tb_def_3.settings_type = dict
-    MockedToolBox3.tool_3._tool_def = tool_def_2
+    MockedToolBox3.tool_3._tool_def = tool_def_2  # type: ignore[attr-defined]
 
     toolbox_instance_3 = tb_def_3.create_toolbox({"any_key": "any-other-value"})
 

@@ -37,7 +37,7 @@ class DocumentHandler(BaseModel):
     doc_model: str
 
     _serializer: Callable | None = PrivateAttr(default=None)
-    _deserializer: callable | None = PrivateAttr(default=None)
+    _deserializer: Callable | None = PrivateAttr(default=None)
 
     @property
     def id(self) -> tuple[str, str]:
@@ -66,7 +66,7 @@ class DocumentHandler(BaseModel):
 
 DOC_TYPES: dict[str, DocumentType] = {}
 DOC_MODELS: dict[str, DocumentModel] = {}
-DOC_HANDLERS: dict[str, DocumentHandler] = {}
+DOC_HANDLERS: dict[tuple[str, str], DocumentHandler] = {}
 
 
 def register_doc_type(id: str, extentions: list[str]) -> DocumentType:
@@ -410,7 +410,7 @@ class DocumentContext(BaseDatorumSettings):
 
     def create_document(
         self, id: str, doc_type: str = "text/plain", doc_model: str = "text"
-    ):
+    ) -> DocumentReference:
         document = DocumentReference(
             id=id,
             doc_type=doc_type,

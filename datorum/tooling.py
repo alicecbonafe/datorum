@@ -36,7 +36,7 @@ def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
             f"Could not resolve type hints for function '{func}': {exc}"
         ) from exc
 
-    fields: dict[str, tuple[Any, Any]] = {}
+    fields: dict[str, tuple[type, Any]] = {}
 
     for name, param in signature.parameters.items():
         if name in _SKIP_PARAMS:
@@ -61,7 +61,7 @@ def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
         return None  # zero-arg tool
 
     model_name = "".join(part.title() for part in func.__name__.split("_")) + "Params"
-    return create_model(model_name, __base__=BaseModel, **fields)
+    return create_model(model_name, __base__=BaseModel, **fields)  # type: ignore[call-overload]
 
 
 def _unwrap_optional(hint: Any) -> Any:
@@ -189,13 +189,13 @@ class FunctionDefinition(BaseModel):
         else:
             schema = {"type": "object", "properties": {}, "additionalProperties": False}
         instance = cls(name=name, description=description, parameters=schema)
-        instance.parameters_model = params_model
+        if params_model is not None:
+            instance.parameters_model = params_model
         return instance
 
 
 class ToolDefinition(BaseModel):
     name: str
-    type: Literal["function"] = "function"
     function: FunctionDefinition
 
     _returns: type[BaseModel] | type[str] = PrivateAttr(default=str)
@@ -207,6 +207,8 @@ class ToolDefinition(BaseModel):
     @returns.setter
     def returns(self, value: type[BaseModel] | type[str]):
         self._returns = value
+
+    type: Literal["function"] = "function"  # OpenAI API protocol compatibility
 
 
 class AttributeExposure(BaseModel):

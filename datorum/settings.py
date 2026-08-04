@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Self
 
 import yaml
 from pydantic import BaseModel, PrivateAttr, model_validator
@@ -90,9 +90,9 @@ class BaseDatorumSettings(BaseModel):
 
     def _propagate_persistent(
         self,
-        value: any,
+        value: Any,
         persistent_instance: "BaseDatorumPersistentSettings",
-        visited: set | None = None,
+        visited: set,
     ) -> None:
         if value is None:
             return
@@ -124,7 +124,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         self._settings_path = value
 
     @classmethod
-    def load(cls, settings_path: Path) -> "BaseDatorumPersistentSettings":
+    def load(cls, settings_path: Path) -> Self:
         with settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         instance = cls.model_validate(data)

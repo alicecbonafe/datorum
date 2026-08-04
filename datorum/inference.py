@@ -33,7 +33,7 @@ class AIServiceProvider(BaseDatorumSettings):
     #     self.api_key_hint = f"{api_key[:7]}..."
 
     @model_validator(mode="after")
-    def _default_model_must_be_listed(self) -> "AIConfig":
+    def _default_model_must_be_listed(self) -> "AIServiceProvider":
         if (
             self.default_model is not None
             and self.models
