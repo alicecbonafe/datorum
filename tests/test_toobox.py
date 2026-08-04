@@ -19,6 +19,9 @@ from datorum.toolbox import (
     ToolDefinition,
     AttributeExposure,
     ToolBoxDefinition,
+    ToolBoxRegistry,
+    tool,
+    toolbox,
 )
 
 
@@ -215,11 +218,22 @@ def test_classes():
     assert hasattr(toolbox_instance_3, "run_tool")
     assert toolbox_instance_3.settings["any_key"] == "any-other-value"
 
-
-
-
-
     with pytest.raises(ToolBoxException, match=r"^ToolBox '.*?' has no defined clazz$"):
         assert ToolBoxDefinition(id=toolbox_definition_id_1).clazz
 
 
+@pytest.mark.depends(on="test_classes")
+def test_decorators():
+    toolbox_name = "mocked-toolbox"
+
+    @toolbox(name=toolbox_name, expose=["exposed_attr"])
+    class MockedToolBox:
+        exposed_attr: dict
+        @tool()
+        def mocked_tool(self, param_1: str):
+            return f"[{param_1}]"
+
+    assert toolbox_name in ToolBoxRegistry
+    assert ToolBoxRegistry[toolbox_name].clazz is MockedToolBox
+    assert "exposed_attr" in ToolBoxRegistry[toolbox_name].attributes
+    assert hasattr(MockedToolBox.mocked_tool, "_tool_def")
