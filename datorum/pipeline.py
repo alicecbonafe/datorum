@@ -14,13 +14,6 @@ from .document import DocumentContext
 from .exceptions import InvalidIdentifierException
 
 
-class ToolBoxSettings(BaseDatorumSettings):
-
-    id: str
-    toolbox: str
-    settings: dict[str, any] = Field(default_factory=dict)
-
-
 class BasePipelineStep(BaseDatorumSettings):
 
     type: str
@@ -34,10 +27,6 @@ class BasePipelineStep(BaseDatorumSettings):
         if self._pipeline is None:
             raise ValueError("Pipeline not found")
         return self._pipeline
-
-    @property
-    def work_dir(self) -> Path:
-        return self.pipeline.pipeflow.work_dir
 
 
 class HumanInteractionStep(BasePipelineStep):
@@ -83,25 +72,23 @@ class Pipeline(BaseDatorumSettings):
         Union[
             HumanInteractionStep,
             ToolStep,
-            ModelStep,
             AgentStep,
         ], Field(discriminator="type")]
     ] = Field(default_factory=list)
 
-    _collection: Optional["PipelineCollection"] = PrivateAttr(default=None)
-    _pipeflow: Optional["PipeFlow"] = PrivateAttr(default=None)
+    _parent: Optional[Union[
+        "PipelineCollection", "PipeFlow"
+    ]] = PrivateAttr(default=None)
 
     @property
-    def collection(self) -> "PipelineCollection":
-        if self._collection is None:
-            raise ValueError("Pipeline collection not found")
-        return self._collection
+    def parent(self) -> Union["PipelineCollection", "PipeFlow"]:
+        if self._parent is None:
+            raise ValueError(f"Pipeline '{id}' has no parent")
+        return self._parent
 
-    @property
-    def pipeflow(self) -> "PipeFlow":
-        if self._pipeflow is None:
-            raise ValueError("Pipeline is not in a flow")
-        return self._pipeflow
+    @parent.setter
+    def parent(self, value: Union["PipelineCollection", "PipeFlow"]):
+        self._parent = value
 
     @model_validator(mode="after")
     def _post_init_setup(self) -> "Pipeline":
@@ -113,9 +100,10 @@ class Pipeline(BaseDatorumSettings):
             )
         for step in self.steps:
             step._pipeline = self
+        return self
 
 
-class PipeFlowState(str, Enun):
+class PipeFlowState(str, Enum):
 
     planning = "planning"
     started  = "started"
@@ -125,7 +113,6 @@ class PipeFlowState(str, Enun):
 
 class PipeFlow(BaseDatorumPersistentSettings):
 
-    work_dir: Path
     pipeline: Pipeline
 
     state: PipeFlowState = PipeFlowState.planning
@@ -134,59 +121,15 @@ class PipeFlow(BaseDatorumPersistentSettings):
     started_at: datetime | None = None
     finished_at: datetime | None = None
 
-    _collection: Optional['PipelineCollection'] = PrivateAttr(default=None)
-
-    @property
-    def collection(self) -> 'PipelineCollection':
-        if self._collection is None:
-            raise ValueError("Pipeline collection not found")
-        return self._collection
-
     @model_validator(mode="after")
     def _post_init_setup(self) -> "PipeFlow":
-        self.pipeline._pipeflow = self
+        self.pipeline.parent = self
         return self
 
 
 class PipelineCollection(BaseDatorumPersistentSettings):
 
     pipelines: list[Pipeline] = Field(default_factory=list)
-    flow_files: list[str] = Field(default_factory=list)
-    toolboxes: list[ToolBoxSettings] = Field(default_factory=list)
-
-    _config: AIConfig | None = PrivateAttr(default=None)
-    _domains: DomainCollection | None = PrivateAttr(default=None)
-    _pipeflows: list[PipeFlow] | None = PrivateAttr(default=None)
-
-    @classmethod
-    def load_pipelines(cls, config: AIConfig) -> PipelineCollection:
-        instance: PipelineCollection = cls.load(
-            config.settings_path / "plumbing.yml")
-        instance._config = config
-        instance._domains = DomainCollection.load(
-            config.settings_path / "domains.yml")
-        return instance
-
-    @property
-    def config(self) -> AIConfig:
-        if self._config is None:
-            raise ValueError("Config not found")
-        return self._config
-
-    @property
-    def domains(self) -> DomainCollection:
-        if self._domains is None:
-            raise ValueError("Domains not found")
-        return self._domains
-
-    @property
-    def pipeflows(self) -> list[PipeFlow]:
-        if self._pipeflows is None:
-            self._pipeflows = [
-                PipeFlow.load(self.settings_path / flow_file)
-                for flow_file in self.flow_files
-            ]
-        return self._pipeflows
 
     @model_validator(mode="after")
     def _post_init_setup(self) -> "PipelineCollection":
@@ -194,16 +137,10 @@ class PipelineCollection(BaseDatorumPersistentSettings):
         if len(pipeline_ids) != len(set(pipeline_ids)):
             duplicates = [id for id, count in Counter(pipeline_ids).items() if count > 1]
             raise InvalidIdentifierException(
-                f"Duplicate pipeline IDs found in '{self.id}': {duplicates}"
-            )
-        flow_ids = [flow.id for flow in self.flows]
-        if len(flow_ids) != len(set(flow_ids)):
-            duplicates = [id for id, count in Counter(flow_ids).items() if count > 1]
-            raise InvalidIdentifierException(
-                f"Duplicate pipe flow IDs found in '{self.id}': {duplicates}"
+                f"Duplicate pipeline IDs found in pipeline collection: {duplicates}"
             )
 
         for pipeline in self.pipelines:
-            pipeline._collection = self
-        for flow in self.flows:
-            flow._collection = self
+            pipeline.parent = self
+
+        return self
