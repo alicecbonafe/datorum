@@ -14,7 +14,7 @@ from typing import (
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model, model_validator
 
-from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 from .wiring import (
     InputPort,
     OutputPort,

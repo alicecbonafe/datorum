@@ -9,7 +9,7 @@ import tomllib
 import tomli_w
 import yaml
 
-from .settings_base import BaseDatorumSettings
+from .settings import BaseDatorumSettings
 from .exceptions import (
     NoFilePathException,
     DocumentNotFoundException,

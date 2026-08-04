@@ -7,7 +7,7 @@ from typing import Literal, Optional, Annotated, Union
 import keyring
 from pydantic import Field, PrivateAttr, model_validator
 
-from .settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 from .exceptions import InvalidIdentifierException, KeyStoreException, NoFilePathException
 
 

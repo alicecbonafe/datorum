@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 from pydantic import Field
 
-from datorum.settings_base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from datorum.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 from datorum.exceptions import NoFilePathException, ConfigException
 
 

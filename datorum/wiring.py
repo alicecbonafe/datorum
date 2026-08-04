@@ -10,7 +10,7 @@ from typing import (
 
 from pydantic import BaseModel, Field
 
-from .settings_base import BaseDatorumSettings
+from .settings import BaseDatorumSettings
 
 
 class TargetConnector(str, Enum):
