@@ -46,22 +46,17 @@ class Job:
         self._pause_event.set()
 
     async def update_status(self, status: JobStatus, message: str):
+        if status == JobStatus.WORKING and self.status == JobStatus.PAUSING:
+            self.status = JobStatus.PAUSED
+            await self._pause_event.wait()
+
         self.status = status
         self.message = message
 
-        if status == JobStatus.PAUSED:
+        if status == JobStatus.PAUSING:
             self._pause_event.clear()
         elif status == JobStatus.RESTARTING:
             self._pause_event.set()
-
-    async def check(self):
-        if self.status == JobStatus.PAUSING:
-            await self.update_status(JobStatus.PAUSED, "Job paused")
-
-        await self._pause_event.wait()
-
-        if self.status == JobStatus.RESTARTING:
-            await self.update_status(JobStatus.WORKING, "Job running")
 
     async def push_chunk(self, chunk: str):
         await self.chunk_buffer.put(chunk)
