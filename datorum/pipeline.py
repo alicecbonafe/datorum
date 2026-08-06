@@ -13,6 +13,7 @@ from .wiring import InputPort, LivePort, OutputPort, ResourcePort
 class BasePipelineStep(BaseDatorumSettings):
     type: str
     id: str
+    target_id: str | None = None
     description: str | None = None
 
     _pipeline: Optional["Pipeline"] = PrivateAttr(default=None)
@@ -30,8 +31,6 @@ class HumanInteractionStep(BasePipelineStep):
 
     dialog_port: LivePort = Field(default_factory=LivePort)
     reference_ports: dict[str, LivePort] = Field(default_factory=dict)
-
-    logger_port: ResourcePort = Field(default_factory=ResourcePort)
 
 
 class ToolStep(BasePipelineStep):
@@ -55,15 +54,29 @@ class AgentStep(BasePipelineStep):
     tools: list[str] = Field(default_factory=list)
 
 
+class CodeType(str, Enum):
+    FORMULA = "formula"
+    SNIPPET = "snippet"
+
+
+class DecisionStep(BasePipelineStep):
+    type: Literal["decision"] = "decision"
+    target_options: list[str] = Field(default_factory=list)
+    code_type: CodeType = CodeType.FORMULA
+    code: str = ""
+
+    input_port: InputPort = Field(default_factory=InputPort)
+
+
 class Pipeline(BaseDatorumSettings):
     id: str
     description: str | None = None
 
-    steps: list[
+    steps: dict[str,
         Annotated[
-            HumanInteractionStep | ToolStep | AgentStep, Field(discriminator="type")
+            HumanInteractionStep | ToolStep | AgentStep | DecisionStep, Field(discriminator="type")
         ]
-    ] = Field(default_factory=list)
+    ] = Field(default_factory=dict)
 
     _parent: Union["PipelineCollection", "PipeFlow"] | None = PrivateAttr(default=None)
 
@@ -91,6 +104,7 @@ class Pipeline(BaseDatorumSettings):
 
 
 class PipeFlowState(str, Enum):
+    id: str
     planning = "planning"
     started = "started"
     paused = "paused"
@@ -102,9 +116,11 @@ class PipeFlow(BaseDatorumPersistentSettings):
     pipeline: Pipeline
 
     state: PipeFlowState = PipeFlowState.planning
-    current_step: int = -1
+    current_step: str | None = None
+    step_history: list[str] = []
 
     started_at: datetime | None = None
+    last_updated_at: datetime | None = None
     finished_at: datetime | None = None
 
     @model_validator(mode="after")

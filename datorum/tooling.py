@@ -359,3 +359,4 @@ class ToolBoxSetUp(BaseDatorumSettings):
 
 class ToolBoxCollection(BaseDatorumPersistentSettings):
     toolboxes: list[ToolBoxSetUp] = Field(default_factory=list)
+

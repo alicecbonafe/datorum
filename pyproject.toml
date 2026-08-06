@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datorum"
-version = "0.1.0a1.dev3"
+version = "0.1.0a1.dev4"
 description = "Context engineering AI agent."
 readme = "README.md"
 license = "Apache-2.0"

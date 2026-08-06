@@ -87,8 +87,12 @@ Commom base for all Datorum use cases.
 
 ---
 
-## 6. Phase 4 — Workers for tools, agents and pipelines
+## 6. Phase 4 (current) — Workers for tools, agents and pipelines
 
+- [ ] BaseWorker and BaseMonitor
+- [ ] ToolWorker and ToolMonitor
+- [ ] AgentWorker and AgentMonitor
+- [ ] PipelineWorker and HumanMonitor
 
 
 ---
