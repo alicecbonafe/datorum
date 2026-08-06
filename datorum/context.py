@@ -2,7 +2,7 @@ import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import tomli_w
 import tomllib
@@ -432,3 +432,81 @@ class DocumentContext(BaseDatorumSettings):
         for document in self.documents.values():
             document._context = self
         return self
+
+
+# ======================================================
+# | Markdown Model
+# ======================================================
+
+
+@doc_model(id="markdown", doc_type="text/markdown")
+class MarkdownDocument:
+
+    DELIMITER_YAML = "---\n"
+    DELIMITER_JSON = ";;;\n"
+    DELIMITER_TOML = "+++\n"
+
+    def __init__(self, content: str, frontmatter: dict | None = None, frontmatter_format: str | None = None):
+        self.content = content
+        self.frontmatter = frontmatter
+        self.frontmatter_format = frontmatter_format
+
+    def dumps(self) -> str:
+        raw = self.content
+        if self.frontmatter_format == "yaml":
+            frontmatter_raw = yaml.safe_dump(self.frontmatter, sort_keys=False, allow_unicode=True)
+            raw = f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
+        elif self.frontmatter_format == "json":
+            frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
+            raw = f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
+        elif self.frontmatter_format == "toml":
+            frontmatter_raw = tomli_w.dumps(data)
+            raw = f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
+        return raw
+
+    def dump(self, file_path: Path):
+        file_path.write_text(self.dumps, encoding="utf-8")
+
+    @classmethod
+    def loads(cls, raw: str) -> Self:
+        content: str = raw
+        frontmatter: dict | None = None
+        frontmatter_format: str | None = None
+
+        if raw.startswith(self.DELIMITER_YAML):
+            closure = raw.find(self.DELIMITER_YAML, len(self.DELIMITER_YAML))
+            if closure > 0:
+                frontmatter_format = "yaml"
+                frontmatter_raw = raw[len(self.DELIMITER_YAML):closure]
+                frontmatter = yaml.safe_load(frontmatter_raw) or {}
+                content = raw[closure+len(self.DELIMITER_YAML):]
+        elif raw.startswith(self.DELIMITER_JSON):
+            closure = raw.find(self.DELIMITER_JSON, len(self.DELIMITER_JSON))
+            if closure > 0:
+                frontmatter_format = "json"
+                frontmatter_raw = raw[len(self.DELIMITER_JSON):closure]
+                frontmatter = json.loads(text)
+                content = raw[closure+len(self.DELIMITER_JSON):]
+        elif raw.startswith(self.DELIMITER_TOML):
+            closure = raw.find(self.DELIMITER_TOML, len(self.DELIMITER_TOML))
+            if closure > 0:
+                frontmatter_format = "toml"
+                frontmatter_raw = raw[len(self.DELIMITER_TOML):closure]
+                frontmatter = tomllib.loads(text)
+                content = raw[closure+len(self.DELIMITER_TOML):]
+
+        return cls(content=content, frontmatter=frontmatter, frontmatter_format=frontmatter_format)
+
+    @classmethod
+    def load(cls, file_path: Path) -> Self:
+        return cls.loads(file_path.read_text(encoding="utf-8"))
+
+
+@serializer(doc_type="text/markdown", doc_model="markdown")
+def markdown_writer(data: MarkdownDocument, file_path: Path):
+    data.dump(file_path=file_path)
+
+
+@deserializer(doc_type="text/markdown", doc_model="markdown")
+def simple_toml_reader(file_path: Path) -> MarkdownDocument:
+    return MarkdownDocument.load(file_path=file_path)

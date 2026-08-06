@@ -49,6 +49,7 @@ class AgentStep(BasePipelineStep):
 
     system_instructions_port: InputPort = Field(default_factory=InputPort)
     user_prompt_port: InputPort = Field(default_factory=InputPort)
+    chat_history_port: LivePort = Field(default_factory=LivePort)
     output_port: OutputPort = Field(default_factory=OutputPort)
 
     tools: list[str] = Field(default_factory=list)
