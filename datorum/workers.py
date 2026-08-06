@@ -6,11 +6,15 @@ from typing import Optional, AsyncGenerator
 import uuid
 
 from .context import DocumentContext, DocumentReference
-from .exceptions import MissingContextException
+from .exceptions import (
+    PauseRequested,
+    InvalidJobTypeException,
+    MissingContextException,
+)
 from .inference import AIConfig, AIServiceProvider, AgentRole
 from .pipeline import PipelineCollection, PipeFlow
 from .security import SecurityBackend
-from .tooling import ToolBoxSetUp, ToolBoxDefinition
+from .tooling import ToolBoxSetUp, ToolBoxDefinition, ToolBoxRegistry
 
 
 
@@ -38,9 +42,26 @@ class Job:
         self.chunk_buffer: asyncio.Queue[Optional[str]] = asyncio.Queue()
         self.log_buffer: asyncio.Queue[Optional[str]] = asyncio.Queue()
 
+        self._pause_event = asyncio.Event()
+        self._pause_event.set()
+
     async def update_status(self, status: JobStatus, message: str):
         self.status = status
         self.message = message
+
+        if status == JobStatus.PAUSED:
+            self._pause_event.clear()
+        elif status == JobStatus.RESTARTING:
+            self._pause_event.set()
+
+    async def check(self):
+        if self.status == JobStatus.PAUSING:
+            await self.update_status(JobStatus.PAUSED, "Job paused")
+
+        await self._pause_event.wait()
+
+        if self.status == JobStatus.RESTARTING:
+            await self.update_status(JobStatus.WORKING, "Job running")
 
     async def push_chunk(self, chunk: str):
         await self.chunk_buffer.put(chunk)
@@ -89,29 +110,84 @@ class WorkFlow(Job):
                 raise MissingContextException(f"Document '{document_id}' not found in context '{context_id}'")
             return doc
 
+    async def save_pipeflow(self):
+        self.pipeflow.save()
+
 
 class Worker(ABC):
-    id: str
     required_context: list[str] = []
-    jobs: dict[str, Job]
 
-    def create_job(self, context: dict[str, DocumentReference]) -> str:...
+    def __init__(self, worker_id: str):
+        self.id: str = worker_id
+        self.jobs: dict[str, Job] = {}
+
+    def create_job(self, context: dict[str, DocumentReference]) -> str:
+        for req in self.required_context:
+            if req not in context:
+                raise MissingContextException(f"Missing required context document for '{req}'")
+
+        job_id = f"{self.__class__.__name__}-{uuid.uuid4().hex}"
+        self.jobs[job_id] = Job(id=job_id, context=context)
+        return job_id
 
     def start_job(self, job_id: str):
-        asyncio.create_task(self.run(self.jobs[job_id]))
+        if job_id not in self.jobs:
+            raise InvalidJobTypeException(f"Job '{job_id}' not found")
+        self.jobs[job_id].update_status(JobStatus.STARTING, "Starting worker...")
+        asyncio.create_task(self._call_run(self.jobs[job_id]))
 
-    def request_pause(self, job_id: str):...
+    def request_pause(self, job_id: str):
+        if job_id in self.jobs:
+            job = self.jobs[job_id]
+            if job.status == JobStatus.WORKING:
+                asyncio.create_task(job.update_status(JobStatus.PAUSING, "Pause requested"))
+
+    def get_logger(self,):...  # TODO
 
     @abstractmethod
-    async def run(self, job: Job):...
+    def run(self, job: Job):...
+
+    async def _call_run(self, job: Job):
+        try:
+            self.run(job)
+        except Exception as e:
+            job.update_status(JobStatus.CRASHED, str(e))
+        finally:
+            job.finish_streams()
 
 
 class ToolWorker(Worker):
-    required_context: list[str] = ["tool_params", "tool_result"]
-    toolbox: ToolBoxSetUp
-    tool_name: str
+    required_context: list[str] = ["settings", "tool_params", "tool_result"]
 
-    async def run(self, job: Job):...
+    def __init__(self, worker_id: str, toolbox: ToolBoxSetUp, tool_name: str):
+        super().__init__(worker_id)
+        self.toolbox = toolbox
+        self.tool_name = tool_name
+
+    def run(self, job: Job):
+        await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
+
+        toolbox_def = ToolBoxRegistry[self.toolbox.toolbox_id]
+        toolbox = toolbox_def.create_toolbox(settings=job.context["settings"])
+
+        if self.toolbox.logger_port.attribute_name is not None:
+            setattr(toolbox, self.toolbox.logger_port.attribute_name, self.get_logger())
+        if self.toolbox.monitor_port.attribute_name is not None:
+            setattr(toolbox, self.toolbox.monitor_port.attribute_name, job)
+        for name, port in self.toolbox.custom_ports.items():
+            if name in job.context:
+                setattr(toolbox, port.attribute_name, job.context[name])
+
+        await job.check()
+        await job.update_status(JobStatus.WORKING, "Starting tool")
+
+        output = toolbox.run_tool(
+            tool_name = self.tool_name,
+            params = job.context["tool_params"]
+        )
+        await job.check()
+        await job.update_status(JobStatus.WORKING, "Saving results")
+        job.context["tool_result"].save(output)
 
 
 class AgentWorker(Worker):
@@ -121,7 +197,7 @@ class AgentWorker(Worker):
 
     tool_worker: Optional[ToolJob]
 
-    async def run(self, job: Job):...
+    def run(self, job: Job):...
 
 
 class PipelineWorker(Worker):
@@ -134,7 +210,7 @@ class PipelineWorker(Worker):
     def create_job(self, context: dict[str, DocumentReference]) -> str:
         raise TypeError
     def create_workflow(self, context_collection: dict[str, DocumentContext]) -> str:...
-    async def run(self, job: Job):
+    def run(self, job: Job):
         assert isinstance(job, WorkFlow)
 
 
