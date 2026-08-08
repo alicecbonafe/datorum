@@ -27,7 +27,6 @@ class BasePipelineStep(BaseDatorumSettings):
 
 class HumanInteractionStep(BasePipelineStep):
     type: Literal["human"] = "human"
-    message: str
 
     dialog_port: LivePort = Field(default_factory=LivePort)
     reference_ports: dict[str, LivePort] = Field(default_factory=dict)
@@ -78,6 +77,7 @@ class Pipeline(BaseDatorumSettings):
             HumanInteractionStep | ToolStep | AgentStep | DecisionStep, Field(discriminator="type")
         ]
     ] = Field(default_factory=dict)
+    first_step_id: str = "in"
 
     _parent: Union["PipelineCollection", "PipeFlow"] | None = PrivateAttr(default=None)
 
@@ -117,7 +117,7 @@ class PipeFlow(BaseDatorumPersistentSettings):
     pipeline: Pipeline
 
     state: PipeFlowState = PipeFlowState.planning
-    current_step: str | None = None
+    current_step_id: str | None = None
     step_history: list[str] = Field(default_factory=list)
 
     started_at: datetime | None = None

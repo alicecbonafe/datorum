@@ -19,6 +19,7 @@ from .exceptions import (
     MissingContextException,
     InferenceException,
     ToolWorkerException,
+    PipelineWorkerException,
 )
 from .inference import (
     AIConfig,
@@ -30,7 +31,15 @@ from .inference import (
     AssistantMessage,
     ToolMessage
 )
-from .pipeline import PipelineCollection, PipeFlow
+from .pipeline import (
+    PipelineCollection,
+    PipeFlow,
+    PipeFlowState,
+    HumanInteractionStep,
+    ToolStep,
+    AgentStep,
+    DecisionStep,
+)
 from .security import SecurityBackend
 from .tooling import ToolBoxSetUp, ToolBoxDefinition, get_toolbox_definition
 from .wiring import (
@@ -79,19 +88,21 @@ class Job:
         self.message: str = "Job created"
         self.is_streaming: bool = False
 
+        self.delegates: list[Job] = []
+
         self.chunk_buffer: asyncio.Queue[Optional[str]] = asyncio.Queue()
         self.log_buffer: asyncio.Queue[Optional[str]] = asyncio.Queue()
 
         self._pause_event = asyncio.Event()
         self._pause_event.set()
 
-    async def update_status(self, status: JobStatus, message: str):
+    async def update_status(self, status: JobStatus, message: Optional[str] = None):
         if status == JobStatus.WORKING and self.status == JobStatus.PAUSING:
             self.status = JobStatus.PAUSED
             await self._pause_event.wait()
 
         self.status = status
-        self.message = message
+        self.message = message or self.message
 
         if status == JobStatus.PAUSING:
             self._pause_event.clear()
@@ -122,6 +133,16 @@ class Job:
         await self.chunk_buffer.put(None)
         await self.log_buffer.put(None)
 
+    async def create_delegate(self, new_id: str, ) -> "Job":
+        new_context = JobContext(
+            documents={
+                **self.context.documents,
+                **(include_docs or {})
+            },
+            domains={**self.context.domains},
+            resources={**self.context.resources},
+        )
+        new_job = Job(id=new_id, )
 
 class Worker(ABC):
     required_context: list[str] = []
@@ -139,17 +160,56 @@ class Worker(ABC):
         self.jobs[job_id] = job
         return job
 
+    def create_delegated_job(
+        self, origin: Job,
+        include_docs: Optional[dict[str, DocumentReference]] = None,
+    ) -> Job:
+        context = JobContext(
+            documents={**origin.context.documents, **(include_docs or {})},
+            domains={**origin.context.domains},
+            resources={**origin.context.resources},
+        )
+        job = self.create_job(context)
+        origin.delegates.append(job)
+        return job
+
+
     def start_job(self, job_id: str):
         if job_id not in self.jobs:
             raise InvalidJobTypeException(f"Job '{job_id}' not found")
-        await self.jobs[job_id].update_status(JobStatus.STARTING, "Starting worker...")
+
+        job = self.jobs[job_id]
+
+        if job.status != JobStatus.IDLE:
+            raise InvalidJobTypeException(f"Job '{job_id}' is not idle")
+
+        await job.update_status(JobStatus.STARTING, "Starting worker...")
         asyncio.create_task(self._call_run(self.jobs[job_id]))
 
+    def restart_job(self, job_id: str):
+        if job_id not in self.jobs:
+            raise InvalidJobTypeException(f"Job '{job_id}' not found")
+
+        job = self.jobs[job_id]
+
+        if job.status != JobStatus.PAUSED:
+            raise InvalidJobTypeException(f"Job '{job_id}' is not paused")
+
+        await job.update_status(JobStatus.RESTARTING, "Restarting worker...")
+
     def request_pause(self, job_id: str):
-        if job_id in self.jobs:
-            job = self.jobs[job_id]
-            if job.status == JobStatus.WORKING:
-                asyncio.create_task(job.update_status(JobStatus.PAUSING, "Pause requested"))
+        if job_id not in self.jobs:
+            raise InvalidJobTypeException(f"Job '{job_id}' not found")
+
+        job = self.jobs[job_id]
+
+        if job.status != JobStatus.WORKING:
+            raise InvalidJobTypeException(f"Job '{job_id}' is inactive")
+
+        last_delegate = job.delegates[len(job.delegates)-1] if len(job.delegates) > 0 else None
+        if last_delegate is not None and last_delegate.status == JobStatus.WORKING:
+            await last_delegate.update_status(JobStatus.PAUSING, "Pause requested")
+        asyncio.create_task(job.update_status(JobStatus.PAUSING, "Pause requested"))
 
     def get_logger(self,):...  # TODO
 
@@ -494,16 +554,11 @@ class AgentWorker(Worker):
                     tool_def = toolbox_def.tools[tool_name]
 
                     tool_worker = ToolWorker(toolbox=toolbox_setup, tool_name=tool_name)
-                    tool_context = JobContext(
-                        documents={
-                            **job.context.documents,
-                            "tool_params": chat_history_doc,
-                            "tool_result": chat_history_doc,
-                        },
-                        domains={**job.context.domains},
-                        resources={**job.context.resources}
-                    )
-                    tool_job = tool_worker.create_job(context=tool_context)
+                    tool_job = tool_worker.create_delegated_job(origin=job, include_docs={
+                        "tool_params": chat_history_doc,
+                        "tool_result": chat_history_doc,
+                    })
+                    job.current_delegate = tool_job
                     await tool_worker._call_run(tool_job)
                     chat_history = chat_history_doc.load()
 
@@ -515,17 +570,97 @@ class AgentWorker(Worker):
 
 
 class PipelineWorker(Worker):
-    providers: dict[str, AIServiceProvider]
-    roles: dict[str, AgentRole]
 
-    tool_worker: Optional[ToolWorker]
-    agent_worker: Optional[AgentWorker]
+    def __init__(
+        self,
+        pipeflow: PipeFlow,
+        providers: dict[str, AIServiceProvider],
+        provider_api_keys: dict[str, str],
+        roles: dict[str, AgentRole],
+        toolkit: list[ToolBoxSetUp],
+    ):
+        self.pipeflow = pipeflow
+        self.providers = providers
+        self.provider_api_keys = provider_api_keys
+        self.roles = roles
+        self.toolkit = toolkit
 
-    def create_job(self, context: dict[str, DocumentReference]) -> str:
-        raise TypeError
-    def create_workflow(self, context_collection: dict[str, DocumentContext]) -> str:...
-    def run(self, job: Job):
-        assert isinstance(job, WorkFlow)
+    async def save_flow(
+        self, *,
+        state: Optional[PipeFlowState] = None,
+        step_id: Optional[str] = None
+    ):
+        self.pipeflow.state = state or self.pipeflow.state
+        now = datetime.now().astimezone()
+        if state != PipeFlowState.planning and self.pipeflow.started_at is None:
+            self.pipeflow.started_at = now
+        self.pipeflow.last_updated_at = now
+        if state in [PipeFlowState.finished, PipeFlowState.crashed] and self.pipeflow.finished_at is None:
+            self.pipeflow.finished_at = now
+        self.pipeflow.save()
+
+    async def run(self, job: Job):
+        current_step_id: str | None = self.pipeflow.current_step_id
+
+        if current_step_id is None and self.pipeflow.started_at is None:
+            current_step_id = self.pipeflow.pipeline.first_step_id
+            self.pipeflow.current_step_id = current_step_id
+            self.save_flow(PipeFlowState.started)
+
+        while current_step_id is not None:
+            if current_step_id not in self.pipeflow.pipeline.steps:
+                raise PipelineWorkerException(f"Step '{current_step_id}' not found in Pipeline '{self.pipeflow.pipeline.id}'")
+
+            current_step = self.pipeflow.pipeline.steps[current_step_id]
+            if current_step.type == "human":
+                assert isinstance(current_step, HumanInteractionStep)
+                job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")
+                job.update_status(JobStatus.WORKING, "Resuming pipeline...")
+            elif current_step.type == "tool":
+                assert isinstance(current_step, ToolStep)
+                job.update_status(JobStatus.WORKING, f"Running tool step '{current_step_id}'...")
+
+                tool_params_doc_id = current_step.tool_params_port.bind.document_id
+                tool_result_doc_id = current_step.tool_result_port.bind.document_id
+                if tool_params_doc_id not in job.context.documents:
+                    raise PipelineWorkerException(f"Step '{current_step_id}' failed, document '{tool_params_doc_id}' not found in context")
+                tool_params_doc = job.context.documents[tool_params_doc_id]
+                tool_result_doc = job.context.documents[tool_result_doc_id]
+                
+                tool_job_context = JobContext(
+                    documents={
+                        **job.context.documents,
+                        "tool_params": tool_params_doc,
+                        "tool_result": tool_result_doc,
+                    },
+                    domains=job.context.domains,
+                    resources=job.context.resources
+                )
+
+                tool_worker = ToolWorker(
+                    toolbox=self.toolkit[current_step.toolbox_setup_id],
+                    tool_name=current_step.tool_name,
+                )
+                job.current_delegate = tool_worker.create_job(
+                    context=tool_job_context
+                )
+
+                job.update_status(JobStatus.WORKING, "Starting tool worker...")
+                await tool_worker.run(job=job.current_delegate)
+                job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
+            elif current_step.type == "agent":
+                assert isinstance(current_step, AgentStep)
+                job.update_status(JobStatus.WORKING, f"Running agent step '{current_step_id}'...")
+
+                # TODO
+            elif current_step.type == "decision":
+                assert isinstance(current_step, DecisionStep)
+                # TODO
+
+            self.pipeflow.step_history.append(current_step_id)
+            current_step_id = current_step.target_id
+            self.pipeflow.current_step_id = current_step_id
+            self.save_flow()
 
 
 
