@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
@@ -141,11 +142,10 @@ class ToolCall(BaseModel):
 # 3. Message definitions (Discriminated Union based on the 'role' field)
 # ============================
 class _MessageBase(BaseModel):
-    """Base class to validate that extra fields are not allowed."""
     name: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "allow"}
 
     def prepare_request(self) -> dict[str, Any]:
         known_fields = set(type(self).model_fields.keys()) - {"metadata"}
@@ -167,8 +167,6 @@ class AssistantMessage(_MessageBase):
     content: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
     function_call: Optional[FunctionCall] = None  # Deprecated, but retained for compatibility
-
-    model_config = {"extra": "allow"}
 
     @model_validator(mode="after")
     def validate_assistant(self):
@@ -210,9 +208,14 @@ ChatMessage = Annotated[
 class ChatHistory(BaseModel):
     """Represents the complete message history for the OpenAI API."""
     messages: List[ChatMessage] = Field(
-        ...,
         default_factory=list,
         description="Ordered list of chat history messages"
     )
 
     model_config = {"extra": "forbid"}
+
+    def prepare_request(self) -> dict[str, Any]:
+        dumped_messages: list[dict] = []
+        for msg in self.messages:
+            dumped_messages.append(msg.prepare_request())
+        return dumped_messages

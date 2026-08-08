@@ -5,7 +5,7 @@ from datorum.exceptions import (
     ToolBoxException,
 )
 from datorum.tooling import (
-    AttributeExposure,
+    ContextField,
     FunctionDefinition,
     ToolBoxDefinition,
     ToolBoxRegistry,
@@ -163,8 +163,8 @@ def test_classes():
     tool_def_1.returns = MockedClass1
     assert issubclass(tool_def_1.returns, BaseModel)
 
-    # AttributeExposure
-    attr_exp_1 = AttributeExposure(attr_name=attribute_name)
+    # ContextField
+    attr_exp_1 = ContextField(attr_name=attribute_name)
     attr_exp_1.attr_type = MockedClass1
     assert attr_exp_1.attr_type is not None
     assert issubclass(attr_exp_1.attr_type, BaseModel)
@@ -228,7 +228,7 @@ def test_decorators():
 
     assert toolbox_name in ToolBoxRegistry
     assert ToolBoxRegistry[toolbox_name].clazz is MockedToolBox
-    assert "exposed_attr" in ToolBoxRegistry[toolbox_name].attributes
+    assert "exposed_attr" in ToolBoxRegistry[toolbox_name].fields
     assert hasattr(MockedToolBox.mocked_tool, "_tool_def")
 
     toolbox_1 = ToolBoxRegistry[toolbox_name].create_toolbox()

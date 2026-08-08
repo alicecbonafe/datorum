@@ -1,14 +1,17 @@
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
 from typing import (
     Annotated,
     Any,
+    Callable,
     Literal,
 )
 
 from pydantic import Field
 
 from .settings import BaseDatorumSettings
+from .context import DocumentReference
 
 
 class TargetConnector(str, Enum):
@@ -34,34 +37,87 @@ class DocumentConnector(str, Enum):
 class BaseBind(BaseDatorumSettings):
     bind_type: str
 
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Any],
+    ) -> Any: ...
+
 
 class BaseDocumentBind(BaseBind):
     document_id: str
-    context_id: str | None = None
 
 
 class DocumentBind(BaseDocumentBind):
-    bind_type: Literal["document"] = "document"
+    bind_type: Literal["doc"] = "doc"
+
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Any],
+    ) -> Any:
+        return documents[self.document_id].load()
 
 
 class DocumentRawBind(BaseDocumentBind):
-    bind_type: Literal["document-raw"] = "document-raw"
+    bind_type: Literal["doc-raw"] = "doc-raw"
+
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Callable],
+    ) -> Any:
+        if self.document_id not in documents:
+            return None
+        return documents[self.document_id].doc_path.read_text(encoding="utf-8")
 
 
 class DocumentPathBind(BaseDocumentBind):
-    bind_type: Literal["document-path"] = "document-path"
+    bind_type: Literal["doc-path"] = "doc-path"
+
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Callable],
+    ) -> Any:
+        if self.document_id not in documents:
+            return None
+        return documents[self.document_id].doc_path
 
 
 class DomainPathBind(BaseBind):
     bind_type: Literal["domain"] = "domain"
     domain_id: str
-    context_id: str | None = None
+
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Callable],
+    ) -> Any:
+        if self.domain_id not in domains:
+            return None
+        return domains[self.domain_id]
 
 
 class ResourceBind(BaseBind):
     bind_type: Literal["resource"] = "resource"
     resource_id: str
     target_alias: str
+
+    def resolve(
+        self,
+        documents: dict[str, DocumentReference],
+        domains: dict[str, Path],
+        resources: dict[str, Callable],
+    ) -> Any:
+        if self.resource_id not in resources  :
+            return None
+        return resources[self.resource_id](self.target_alias)
 
 
 class BasePort(BaseDatorumSettings):
@@ -103,29 +159,4 @@ class CustomPort(BasePort):
         ]
         | None
     ) = None
-    attribute_name: str
-
-
-ResourceFactoryRegistry: dict[str, Callable] = {}
-
-
-def register_resource_factory(
-    resource_id: str,
-    factory: Callable,
-):
-    ResourceFactoryRegistry[resource_id] = factory
-
-
-def get_resource(
-    resource_id,
-    target_alias: str,
-) -> Any:
-    return ResourceFactoryRegistry[resource_id](target_alias)
-
-
-def resource_factory(resource_id: str):
-    def decorator(func):
-        register_resource_factory(resource_id, func)
-        return func
-
-    return decorator
+    attribute_name: str  # TODO deprecate?

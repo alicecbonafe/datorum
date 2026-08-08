@@ -69,7 +69,9 @@ DOC_MODELS: dict[str, DocumentModel] = {}
 DOC_HANDLERS: dict[tuple[str, str], DocumentHandler] = {}
 
 
-def register_doc_type(id: str, extentions: list[str]) -> DocumentType:
+def register_doc_type(id: str, extentions: list[str], force: bool = False) -> DocumentType:
+    if id in DOC_TYPES and not force:
+        raise DocumentFormatException(f"Doc type '{id}' is already registered")
     doc_type = DocumentType(id=id, extentions=extentions)
     DOC_TYPES[id] = doc_type
     return doc_type
@@ -155,13 +157,15 @@ def find_handlers(
 # ======================================================
 
 
-def doc_model(id: str, doc_type: str | None = None):
+def doc_model(id: str, doc_type: str | None = None, force: bool = False):
     def decorator(cls):
         if issubclass(cls, BaseModel):
             register_pydantic_based_handler(
                 model_type=cls,
                 doc_type=doc_type,
             )
+        elif id in DOC_MODELS and not force:
+            raise DocumentFormatException(f"Doc model '{id}' is already registrered")
         else:
             DOC_MODELS[id] = DocumentModel(
                 id=id,

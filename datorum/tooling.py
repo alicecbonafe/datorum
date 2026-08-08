@@ -1,12 +1,16 @@
 import inspect
 from collections.abc import Callable
+import types
 from typing import (
     Any,
     Literal,
+    Protocol,
+    Self,
     Union,
     get_args,
     get_origin,
     get_type_hints,
+    runtime_checkable,
 )
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model
@@ -71,6 +75,14 @@ def _unwrap_optional(hint: Any) -> Any:
         if len(non_none) == 1:
             return non_none[0]
     return hint
+
+
+def _is_optional(hint: Any) -> bool:
+    origin = get_origin(hint)
+    if origin in (Union, types.UnionType):
+        args = get_args(hint)
+        return type(None) in args
+    return False
 
 
 def _hint_matches(hint: Any, expected: type) -> bool:
@@ -157,6 +169,11 @@ def _resolve_call_args(
 # ======================================================
 
 
+class ToolBox(Protocol):
+    def get_toolbox_definition() -> "ToolBoxDefinition":...
+    async def run_tool(self, tool_name: str, params: Any = None):...
+
+
 class FunctionDefinition(BaseModel):
     name: str
     description: str
@@ -211,62 +228,39 @@ class ToolDefinition(BaseModel):
     type: Literal["function"] = "function"  # OpenAI API protocol compatibility
 
 
-class AttributeExposure(BaseModel):
-    attr_name: str
-
-    _attr_type: type | None = PrivateAttr(default=None)
-
-    @property
-    def attr_type(self) -> type | None:
-        return self._attr_type
-
-    @attr_type.setter
-    def attr_type(self, value: type):
-        self._attr_type = value
+class ContextField(BaseModel):
+    name: str | None = None
+    attr_name: str | None = None
+    field_type: Literal["doc", "doc-raw", "doc-path", "domain-path", "resource"] = "doc"
+    resource_name: str | None = None
+    description: str | None = None
+    required: bool | None = None
 
 
 class ToolBoxDefinition(BaseModel):
-    id: str
-    settings_attr: str | None = None
-
+    name: str
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)
-    attributes: dict[str, AttributeExposure] = Field(default_factory=dict)
+    fields: dict[str, ContextField] = Field(default_factory=dict)
+    clazz: type[Any] = Field(default=None, exclude=True)
 
-    _clazz: type | None = PrivateAttr(default=None)
-    _settings_type: type[BaseModel] | type[dict] = PrivateAttr(default=dict)
+    def create_toolbox(self, context: dict[str, Any]) -> ToolBox:
+        result: Any = self.clazz()
 
-    @property
-    def clazz(self) -> type:
-        if self._clazz is None:
-            raise ToolBoxException(f"ToolBox '{self.id}' has no defined clazz")
-        return self._clazz
+        for ctx_key, ctx_val in context.items():
+            if ctx_key in self.fields:
+                setattr(result, self.fields[ctx_key].attr_name, ctx_val)
 
-    @clazz.setter
-    def clazz(self, value: type):
-        self._clazz = value
+        def get_toolbox_definition() -> Self:
+            return self
 
-    @property
-    def settings_type(self) -> type[BaseModel] | type[dict]:
-        return self._settings_type
+        async def run_tool(tool_name: str, params: Any = None):
+            missing_fields: list[str] = []
+            for field in self.fields.values():
+                if field.required and getattr(result, field.attr_name, None) is None:
+                    missing_fields.append(field.name)
+            if len(missing_fields) > 0:
+                raise ToolBoxException(f"Missing required context field(s): {missing_fields}")
 
-    @settings_type.setter
-    def settings_type(self, value: type[BaseModel] | type[dict]):
-        self._settings_type = value
-
-    def create_toolbox(self, settings: Any = None) -> Any:
-        result: Any = None
-
-        if settings is None or self.settings_attr is not None:
-            result = self.clazz()
-        else:
-            init_method = getattr(self.clazz, "__init__", object.__init__)
-            args, kwargs = _resolve_call_args(init_method, settings, self.settings_type)
-            result = self.clazz(*args, **kwargs)
-
-        if settings is not None and self.settings_attr is not None:
-            setattr(result, self.settings_attr, settings)
-
-        def run_tool(tool_name: str, params: Any = None):
             tool_method = getattr(result, tool_name)
             tool_def: ToolDefinition = tool_method._tool_def
 
@@ -278,6 +272,7 @@ class ToolBoxDefinition(BaseModel):
 
             return tool_method()
 
+        result.get_toolbox_definition = get_toolbox_definition
         result.run_tool = run_tool
 
         return result
@@ -290,7 +285,11 @@ class ToolBoxDefinition(BaseModel):
 ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
 
 
-def tool(params: type[BaseModel] | None = None, *, name: str | None = None):
+def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
+    return ToolBoxRegistry[toolbox_name]
+
+
+def tool(name: str | None = None, params: type[BaseModel] | None = None):
     def decorator(func):
         func._tool_def = ToolDefinition(
             name=func.__name__,
@@ -306,34 +305,34 @@ def tool(params: type[BaseModel] | None = None, *, name: str | None = None):
     return decorator
 
 
-def toolbox(
-    settings_type: type[BaseModel] | type[dict] = dict,
-    *,
-    name: str | None = None,
-    settings_attr: str | None = None,
-    expose: list[str] | None = None,
-):
-    exp_attrs = [*expose] if expose is not None else []
-
+def toolbox(name: str | None = None, force: bool = False):
     def decorator(cls):
-        toolbox_def = ToolBoxDefinition(
-            id=name or cls.__qualname__,
-            settings_attr=settings_attr,
-        )
+        toolbox_name = name=name or cls.__qualname__
+        if toolbox_name in ToolBoxRegistry and not force:
+            raise ToolBoxException(f"ToolBox '{toolbox_name}' is already registered")
+        toolbox_def = ToolBoxDefinition(name=name or cls.__qualname__)
         toolbox_def.clazz = cls
-        toolbox_def._settings_type = settings_type
-        ToolBoxRegistry[toolbox_def.id] = toolbox_def
-
-        for attr_value in vars(cls).values():
-            if hasattr(attr_value, "_tool_def"):
-                tool_def: ToolDefinition = attr_value._tool_def
-                toolbox_def.tools[tool_def.name] = tool_def
+        ToolBoxRegistry[toolbox_def.name] = toolbox_def
 
         type_hints = get_type_hints(cls)
-        for exp_attr in exp_attrs:
-            toolbox_def.attributes[exp_attr] = AttributeExposure(attr_name=exp_attr)
-            if exp_attr in type_hints:
-                toolbox_def.attributes[exp_attr].attr_type = type_hints[exp_attr]
+
+        for attr_name, attr_value in vars(cls).items():
+            if hasattr(attr_value, "_tool_def"):
+                tool_def: ToolDefinition = attr_value._tool_def
+                if tool_def.name in toolbox_def.tools:
+                    raise ToolBoxException(f"Tool '{tool_def.name}' is already registered in ToolBox '{toolbox_name}'")
+                toolbox_def.tools[tool_def.name] = tool_def
+            elif isinstance(attr_value, ContextField):
+                if attr_value.name in toolbox_def.fields:
+                    raise ToolBoxException(f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'")
+                attr_value.attr_name = attr_name
+                attr_value.name = attr_value.name or attr_name
+                if attr_value.required is None:
+                    if attr_name in type_hints:
+                        attr_value.required = not _is_optional(type_hints[attr_name])
+                    else:
+                        attr_value.required = False
+                toolbox_def.fields[attr_value.name] = attr_value
 
         return cls
 
@@ -347,13 +346,10 @@ def toolbox(
 
 class ToolBoxSetUp(BaseDatorumSettings):
     id: str
-    toolbox_id: str
+    toolbox_name: str
 
     tools_enabled: list[str] = Field(default_factory=list)
 
-    settings_port: InputPort = Field(default_factory=InputPort)
-    logger_port: ResourcePort = Field(default_factory=ResourcePort)
-    monitor_port: ResourcePort = Field(default_factory=ResourcePort)
     custom_ports: dict[str, CustomPort] = Field(default_factory=dict)
 
 

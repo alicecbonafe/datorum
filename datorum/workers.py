@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 import asyncio
+from copy import deepcopy
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Callable
 import uuid
 
 import httpx
+from pydantic import BaseModel
 
 from .context import DocumentContext, DocumentReference, MarkdownDocument
 from .exceptions import (
@@ -23,11 +26,22 @@ from .inference import (
     SystemMessage,
     UserMessage,
     AssistantMessage,
+    ToolMessage
 )
 from .pipeline import PipelineCollection, PipeFlow
 from .security import SecurityBackend
-from .tooling import ToolBoxSetUp, ToolBoxDefinition, ToolBoxRegistry
+from .tooling import ToolBoxSetUp, ToolBoxDefinition, get_toolbox_definition
+from .wiring import (
+    BaseBind,
+    DocumentBind, DocumentRawBind, DocumentPathBind,
+    DomainPathBind, ResourceBind,
+)
 
+
+tmp_dir = f"/tmp/datorum_{datetime.now().strftime("%Y%m%d_%H%M%S")}"
+TMP_CONTEXT = DocumentContext(id="tmp-context")
+TMP_CONTEXT.base_path = Path(tmp_dir)
+TMP_CONTEXT.base_path.mkdir(parents=True, exist_ok=True)
 
 
 class JobStatus(str, Enum):
@@ -41,9 +55,21 @@ class JobStatus(str, Enum):
     CRASHED = "crashed"
 
 
+class JobContext:
+
+    def __init__(self,
+        documents: dict[str, DocumentReference] | None = None,
+        domains: dict[str, Path] | None = None,
+        resources: dict[str, Callable] | None = None,
+    ):
+        self.documents = documents or {}
+        self.domains = domains or {}
+        self.resources = resources or {}
+
+
 class Job:
 
-    def __init__(self, id: str, context: dict[str, DocumentReference]):
+    def __init__(self, id: str, context: JobContext):
         self.id = id
         self.context = context
 
@@ -95,52 +121,52 @@ class Job:
         await self.log_buffer.put(None)
 
 
-class WorkFlow(Job):
+# class WorkFlow(Job):
 
-    def __init__(self, id: str, pipeflow: PipeFlow, context_collection: dict[str, DocumentContext]):
-        super().__init__(id=id, context={})
-        self.pipeflow = pipeflow
-        self.context_collection = context_collection
+#     def __init__(self, id: str, pipeflow: PipeFlow, context_collection: dict[str, DocumentContext]):
+#         super().__init__(id=id, context={})
+#         self.pipeflow = pipeflow
+#         self.context_collection = context_collection
 
-    async def resolve_document(self, document_id: str, context_id: str | None = None) -> DocumentReference:
-        if context_id is None:
-            for context in self.context_collection.values():
-                doc = context.get_document(document_id)
-                if doc is not None:
-                    return doc
-            raise MissingContextException(f"Document '{document_id}' not found in workflow '{self.id}'")
-        else:
-            if context_id not in self.context_collection:
-                raise MissingContextException(f"Context '{context_id}' not found in workflow '{self.id}'")
-            doc = self.context_collection[context_id].get_document(document_id)
-            if doc is None:
-                raise MissingContextException(f"Document '{document_id}' not found in context '{context_id}'")
-            return doc
+#     async def resolve_document(self, document_id: str, context_id: str | None = None) -> DocumentReference:
+#         if context_id is None:
+#             for context in self.context_collection.values():
+#                 doc = context.get_document(document_id)
+#                 if doc is not None:
+#                     return doc
+#             raise MissingContextException(f"Document '{document_id}' not found in workflow '{self.id}'")
+#         else:
+#             if context_id not in self.context_collection:
+#                 raise MissingContextException(f"Context '{context_id}' not found in workflow '{self.id}'")
+#             doc = self.context_collection[context_id].get_document(document_id)
+#             if doc is None:
+#                 raise MissingContextException(f"Document '{document_id}' not found in context '{context_id}'")
+#             return doc
 
-    async def save_pipeflow(self):
-        self.pipeflow.save()
+#     async def save_pipeflow(self):
+#         self.pipeflow.save()
 
 
 class Worker(ABC):
     required_context: list[str] = []
 
-    def __init__(self, worker_id: str):
-        self.id: str = worker_id
+    def __init__(self):
         self.jobs: dict[str, Job] = {}
 
-    def create_job(self, context: dict[str, DocumentReference]) -> str:
+    def create_job(self, context: JobContext) -> Job:
         for req in self.required_context:
-            if req not in context:
+            if req not in context.documents:
                 raise MissingContextException(f"Missing required context document for '{req}'")
 
         job_id = f"{self.__class__.__name__}-{uuid.uuid4().hex}"
-        self.jobs[job_id] = Job(id=job_id, context=context)
-        return job_id
+        job = Job(id=job_id, context=context)
+        self.jobs[job_id] = job
+        return job
 
     def start_job(self, job_id: str):
         if job_id not in self.jobs:
             raise InvalidJobTypeException(f"Job '{job_id}' not found")
-        self.jobs[job_id].update_status(JobStatus.STARTING, "Starting worker...")
+        await self.jobs[job_id].update_status(JobStatus.STARTING, "Starting worker...")
         asyncio.create_task(self._call_run(self.jobs[job_id]))
 
     def request_pause(self, job_id: str):
@@ -156,43 +182,51 @@ class Worker(ABC):
 
     async def _call_run(self, job: Job):
         try:
-            self.run(job)
+            await self.run(job)
         except Exception as e:
-            job.update_status(JobStatus.CRASHED, str(e))
+            await job.update_status(JobStatus.CRASHED, str(e))
         finally:
-            job.finish_streams()
+            await job.finish_streams()
 
 
 class ToolWorker(Worker):
-    required_context: list[str] = ["settings", "tool_params", "tool_result"]
+    required_context: list[str] = ["tool_params", "tool_result"]
 
-    def __init__(self, worker_id: str, toolbox: ToolBoxSetUp, tool_name: str):
-        super().__init__(worker_id)
+    def __init__(self, toolbox: ToolBoxSetUp, tool_name: str):
+        super().__init__()
         self.toolbox = toolbox
         self.tool_name = tool_name
 
     async def run(self, job: Job):
         await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
-        toolbox_def = ToolBoxRegistry[self.toolbox.toolbox_id]
-        toolbox = toolbox_def.create_toolbox(settings=job.context["settings"])
+        toolbox_def = get_toolbox_definition(self.toolbox.toolbox_name)
+        toolbox = toolbox_def.create_toolbox()
 
-        if self.toolbox.logger_port.attribute_name is not None:
-            setattr(toolbox, self.toolbox.logger_port.attribute_name, self.get_logger())
-        if self.toolbox.monitor_port.attribute_name is not None:
-            setattr(toolbox, self.toolbox.monitor_port.attribute_name, job)
-        for name, port in self.toolbox.custom_ports.items():
-            if name in job.context:
-                setattr(toolbox, port.attribute_name, job.context[name])
+        for field_name, field in toolbox_def.fields.items():
+            port = self.toolbox.custom_ports.get(field_name, None)
+            field_value: Any | None = None
+            if port:
+                bind: BaseBind = port.bind
+                field_value = bind.resolve(
+                    documents=job.context.documents,
+                    domains=job.context.domains,
+                    resources=job.context.resources,
+                )
+
+            if field_value is not None:
+                setattr(toolbox, field.attr_name, field_value)
+            elif field.required:
+                raise MissingContextException(f"Missing bind for '{self.toolbox.id}.{field_name}")
 
         await job.update_status(JobStatus.WORKING, "Starting tool")
 
         output = toolbox.run_tool(
             tool_name = self.tool_name,
-            params = job.context["tool_params"]
+            params = job.context.documents["tool_params"].load()
         )
         await job.update_status(JobStatus.WORKING, "Saving results")
-        job.context["tool_result"].save(output)
+        job.context.documents["tool_result"].save(output)
 
 
 class AgentWorker(Worker):
@@ -201,17 +235,18 @@ class AgentWorker(Worker):
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
     def __init__(self,
-        worker_id: str,
         provider: AIServiceProvider,
         role: AgentRole,
         api_key: str,
-        toolkit: list[ToolBoxSetUp] = []
+        toolkit: list[ToolBoxSetUp] = [],
+        toolkit_context: dict[str, dict[str, DocumentReference]] = {},
     ):
-        super().__init__(worker_id=worker_id)
-        self.provider = provider
-        self.role = role
-        self.api_key = api_key
-        self.toolkit = toolkit
+        super().__init__()
+        self.provider: AIServiceProvider = provider
+        self.role: AgentRole = role
+        self.api_key: str = api_key
+        self.toolkit: list[ToolBoxSetUp] = toolkit
+        self.toolkit_context: dict[str, dict[str, DocumentReference]] = toolkit_context
 
     def _select_model(self) -> str:
         for candidate in self.role.preferred_models:
@@ -226,10 +261,11 @@ class AgentWorker(Worker):
     def _toolbox_schema(self, toolbox: ToolBoxSetUp) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
         for tool_name in toolbox.tools_enabled:
-            toolbox_def = ToolBoxRegistry[toolbox.toolbox_id]
+            toolbox_def = get_toolbox_definition(toolbox.toolbox_name)
             tool_def = toolbox_def.tools[tool_name]
-            result.append(tool_def.model_dump(
-                mode="json", exclude={"name"}))
+            tool_data = tool_def.model_dump(mode="json", exclude={"name"})
+            tool_data["function"]["name"] = f"{toolbox.id}.{tool_data["function"]["name"]}"
+            result.append(tool_data)
         return result
 
     def _toolkit_schema(self) -> list[dict[str, Any]]:
@@ -284,7 +320,7 @@ class AgentWorker(Worker):
                                 entry["id"] = tc_delta["id"]
                             fn_delta = tc_delta.get("function") or {}
                             entry["function"]["name"] += fn_delta.get("name") or ""
-                            entry["function"]["arguments"] += fn_delta.get("arguments")
+                            entry["function"]["arguments"] += fn_delta.get("arguments") or ""
 
                         for key, value in delta.items():
                             if key in self._KNOWN_DELTA_KEYS:
@@ -310,14 +346,11 @@ class AgentWorker(Worker):
 
         return message, response_meta
 
-
-
-
     async def _call_fetcher(self, request_payload: dict[str, Any], job: Job) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             async with httpx.AsyncClient(base_url=self.provider.base_url, timeout=120.0) as client:
                 response = await client.post(
-                    "chat/completations",
+                    "chat/completions",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json=request_payload,
                 )
@@ -337,21 +370,27 @@ class AgentWorker(Worker):
 
         return message, response_meta
 
-
-
-
-
     async def run(self, job: Job):
         await job.update_status(JobStatus.WORKING, "Collecting agent resources")
 
-        chat_history_doc = job.context["chat_history"] if "chat_history" in job.context else None
-        chat_history: ChatHistory
-        if chat_history_doc is None:
-            chat_history = ChatHistory()
+        chat_history_doc: DocumentReference
+        if "chat_history" in job.context:
+            chat_history_doc = job.context.documents["chat_history"]
         else:
-            chat_history = chat_history_doc.load()
+            chat_history_doc = TMP_CONTEXT.create_document(
+                id="chat-history",
+                doc_model="chat-history",
+                doc_type="application/json"
+            )
 
-        system_instructions_doc = job.context["system_instructions"] if "system_instructions" in job.context else None
+        chat_history: ChatHistory
+        if chat_history_doc.doc_path.exists():
+            chat_history = chat_history_doc.load()
+        else:
+            chat_history = ChatHistory()
+
+        system_instructions_doc = job.context.documents["system_instructions"] \
+            if "system_instructions" in job.context.documents else None
         if system_instructions_doc is not None:
             system_instructions = system_instructions_doc.load()
             if isinstance(system_instructions, MarkdownDocument):
@@ -382,7 +421,7 @@ class AgentWorker(Worker):
             await job.update_status(JobStatus.WORKING, f"Calling model '{model}' at provider '{self.provider.id}'")
             request_payload: dict[str, Any] = {
                 "model": model,
-                "messages": chat_history.model_dump(mode="json", exclude_none=True)["messages"],
+                "messages": chat_history.prepare_request(),
                 "temperature": self.role.temperature,
                 "top_p": self.role.top_p,
                 "max_tokens": self.role.max_tokens,
@@ -392,9 +431,11 @@ class AgentWorker(Worker):
                 request_payload["tools"] = toolkit_schema
 
             if self.provider.supports_streaming:
-                message, response_meta = self._call_streamer(request_payload=request_payload, job=job)
+                message, response_meta = await self._call_streamer(
+                    request_payload=request_payload, job=job)
             else:
-                message, response_meta = self._call_fetcher(request_payload=request_payload, job=job)
+                message, response_meta = await self._call_fetcher(
+                    request_payload=request_payload, job=job)
 
             assistant_message: AssistantMessage = AssistantMessage.model_validate(message)
             assistant_message.metadata = response_meta
@@ -402,9 +443,67 @@ class AgentWorker(Worker):
             chat_history.messages.append(assistant_message)
             chat_history_doc.save(chat_history)
 
-            if finish_reason == "tool_calls":
-                for tool_call in assistant_message.tool_calls:...
+            if response_meta["finish_reason"] == "tool_calls":
+                for tool_call in assistant_message.tool_calls:
+                    _splited = tool_call.function.name.split(".")
+                    toolbox_setup_id = _splited[0]
+                    tool_name = _splited[1]
+
+                    toolbox_setup: Optional[ToolBoxSetUp] = None
+                    for _setup in self.toolkit:
+                        if _setup.id == toolbox_setup_id:
+                            toolbox_setup = _setup
+                            break
+
+                    if toolbox_setup is None:
+                        tool_message = ToolMessage(
+                            content=f"ToolBox '{toolbox_setup_id}' not found.",
+                            tool_call_id=tool_call.id,
+                        )
+                        chat_history.messages.append(tool_message)
+                        chat_history_doc.save(chat_history)
+                        continue
+
+                    toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
+                    tool_def = toolbox_def.tools[tool_name]
+
+                    tool_params_doc = TMP_CONTEXT.create_document(
+                        id="tool_params",
+                        doc_type="application/json",
+                        doc_model="dict",
+                    )
+
+                    result_as_dict = issubclass(tool_def.returns, BaseModel)
+                    tool_result_doc = TMP_CONTEXT.create_document(
+                        id="tool_result",
+                        doc_type="application/json" if tool_result_doc else "text/plain",
+                        doc_model="dict" if tool_result_doc else "text",
+                    )
+
+                    tool_worker = ToolWorker(toolbox=toolbox_setup, tool_name=tool_name)
+                    tool_context = JobContext(
+                        documents={
+                            **job.context.documents,
+                            "tool_params": tool_params_doc,
+                            "tool_result": tool_result_doc,
+                        },
+                        domains={**job.context.domains},
+                        resources={**job.context.resources}
+                    )
+                    tool_job = tool_worker.create_job(context=tool_context)
+                    await tool_worker._call_run(tool_job)
+
+                    tool_message = ToolMessage(
+                        content=tool_result_doc.doc_path.read_text(encoding="utf-8"),
+                        tool_call_id=tool_call.id,
+                    )
+                    chat_history.messages.append(tool_message)
+                    chat_history_doc.save(chat_history)
+
+
             else:
+                if assistant_message.content:
+                    job.context.documents["output"].doc_path.write_text(assistant_message.content)
                 break
 
 
@@ -440,8 +539,12 @@ class DatorumOrquestrator():
         ai_config: Optional[AIConfig | Path] = None,
     ):
         self.security_backend = security_backend
-        self.pipelines = pipelines if isinstance(pipelines, PipelineCollection) else PipelineCollection.load(pipelines)
-        self.ai_config = ai_config if isinstance(ai_config, (AIConfig, None)) else AIConfig.load(pipelines)
+        self.pipelines: PipelineCollection = pipelines \
+            if isinstance(pipelines, PipelineCollection) \
+                else PipelineCollection.load(pipelines)
+        self.ai_config: Optional[AIConfig] = ai_config \
+            if ai_config is None or isinstance(ai_config, AIConfig) \
+                else AIConfig.load(ai_config)
 
         self.context_collection: dict[str, DocumentContext] = {}
         self.toolbox_collection: dict[str, ToolBoxSetUp] = {}
@@ -452,12 +555,12 @@ class DatorumOrquestrator():
     def create_profile(self,
         username: str,
         ai_config: Optional[AIConfig | Path] = None,
-        context_collection: dict[str, DocumentContext] = {}) -> DatorumProfile:...
+        context_collection: dict[str, DocumentContext] | None = None) -> DatorumProfile:...
 
     def get_profile(self, *, username: str | None = None, token: str | None = None) -> Optional[DatorumProfile]:...
 
     def register_session(self, username: str, token: str):
-        if token not in self.sessions:
+        if token not in self.sessions.items():
             for key, val in self.sessions:
                 if val == username:
                     del self.sessions[key]
