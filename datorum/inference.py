@@ -43,7 +43,6 @@ class AgentRole(BaseDatorumSettings):
     description: str | None = None
     preferred_models: list[str] = Field(default_factory=list)
     system_instructions: str = Field(default="")
-    user_prompt: str = Field(default="")
     temperature: float = Field(default=0.5)
     top_p: float = Field(default=1.0)
     max_tokens: int = Field(default=4096)

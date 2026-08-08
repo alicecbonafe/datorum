@@ -3,6 +3,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
+import json
 from pathlib import Path
 from typing import Optional, AsyncGenerator, Callable
 import uuid
@@ -121,32 +122,6 @@ class Job:
         await self.log_buffer.put(None)
 
 
-# class WorkFlow(Job):
-
-#     def __init__(self, id: str, pipeflow: PipeFlow, context_collection: dict[str, DocumentContext]):
-#         super().__init__(id=id, context={})
-#         self.pipeflow = pipeflow
-#         self.context_collection = context_collection
-
-#     async def resolve_document(self, document_id: str, context_id: str | None = None) -> DocumentReference:
-#         if context_id is None:
-#             for context in self.context_collection.values():
-#                 doc = context.get_document(document_id)
-#                 if doc is not None:
-#                     return doc
-#             raise MissingContextException(f"Document '{document_id}' not found in workflow '{self.id}'")
-#         else:
-#             if context_id not in self.context_collection:
-#                 raise MissingContextException(f"Context '{context_id}' not found in workflow '{self.id}'")
-#             doc = self.context_collection[context_id].get_document(document_id)
-#             if doc is None:
-#                 raise MissingContextException(f"Document '{document_id}' not found in context '{context_id}'")
-#             return doc
-
-#     async def save_pipeflow(self):
-#         self.pipeflow.save()
-
-
 class Worker(ABC):
     required_context: list[str] = []
 
@@ -183,6 +158,7 @@ class Worker(ABC):
     async def _call_run(self, job: Job):
         try:
             await self.run(job)
+            await job.update_status(JobStatus.FINISHED, "Worker has finished the job.")
         except Exception as e:
             await job.update_status(JobStatus.CRASHED, str(e))
         finally:
@@ -238,15 +214,13 @@ class AgentWorker(Worker):
         provider: AIServiceProvider,
         role: AgentRole,
         api_key: str,
-        toolkit: list[ToolBoxSetUp] = [],
-        toolkit_context: dict[str, dict[str, DocumentReference]] = {},
+        toolkit: list[ToolBoxSetUp] | None = None,
     ):
         super().__init__()
         self.provider: AIServiceProvider = provider
         self.role: AgentRole = role
         self.api_key: str = api_key
-        self.toolkit: list[ToolBoxSetUp] = toolkit
-        self.toolkit_context: dict[str, dict[str, DocumentReference]] = toolkit_context
+        self.toolkit: list[ToolBoxSetUp] = toolkit or []
 
     def _select_model(self) -> str:
         for candidate in self.role.preferred_models:
@@ -264,7 +238,8 @@ class AgentWorker(Worker):
             toolbox_def = get_toolbox_definition(toolbox.toolbox_name)
             tool_def = toolbox_def.tools[tool_name]
             tool_data = tool_def.model_dump(mode="json", exclude={"name"})
-            tool_data["function"]["name"] = f"{toolbox.id}.{tool_data["function"]["name"]}"
+            function_name = tool_data["function"]["name"]
+            tool_data["function"]["name"] = f"{toolbox.id}.{function_name}"
             result.append(tool_data)
         return result
 
@@ -374,7 +349,7 @@ class AgentWorker(Worker):
         await job.update_status(JobStatus.WORKING, "Collecting agent resources")
 
         chat_history_doc: DocumentReference
-        if "chat_history" in job.context:
+        if "chat_history" in job.context.documents:
             chat_history_doc = job.context.documents["chat_history"]
         else:
             chat_history_doc = TMP_CONTEXT.create_document(
@@ -389,13 +364,15 @@ class AgentWorker(Worker):
         else:
             chat_history = ChatHistory()
 
+        system_instructions = self.role.system_instructions
         system_instructions_doc = job.context.documents["system_instructions"] \
             if "system_instructions" in job.context.documents else None
         if system_instructions_doc is not None:
-            system_instructions = system_instructions_doc.load()
-            if isinstance(system_instructions, MarkdownDocument):
-                system_instructions = system_instructions.content
+            system_instructions = system_instructions.content \
+                if isinstance(system_instructions, MarkdownDocument) \
+                    else system_instructions_doc.load()
 
+        if system_instructions:
             if len(chat_history.messages) == 0:
                 chat_history.messages.append(SystemMessage(content=system_instructions))
             else:
@@ -404,7 +381,7 @@ class AgentWorker(Worker):
                 else:
                     chat_history.messages.insert(0, SystemMessage(content=system_instructions))
 
-        user_prompt_doc = job.context["user_prompt"]
+        user_prompt_doc = job.context.documents["user_prompt"]
         if user_prompt_doc is None:
             if len(chat_history.messages) == 0 or chat_history.messages[len(chat_history.messages)-1].role != "user":
                 raise AgentWorkerException("User prompt not found")
@@ -444,11 +421,10 @@ class AgentWorker(Worker):
             chat_history_doc.save(chat_history)
 
             if response_meta["finish_reason"] == "tool_calls":
+                if not assistant_message.tool_calls:
+                    raise AgentWorkerException(f"Agent's tool call is empty")
                 for tool_call in assistant_message.tool_calls:
-                    _splited = tool_call.function.name.split(".")
-                    toolbox_setup_id = _splited[0]
-                    tool_name = _splited[1]
-
+                    toolbox_setup_id, _, tool_name = tool_call.function.name.partition(".")
                     toolbox_setup: Optional[ToolBoxSetUp] = None
                     for _setup in self.toolkit:
                         if _setup.id == toolbox_setup_id:
@@ -472,12 +448,15 @@ class AgentWorker(Worker):
                         doc_type="application/json",
                         doc_model="dict",
                     )
+                    tool_params_doc.save(
+                        json.loads(tool_call.function.arguments)
+                    )
 
                     result_as_dict = issubclass(tool_def.returns, BaseModel)
                     tool_result_doc = TMP_CONTEXT.create_document(
                         id="tool_result",
-                        doc_type="application/json" if tool_result_doc else "text/plain",
-                        doc_model="dict" if tool_result_doc else "text",
+                        doc_type="application/json" if result_as_dict else "text/plain",
+                        doc_model="dict" if result_as_dict else "text",
                     )
 
                     tool_worker = ToolWorker(toolbox=toolbox_setup, tool_name=tool_name)

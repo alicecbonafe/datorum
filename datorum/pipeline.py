@@ -118,7 +118,7 @@ class PipeFlow(BaseDatorumPersistentSettings):
 
     state: PipeFlowState = PipeFlowState.planning
     current_step: str | None = None
-    step_history: list[str] = []
+    step_history: list[str] = Field(default_factory=list)
 
     started_at: datetime | None = None
     last_updated_at: datetime | None = None

@@ -243,12 +243,8 @@ class ToolBoxDefinition(BaseModel):
     fields: dict[str, ContextField] = Field(default_factory=dict)
     clazz: type[Any] = Field(default=None, exclude=True)
 
-    def create_toolbox(self, context: dict[str, Any]) -> ToolBox:
+    def create_toolbox(self) -> ToolBox:
         result: Any = self.clazz()
-
-        for ctx_key, ctx_val in context.items():
-            if ctx_key in self.fields:
-                setattr(result, self.fields[ctx_key].attr_name, ctx_val)
 
         def get_toolbox_definition() -> Self:
             return self
