@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 import json
 from pathlib import Path
-from typing import Optional, AsyncGenerator, Callable
+from typing import Optional, AsyncGenerator, Callable, Any
 import uuid
 
 import httpx
@@ -18,6 +18,7 @@ from .exceptions import (
     InvalidJobTypeException,
     MissingContextException,
     InferenceException,
+    ToolWorkerException,
 )
 from .inference import (
     AIConfig,
@@ -177,6 +178,9 @@ class ToolWorker(Worker):
         await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
         toolbox_def = get_toolbox_definition(self.toolbox.toolbox_name)
+        if self.tool_name not in toolbox_def.tools:
+            raise ToolWorkerException(f"Tool '{self.tool_name}' not found in ToolBox '{toolbox_def.name}'")
+        tool_def = toolbox_def.tools[self.tool_name]
         toolbox = toolbox_def.create_toolbox()
 
         for field_name, field in toolbox_def.fields.items():
@@ -195,14 +199,60 @@ class ToolWorker(Worker):
             elif field.required:
                 raise MissingContextException(f"Missing bind for '{self.toolbox.id}.{field_name}")
 
+        tool_params_doc = job.context.documents["tool_params"]
+        tool_result_doc = job.context.documents["tool_result"]
+
+        tool_params = None
+        tool_call_id = "no-id"
+        chat_history: Optional[ChatHistory] = None
+        if tool_params_doc.doc_path.exists():
+            if tool_params_doc.doc_model == "chat-history":
+                chat_history = tool_params_doc.load()
+                assistant_message: AssistantMessage = chat_history.messages[len(chat_history.messages)-1]
+                if not assistant_message.tool_calls:
+                    raise ToolWorkerException(f"Agent's tool call is empty")
+                for tool_call in assistant_message.tool_calls:
+                    if tool_call.function.name == f"{self.toolbox.id}.{self.tool_name}":
+                        tool_params = json.loads(tool_call.function.arguments)
+                        tool_call_id = tool_call.id
+                        break
+            else:
+                tool_params = tool_params_doc.load()
+
         await job.update_status(JobStatus.WORKING, "Starting tool")
 
         output = toolbox.run_tool(
             tool_name = self.tool_name,
-            params = job.context.documents["tool_params"].load()
+            params = tool_params
         )
+
         await job.update_status(JobStatus.WORKING, "Saving results")
-        job.context.documents["tool_result"].save(output)
+        if tool_result_doc.doc_model == "chat-history":
+            if chat_history is None or tool_result_doc.doc_path != tool_params_doc.doc_path:
+                if tool_result_doc.doc_path.exists():
+                    chat_history = tool_result_doc.load()
+                else:
+                    chat_history = ChatHistory()
+
+            output_text: str
+            if isinstance(output, str):
+                output_text = output
+            elif isinstance(output, dict):
+                output_text = json.dumps(
+                    output, indent=2, ensure_ascii=False)
+            elif isinstance(output, BaseModel):
+                output_text = output.model_dump_json(
+                    indent=2, ensure_ascii=False)
+            else:
+                output_text = str(output)
+            chat_history.messages.append(ToolMessage(
+                content=output_text,
+                tool_call_id=tool_call_id,
+            ))
+
+            tool_result_doc.save(chat_history)
+        else:
+            tool_result_doc.save(output)
 
 
 class AgentWorker(Worker):
@@ -443,42 +493,19 @@ class AgentWorker(Worker):
                     toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
                     tool_def = toolbox_def.tools[tool_name]
 
-                    tool_params_doc = TMP_CONTEXT.create_document(
-                        id="tool_params",
-                        doc_type="application/json",
-                        doc_model="dict",
-                    )
-                    tool_params_doc.save(
-                        json.loads(tool_call.function.arguments)
-                    )
-
-                    result_as_dict = issubclass(tool_def.returns, BaseModel)
-                    tool_result_doc = TMP_CONTEXT.create_document(
-                        id="tool_result",
-                        doc_type="application/json" if result_as_dict else "text/plain",
-                        doc_model="dict" if result_as_dict else "text",
-                    )
-
                     tool_worker = ToolWorker(toolbox=toolbox_setup, tool_name=tool_name)
                     tool_context = JobContext(
                         documents={
                             **job.context.documents,
-                            "tool_params": tool_params_doc,
-                            "tool_result": tool_result_doc,
+                            "tool_params": chat_history_doc,
+                            "tool_result": chat_history_doc,
                         },
                         domains={**job.context.domains},
                         resources={**job.context.resources}
                     )
                     tool_job = tool_worker.create_job(context=tool_context)
                     await tool_worker._call_run(tool_job)
-
-                    tool_message = ToolMessage(
-                        content=tool_result_doc.doc_path.read_text(encoding="utf-8"),
-                        tool_call_id=tool_call.id,
-                    )
-                    chat_history.messages.append(tool_message)
-                    chat_history_doc.save(chat_history)
-
+                    chat_history = chat_history_doc.load()
 
             else:
                 if assistant_message.content:
