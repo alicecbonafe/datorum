@@ -282,6 +282,8 @@ ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
 
 
 def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
+    if toolbox_name not in ToolBoxRegistry:
+        raise ToolBoxException(f"ToolBox '{toolbox_name}' not found")
     return ToolBoxRegistry[toolbox_name]
 
 

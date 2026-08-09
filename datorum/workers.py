@@ -43,7 +43,7 @@ from .pipeline import (
 from .security import SecurityBackend
 from .tooling import ToolBoxSetUp, ToolBoxDefinition, get_toolbox_definition
 from .wiring import (
-    BaseBind,
+    BasePort, BaseBind,
     DocumentBind, DocumentRawBind, DocumentPathBind,
     DomainPathBind, ResourceBind,
 )
@@ -133,16 +133,6 @@ class Job:
         await self.chunk_buffer.put(None)
         await self.log_buffer.put(None)
 
-    async def create_delegate(self, new_id: str, ) -> "Job":
-        new_context = JobContext(
-            documents={
-                **self.context.documents,
-                **(include_docs or {})
-            },
-            domains={**self.context.domains},
-            resources={**self.context.resources},
-        )
-        new_job = Job(id=new_id, )
 
 class Worker(ABC):
     required_context: list[str] = []
@@ -183,33 +173,49 @@ class Worker(ABC):
         if job.status != JobStatus.IDLE:
             raise InvalidJobTypeException(f"Job '{job_id}' is not idle")
 
-        await job.update_status(JobStatus.STARTING, "Starting worker...")
+        asyncio.create_task(job.update_status(JobStatus.STARTING, "Starting worker..."))
         asyncio.create_task(self._call_run(self.jobs[job_id]))
+
+    def _propagate_status(
+        self,
+        job: Job,
+        previous_status: JobStatus,
+        next_status: JobStatus,
+        next_message: Optiona[str] = None
+    ):
+        if job.status != previous_status:
+            raise InvalidJobTypeException(
+                f"Job '{job.id}' is not {str(previous_status.value).lower()}")
+
+        last_delegate = job.delegates[-1] if job.delegates else None
+        if last_delegate is not None and last_delegate.status == previous_status:
+            self._propagate_status(
+                job=last_delegate,
+                previous_status=previous_status,
+                next_status=next_status,
+                next_message=next_message,
+            )
+        asyncio.create_task(job.update_status(next_status, next_message))
 
     def restart_job(self, job_id: str):
         if job_id not in self.jobs:
             raise InvalidJobTypeException(f"Job '{job_id}' not found")
-
-        job = self.jobs[job_id]
-
-        if job.status != JobStatus.PAUSED:
-            raise InvalidJobTypeException(f"Job '{job_id}' is not paused")
-
-        await job.update_status(JobStatus.RESTARTING, "Restarting worker...")
+        self._propagate_status(
+            job=self.jobs[job_id],
+            previous_status=JobStatus.PAUSED,
+            next_status=JobStatus.RESTARTING,
+            next_message="Restarting worker...",
+        )
 
     def request_pause(self, job_id: str):
         if job_id not in self.jobs:
             raise InvalidJobTypeException(f"Job '{job_id}' not found")
-
-        job = self.jobs[job_id]
-
-        if job.status != JobStatus.WORKING:
-            raise InvalidJobTypeException(f"Job '{job_id}' is inactive")
-
-        last_delegate = job.delegates[len(job.delegates)-1] if len(job.delegates) > 0 else None
-        if last_delegate is not None and last_delegate.status == JobStatus.WORKING:
-            await last_delegate.update_status(JobStatus.PAUSING, "Pause requested")
-        asyncio.create_task(job.update_status(JobStatus.PAUSING, "Pause requested"))
+        self._propagate_status(
+            job=self.jobs[job_id],
+            previous_status=JobStatus.WORKING,
+            next_status=JobStatus.PAUSING,
+            next_message="Restarting worker...",
+        )
 
     def get_logger(self,):...  # TODO
 
@@ -240,7 +246,7 @@ class ToolWorker(Worker):
         toolbox_def = get_toolbox_definition(self.toolbox.toolbox_name)
         if self.tool_name not in toolbox_def.tools:
             raise ToolWorkerException(f"Tool '{self.tool_name}' not found in ToolBox '{toolbox_def.name}'")
-        tool_def = toolbox_def.tools[self.tool_name]
+        # tool_def = toolbox_def.tools[self.tool_name]
         toolbox = toolbox_def.create_toolbox()
 
         for field_name, field in toolbox_def.fields.items():
@@ -281,7 +287,7 @@ class ToolWorker(Worker):
 
         await job.update_status(JobStatus.WORKING, "Starting tool")
 
-        output = toolbox.run_tool(
+        output = await toolbox.run_tool(
             tool_name = self.tool_name,
             params = tool_params
         )
@@ -391,6 +397,7 @@ class AgentWorker(Worker):
                         choice = event["choices"][0]
                         delta = choice.get("delta", {})
                         finish_reason = choice.get("finish_reason") or finish_reason
+                        response_meta["finish_reason"] = finish_reason
 
                         if "content" in delta:
                             content_parts.append(delta["content"])
@@ -447,7 +454,8 @@ class AgentWorker(Worker):
 
         response_data = response.json()
         message = response_data["choices"][0]["message"]
-        response_meta: dict[str, Any] = {}
+        finish_reason = response_data["choices"][0]["finish_reason"]
+        response_meta: dict[str, Any] = {"finish_reason": finish_reason}
 
         for key, value in response_data.items():
             if key != "choices" and value is not None:
@@ -478,9 +486,9 @@ class AgentWorker(Worker):
         system_instructions_doc = job.context.documents["system_instructions"] \
             if "system_instructions" in job.context.documents else None
         if system_instructions_doc is not None:
-            system_instructions = system_instructions.content \
-                if isinstance(system_instructions, MarkdownDocument) \
-                    else system_instructions_doc.load()
+            system_instructions = system_instructions_doc.load()
+            if isinstance(system_instructions, MarkdownDocument):
+                system_instructions = system_instructions.content
 
         if system_instructions:
             if len(chat_history.messages) == 0:
@@ -496,7 +504,7 @@ class AgentWorker(Worker):
             if len(chat_history.messages) == 0 or chat_history.messages[len(chat_history.messages)-1].role != "user":
                 raise AgentWorkerException("User prompt not found")
         else:
-            user_prompt = user_prompt_doc.load();
+            user_prompt = user_prompt_doc.load()
             if isinstance(user_prompt, MarkdownDocument):
                 user_prompt = user_prompt.content
             chat_history.messages.append(UserMessage(content=user_prompt))
@@ -558,8 +566,7 @@ class AgentWorker(Worker):
                         "tool_params": chat_history_doc,
                         "tool_result": chat_history_doc,
                     })
-                    job.current_delegate = tool_job
-                    await tool_worker._call_run(tool_job)
+                    await tool_worker.run(tool_job)
                     chat_history = chat_history_doc.load()
 
             else:
@@ -579,11 +586,20 @@ class PipelineWorker(Worker):
         roles: dict[str, AgentRole],
         toolkit: list[ToolBoxSetUp],
     ):
+        super().__init__()
         self.pipeflow = pipeflow
         self.providers = providers
         self.provider_api_keys = provider_api_keys
         self.roles = roles
         self.toolkit = toolkit
+
+    async def _get_document(self, job: Job, port: BasePort) -> Optional[DocumentReference]:
+        if port.bind is None:
+            return None
+        if not isinstance(port.bind, DocumentBind):
+            raise PipelineWorkerException("Port is not binded to a document")
+        doc_id = port.bind.document_id
+        return job.context.documents.get(doc_id)
 
     async def save_flow(
         self, *,
@@ -605,7 +621,7 @@ class PipelineWorker(Worker):
         if current_step_id is None and self.pipeflow.started_at is None:
             current_step_id = self.pipeflow.pipeline.first_step_id
             self.pipeflow.current_step_id = current_step_id
-            self.save_flow(PipeFlowState.started)
+            await self.save_flow(state=PipeFlowState.started)
 
         while current_step_id is not None:
             if current_step_id not in self.pipeflow.pipeline.steps:
@@ -614,45 +630,92 @@ class PipelineWorker(Worker):
             current_step = self.pipeflow.pipeline.steps[current_step_id]
             if current_step.type == "human":
                 assert isinstance(current_step, HumanInteractionStep)
-                job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")
-                job.update_status(JobStatus.WORKING, "Resuming pipeline...")
+                await job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")
+                await job.update_status(JobStatus.WORKING, "Resuming pipeline...")
             elif current_step.type == "tool":
                 assert isinstance(current_step, ToolStep)
-                job.update_status(JobStatus.WORKING, f"Running tool step '{current_step_id}'...")
+                await job.update_status(JobStatus.WORKING, f"Running tool step '{current_step_id}'...")
 
-                tool_params_doc_id = current_step.tool_params_port.bind.document_id
-                tool_result_doc_id = current_step.tool_result_port.bind.document_id
-                if tool_params_doc_id not in job.context.documents:
-                    raise PipelineWorkerException(f"Step '{current_step_id}' failed, document '{tool_params_doc_id}' not found in context")
-                tool_params_doc = job.context.documents[tool_params_doc_id]
-                tool_result_doc = job.context.documents[tool_result_doc_id]
-                
-                tool_job_context = JobContext(
-                    documents={
-                        **job.context.documents,
-                        "tool_params": tool_params_doc,
-                        "tool_result": tool_result_doc,
-                    },
-                    domains=job.context.domains,
-                    resources=job.context.resources
-                )
+                tool_params_doc = self._get_document(
+                    job=job, port=current_step.tool_params_port)
+                tool_result_doc = self._get_document(
+                    job=job, port=current_step.tool_result_port)
 
+                documents = {**job.context.documents}
+                if tool_params_doc is not None:
+                    documents["tool_params"] = tool_params_doc
+                if tool_result_doc is not None:
+                    documents["tool_result"] = tool_result_doc
+                tool_job = self.create_delegated_job(
+                    origin=job, include_docs=documents)
+
+                toolbox = next((
+                    toolbox for toolbox in self.toolkit \
+                        if toolbox.id == current_step.toolbox_setup_id
+                ), None)
+                if toolbox is None:
+                    raise PipelineWorkerException(f"Toolbox '{current_step.toolbox_setup_id}' not found")
                 tool_worker = ToolWorker(
-                    toolbox=self.toolkit[current_step.toolbox_setup_id],
+                    toolbox=toolbox,
                     tool_name=current_step.tool_name,
                 )
-                job.current_delegate = tool_worker.create_job(
-                    context=tool_job_context
-                )
 
-                job.update_status(JobStatus.WORKING, "Starting tool worker...")
-                await tool_worker.run(job=job.current_delegate)
-                job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
+                await job.update_status(JobStatus.WORKING, "Starting tool worker...")
+                await tool_worker.run(job=tool_job)
+                await job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
+
             elif current_step.type == "agent":
                 assert isinstance(current_step, AgentStep)
-                job.update_status(JobStatus.WORKING, f"Running agent step '{current_step_id}'...")
+                await job.update_status(JobStatus.WORKING, f"Running agent step '{current_step_id}'...")
 
-                # TODO
+                system_instructions_doc = self._get_document(
+                    job=job, port=current_step.system_instructions_port)
+                user_prompt_doc = self._get_document(
+                    job=job, port=current_step.user_prompt_port)
+                chat_history_doc = self._get_document(
+                    job=job, port=current_step.chat_history_port)
+                output_doc = self._get_document(
+                    job=job, port=current_step.output_port)
+
+                documents = {**job.context.documents}
+                if system_instructions_doc is not None:
+                    documents["system_instructions"] = system_instructions_doc
+                if user_prompt_doc is not None:
+                    documents["user_prompt"] = user_prompt_doc
+                if chat_history_doc is not None:
+                    documents["chat_history"] = chat_history_doc
+                if output_doc is not None:
+                    documents["output"] = output_doc
+                agent_job = self.create_delegated_job(
+                    origin=job, include_docs=documents)
+
+                agent_toolkit: list[ToolBoxSetUp] = []
+                for toolbox_setup in self.toolkit:
+                    toolbox_setup_new: Optional[ToolBoxSetUp] = None
+                    for tool in toolbox_setup.tools_enabled:
+                        tool_id = f"{toolbox_setup.id}.{tool}"
+                        if tool_id in current_step.tools:
+                            if toolbox_setup_new is None:
+                                toolbox_setup_new = ToolBoxSetUp(
+                                    id=f"{toolbox_setup.id}-subset-{uuid.uuid4().hex[:6]}",
+                                    toolbox_name=toolbox_setup.toolbox_name,
+                                    custom_ports=toolbox_setup.custom_ports
+                                )
+                            toolbox_setup_new.tools_enabled.append(tool)
+                    if toolbox_setup_new is not None:
+                        agent_toolkit.append(toolbox_setup_new)
+
+                agent_worker = AgentWorker(
+                    provider=self.providers[current_step.provider_id],
+                    role=self.roles[current_step.role_id],
+                    api_key=self.provider_api_keys[current_step.provider_id],
+                    toolkit=agent_toolkit,
+                )
+
+                await job.update_status(JobStatus.WORKING, "Starting agent worker...")
+                await agent_worker.run(job=agent_job)
+                await job.update_status(JobStatus.WORKING, "Agent worker has completed the job.")
+
             elif current_step.type == "decision":
                 assert isinstance(current_step, DecisionStep)
                 # TODO
@@ -660,7 +723,7 @@ class PipelineWorker(Worker):
             self.pipeflow.step_history.append(current_step_id)
             current_step_id = current_step.target_id
             self.pipeflow.current_step_id = current_step_id
-            self.save_flow()
+            await self.save_flow()
 
 
 
