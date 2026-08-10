@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,7 @@ description = "Context engineering AI agent."
 readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "Datorum Team" }]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "cryptography>=49.0",
     "openai>=2.47",
@@ -53,9 +53,8 @@ lint = [
 datorum = "datorum.cli:app"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["datorum*"]
-exclude = ["data*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
