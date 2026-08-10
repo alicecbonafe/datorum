@@ -79,9 +79,9 @@ class PipelineWorker(Worker):
                 assert isinstance(current_step, ToolStep)
                 await job.update_status(JobStatus.WORKING, f"Running tool step '{current_step_id}'...")
 
-                tool_params_doc = self._get_document(
+                tool_params_doc = await self._get_document(
                     job=job, port=current_step.tool_params_port)
-                tool_result_doc = self._get_document(
+                tool_result_doc = await self._get_document(
                     job=job, port=current_step.tool_result_port)
 
                 documents = {**job.context.documents}
@@ -111,13 +111,13 @@ class PipelineWorker(Worker):
                 assert isinstance(current_step, AgentStep)
                 await job.update_status(JobStatus.WORKING, f"Running agent step '{current_step_id}'...")
 
-                system_instructions_doc = self._get_document(
+                system_instructions_doc = await self._get_document(
                     job=job, port=current_step.system_instructions_port)
-                user_prompt_doc = self._get_document(
+                user_prompt_doc = await self._get_document(
                     job=job, port=current_step.user_prompt_port)
-                chat_history_doc = self._get_document(
+                chat_history_doc = await self._get_document(
                     job=job, port=current_step.chat_history_port)
-                output_doc = self._get_document(
+                output_doc = await self._get_document(
                     job=job, port=current_step.output_port)
 
                 documents = {**job.context.documents}
