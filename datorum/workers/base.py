@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, AsyncGenerator, Callable
+from typing import Any, Optional, AsyncGenerator, Callable
 import uuid
 
 from ..context import DocumentContext, DocumentReference
@@ -66,10 +66,12 @@ class JobContext:
         documents: dict[str, DocumentReference] | None = None,
         domains: dict[str, Path] | None = None,
         resources: dict[str, Callable] | None = None,
+        custom: dict[str, Any] | None = None,
     ):
         self.documents = documents or {}
         self.domains = domains or {}
         self.resources = resources or {}
+        self.custom = custom or {}
 
 
 class Job:
@@ -120,7 +122,8 @@ class Job:
 
 
 class Worker(ABC):
-    required_context: list[str] = []
+    required_documents: list[str] = []
+    required_custom: list[str] = []
 
     def __init__(self):
         self.jobs: dict[str, Job] = {}
@@ -144,9 +147,13 @@ class Worker(ABC):
             await job.finish_broadcasting()
 
     def create_job(self, context: JobContext) -> Job:
-        for req in self.required_context:
+        for req in self.required_documents:
             if req not in context.documents:
                 raise MissingContextException(f"Missing required context document for '{req}'")
+
+        for req in self.required_custom:
+            if req not in context.custom:
+                raise MissingContextException(f"Missing required context custom var for '{req}'")
 
         job_id = f"{self.__class__.__name__}-{uuid.uuid4().hex}"
         job = Job(id=job_id, context=context)

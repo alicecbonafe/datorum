@@ -11,7 +11,7 @@ from .base import JobStatus, Job, Worker
 
 
 class ToolWorker(Worker):
-    required_context: list[str] = ["tool_params", "tool_result"]
+    required_documents: list[str] = ["tool_params", "tool_result"]
 
     def __init__(self, toolbox: ToolBoxSetUp, tool_name: str):
         super().__init__()

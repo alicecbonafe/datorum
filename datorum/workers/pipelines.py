@@ -16,6 +16,7 @@ from ..tooling import ToolBoxSetUp
 from ..wiring import BasePort, DocumentBind
 from .base import Worker, Job, JobStatus
 from .agents import AgentWorker
+from .decisions import DecisionWorker
 from .tools import ToolWorker
 
 
@@ -84,7 +85,7 @@ class PipelineWorker(Worker):
                 tool_result_doc = await self._get_document(
                     job=job, port=current_step.tool_result_port)
 
-                documents = {**job.context.documents}
+                documents = {}
                 if tool_params_doc is not None:
                     documents["tool_params"] = tool_params_doc
                 if tool_result_doc is not None:
@@ -120,7 +121,7 @@ class PipelineWorker(Worker):
                 output_doc = await self._get_document(
                     job=job, port=current_step.output_port)
 
-                documents = {**job.context.documents}
+                documents = {}
                 if system_instructions_doc is not None:
                     documents["system_instructions"] = system_instructions_doc
                 if user_prompt_doc is not None:
@@ -161,7 +162,28 @@ class PipelineWorker(Worker):
 
             elif current_step.type == "decision":
                 assert isinstance(current_step, DecisionStep)
-                # TODO
+                await job.update_status(JobStatus.WORKING, f"Running decision step '{current_step_id}'...")
+
+                input_doc = await self._get_document(
+                    job=job, port=current_step.input_port)
+                include_docs = {"input": input_doc} if input_doc else {}
+                decision_job = self.create_delegated_job(
+                    origin=job, include_docs=include_docs)
+                decision_job.context.custom["code"] = current_step.code
+                decision_job.context.custom["code_type"] = current_step.code_type
+
+                await job.update_status(JobStatus.WORKING, "Starting decision worker...")
+                await DecisionWorker().run(job=decision_job)
+
+                await job.update_status(JobStatus.WORKING, "Validating target...")
+                if "target_id" not in decision_job.context.custom:
+                    raise PipelineWorkerException(f"Decision step '{current_step_id}' did not select a target")
+                target_id = decision_job.context.custom["target_id"]
+                if target_id not in current_step.target_options:
+                    raise PipelineWorkerException(f"Decision step '{current_step_id}' selected an invalid target: '{target_id}'")
+                current_step.target_id = target_id
+
+                await job.update_status(JobStatus.WORKING, "Decision worker has completed the job.")
 
             self.pipeflow.step_history.append(current_step_id)
             current_step_id = current_step.target_id

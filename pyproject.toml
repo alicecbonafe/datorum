@@ -22,6 +22,7 @@ dependencies = [
     "typer>=0.27",
     "keyring>=25.7",
     "tomli_w>=1.2",
+    "RestrictedPython>=8.4"
 ]
 
 [project.optional-dependencies]
