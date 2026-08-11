@@ -90,7 +90,7 @@ class PipelineWorker(Worker):
                     documents["tool_params"] = tool_params_doc
                 if tool_result_doc is not None:
                     documents["tool_result"] = tool_result_doc
-                tool_job = self.create_delegated_job(
+                tool_job = ToolWorker.create_delegated_job(
                     origin=job, include_docs=documents)
 
                 toolbox = next((
@@ -100,12 +100,13 @@ class PipelineWorker(Worker):
                 if toolbox is None:
                     raise PipelineWorkerException(f"Toolbox '{current_step.toolbox_setup_id}' not found")
                 tool_worker = ToolWorker(
+                    job=tool_job,
                     toolbox=toolbox,
                     tool_name=current_step.tool_name,
                 )
 
                 await job.update_status(JobStatus.WORKING, "Starting tool worker...")
-                await tool_worker.run(job=tool_job)
+                await tool_worker.run()
                 await job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
 
             elif current_step.type == "agent":
@@ -130,7 +131,7 @@ class PipelineWorker(Worker):
                     documents["chat_history"] = chat_history_doc
                 if output_doc is not None:
                     documents["output"] = output_doc
-                agent_job = self.create_delegated_job(
+                agent_job = AgentWorker.create_delegated_job(
                     origin=job, include_docs=documents)
 
                 agent_toolkit: list[ToolBoxSetUp] = []
@@ -150,6 +151,7 @@ class PipelineWorker(Worker):
                         agent_toolkit.append(toolbox_setup_new)
 
                 agent_worker = AgentWorker(
+                    job=agent_job,
                     provider=self.providers[current_step.provider_id],
                     role=self.roles[current_step.role_id],
                     api_key=self.provider_api_keys[current_step.provider_id],
@@ -167,18 +169,23 @@ class PipelineWorker(Worker):
                 input_doc = await self._get_document(
                     job=job, port=current_step.input_port)
                 include_docs = {"input": input_doc} if input_doc else {}
-                decision_job = self.create_delegated_job(
+                decision_job = DecisionWorker.create_delegated_job(
                     origin=job, include_docs=include_docs)
+
                 decision_job.context.custom["code"] = current_step.code
                 decision_job.context.custom["code_type"] = current_step.code_type
 
                 await job.update_status(JobStatus.WORKING, "Starting decision worker...")
-                await DecisionWorker().run(job=decision_job)
+                await DecisionWorker(
+                    job=decision_job,
+                    code=current_step.code,
+                    code_type=current_step.code_type,
+                ).run()
 
                 await job.update_status(JobStatus.WORKING, "Validating target...")
-                if "target_id" not in decision_job.context.custom:
+                if decision_job.result is None:
                     raise PipelineWorkerException(f"Decision step '{current_step_id}' did not select a target")
-                target_id = decision_job.context.custom["target_id"]
+                target_id = decision_job.result
                 if target_id not in current_step.target_options:
                     raise PipelineWorkerException(f"Decision step '{current_step_id}' selected an invalid target: '{target_id}'")
                 current_step.target_id = target_id

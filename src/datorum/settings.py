@@ -116,7 +116,9 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
     @property
     def settings_path(self) -> Path:
         if self._settings_path is None:
-            raise NoFilePathException("Settings file path not defined.")
+            if self.persistent is self:
+                raise NoFilePathException("Settings file path not defined.")
+            return self.persistent.settings_path
         return self._settings_path
 
     @settings_path.setter

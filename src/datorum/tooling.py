@@ -5,6 +5,7 @@ from typing import (
     Any,
     Literal,
     Protocol,
+    Optional,
     Self,
     Union,
     get_args,
@@ -15,13 +16,9 @@ from typing import (
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model
 
+from .context import DocumentContext
 from .exceptions import ToolBoxException
 from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
-from .wiring import (
-    CustomPort,
-    InputPort,
-    ResourcePort,
-)
 
 _SKIP_PARAMS = {"self", "cls"}
 
@@ -29,6 +26,64 @@ _SKIP_PARAMS = {"self", "cls"}
 # ======================================================
 # | Helpers
 # ======================================================
+
+def _validate_factory_signature(func: Callable) -> bool:
+    signature = inspect.signature(func)
+    params = signature.parameters
+
+    for param in params.values():
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            return False
+
+    if any(
+        p.kind == inspect.Parameter.KEYWORD_ONLY \
+            and p.default is inspect.Parameter.empty \
+                for p in params.values()
+    ):
+        return False
+
+    pos_params = [
+        p for p in params.values()
+        if p.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD
+        ) and p.default is inspect.Parameter.empty
+    ]
+
+    if len(pos_params) != 1:
+        return False
+
+    param = pos_params[0]
+
+    if param.annotation is inspect.Parameter.empty:
+        return True
+
+    hints = get_type_hints(func, include_extras=True)
+    param_type = hints.get(param.name, param.annotation)
+
+    if param_type is Any or param_type is object:
+        return True
+
+    origin = get_origin(param_type)
+    if origin is Union:
+        args = get_args(param_type)
+    elif hasattr(param_type, "__origin__") and param_type.__origin__ in (Union, types.UnionType):
+        args = param_type.__args__
+    elif isinstance(param_type, types.UnionType):
+        args = param_type.__args__
+    else:
+        args = None
+
+    if args is None:
+        return False
+
+    expected_types = (str, type(None))
+    for exp in expected_types:
+        if not any(issubclass(exp, arg) for arg in args):
+            return False
+
+    return True
+    
 
 
 def _params_model_from_signature(func: Callable) -> type[BaseModel] | None:
@@ -228,19 +283,35 @@ class ToolDefinition(BaseModel):
     type: Literal["function"] = "function"  # OpenAI API protocol compatibility
 
 
-class ContextField(BaseModel):
+class BaseField(BaseModel):
     name: str | None = None
     attr_name: str | None = None
-    field_type: Literal["doc", "doc-raw", "doc-path", "domain-path", "resource"] = "doc"
-    resource_name: str | None = None
     description: str | None = None
     required: bool | None = None
+
+
+class ContextField(BaseField):
+    content_type: Literal[
+
+        "model",  "model-input",  "model-output",
+        "text",   "text-input",   "text-output",
+        "bytes",  "bytes-input",  "bytes-output",
+
+        "document-path",  "document-metadata",
+        "domain-path",    "domain-metadata",
+
+    ] = Field(default="model")
+
+
+class ResourceField(BaseModel):
+    default_factory: Optional[Callable] = Field(default=None)
 
 
 class ToolBoxDefinition(BaseModel):
     name: str
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)
-    fields: dict[str, ContextField] = Field(default_factory=dict)
+    context_fields: dict[str, ContextField] = Field(default_factory=dict)
+    resource_fields: dict[str, ResourceField] = Field(default_factory=dict)
     clazz: type[Any] = Field(default=None, exclude=True)
 
     def create_toolbox(self) -> ToolBox:
@@ -251,11 +322,14 @@ class ToolBoxDefinition(BaseModel):
 
         async def run_tool(tool_name: str, params: Any = None):
             missing_fields: list[str] = []
-            for field in self.fields.values():
+            for field in self.context_fields.values():
                 if field.required and getattr(result, field.attr_name, None) is None:
-                    missing_fields.append(field.name)
+                    missing_fields.append(f"ctx:{field.name}")
+            for field in self.resource_fields.values():
+                if field.required and getattr(result, field.attr_name, None) is None:
+                    missing_fields.append(f"res:{field.name}")
             if len(missing_fields) > 0:
-                raise ToolBoxException(f"Missing required context field(s): {missing_fields}")
+                raise ToolBoxException(f"Missing required field(s): {missing_fields}")
 
             tool_method = getattr(result, tool_name)
             tool_def: ToolDefinition = tool_method._tool_def
@@ -279,13 +353,17 @@ class ToolBoxDefinition(BaseModel):
 # ======================================================
 
 ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
-
+ResourceFactoryRegistry: dict[str, Callable] = {}
 
 def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
     if toolbox_name not in ToolBoxRegistry:
         raise ToolBoxException(f"ToolBox '{toolbox_name}' not found")
     return ToolBoxRegistry[toolbox_name]
 
+def get_resource_factory(factory_name: str) -> Callable:
+    if factory_name not in ResourceFactoryRegistry:
+        raise ToolBoxException(f"Resource factory '{factory_name}' not found")
+    return ResourceFactoryRegistry[factory_name]
 
 def tool(name: str | None = None, params: type[BaseModel] | None = None):
     def decorator(func):
@@ -307,7 +385,7 @@ def toolbox(name: str | None = None, force: bool = False):
     def decorator(cls):
         toolbox_name = name=name or cls.__qualname__
         if toolbox_name in ToolBoxRegistry and not force:
-            raise ToolBoxException(f"ToolBox '{toolbox_name}' is already registered")
+            raise ToolBoxException(f"ToolBox '{toolbox_name}' is already registered, use 'force=True' to overwrite")
         toolbox_def = ToolBoxDefinition(name=name or cls.__qualname__)
         toolbox_def.clazz = cls
         ToolBoxRegistry[toolbox_def.name] = toolbox_def
@@ -321,7 +399,7 @@ def toolbox(name: str | None = None, force: bool = False):
                     raise ToolBoxException(f"Tool '{tool_def.name}' is already registered in ToolBox '{toolbox_name}'")
                 toolbox_def.tools[tool_def.name] = tool_def
             elif isinstance(attr_value, ContextField):
-                if attr_value.name in toolbox_def.fields:
+                if attr_value.name in toolbox_def.context_fields:
                     raise ToolBoxException(f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'")
                 attr_value.attr_name = attr_name
                 attr_value.name = attr_value.name or attr_name
@@ -330,10 +408,33 @@ def toolbox(name: str | None = None, force: bool = False):
                         attr_value.required = not _is_optional(type_hints[attr_name])
                     else:
                         attr_value.required = False
-                toolbox_def.fields[attr_value.name] = attr_value
+                toolbox_def.context_fields[attr_value.name] = attr_value
+            elif isinstance(attr_value, ResourceField):
+                if attr_value.name in toolbox_def.resource_fields:
+                    raise ToolBoxException(f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'")
+                attr_value.attr_name = attr_name
+                attr_value.name = attr_value.name or attr_name
+                if attr_value.required is None:
+                    if attr_name in type_hints:
+                        attr_value.required = not _is_optional(type_hints[attr_name])
+                    else:
+                        attr_value.required = False
+                toolbox_def.resource_fields[attr_value.name] = attr_value
 
         return cls
 
+    return decorator
+
+
+def resource_factory(name: str | None = None, force: bool = False):
+    def decorator(func):
+        factory_name = name or func.__name__
+        if factory_name in ResourceFactoryRegistry and not force:
+            raise ToolBoxException(f"Resource factory '{factory_name}' is already registered, use 'force=True' to overwrite")
+        if not _validate_factory_signature(func):
+            raise ToolBoxException(f"Resource factory '{factory_name}' has not a compatible signature")
+        ResourceFactoryRegistry[factory_name] = func
+        return func
     return decorator
 
 
@@ -342,13 +443,19 @@ def toolbox(name: str | None = None, force: bool = False):
 # ======================================================
 
 
+class ResourceBind(BaseDatorumSettings):
+    factory_name: str | None = None
+    selector: str | None = None
+
+
 class ToolBoxSetUp(BaseDatorumSettings):
     id: str
     toolbox_name: str
 
     tools_enabled: list[str] = Field(default_factory=list)
 
-    custom_ports: dict[str, CustomPort] = Field(default_factory=dict)
+    context_bindings: dict[str, str] = Field(default_factory=dict)
+    resource_bindings: dict[str, ResourceBind] = Field(default_factory=dict)
 
 
 class ToolBoxCollection(BaseDatorumPersistentSettings):

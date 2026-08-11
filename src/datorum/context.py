@@ -13,8 +13,9 @@ from .exceptions import (
     DocumentFormatException,
     DocumentNotFoundException,
     UnknownDataModelException,
+    InvalidIdentifierException,
 )
-from .settings import BaseDatorumSettings
+from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 
 # ======================================================
 # | Classes
@@ -267,14 +268,6 @@ class DocumentReference(BaseDatorumSettings):
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    _context: Optional["DocumentContext"] = PrivateAttr(default=None)
-
-    @property
-    def context(self) -> "DocumentContext":
-        if self._context is None:
-            raise ValueError(f"Document '{self.id}' is out of context")
-        return self._context
-
     @property
     def registry_doc_type(self) -> DocumentType:
         try:
@@ -304,7 +297,9 @@ class DocumentReference(BaseDatorumSettings):
 
     @property
     def base_path(self) -> Path:
-        return self.context.base_path
+        if hasattr(self.persistent, "base_path"):
+            return self.persistent.base_path
+        return self.settings_path.parent
 
     @property
     def name(self) -> str:
@@ -392,10 +387,10 @@ class DocumentReference(BaseDatorumSettings):
         return target
 
 
-class DocumentContext(BaseDatorumSettings):
+class DocumentContext(BaseDatorumPersistentSettings):
     id: str
     documents: dict[str, DocumentReference] = Field(default_factory=dict)
-    domain_metadata: dict[str, Any] = Field(default_factory=dict)
+    domain_metadata: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     _base_path: Path | None = PrivateAttr(default=None)
 
@@ -408,6 +403,29 @@ class DocumentContext(BaseDatorumSettings):
     @base_path.setter
     def base_path(self, value: Path):
         self._base_path = value
+
+    def knows_domain(self, domain: str) -> bool:
+        if domain in self.domain_metadata:
+            return True
+
+        return any(
+            doc.startswith(f"{domain}.")
+            for doc in self.documents.keys()
+        )
+
+    def get_domain_path(self, domain: str):
+        domain_path = self.base_path
+        for step in domain.split("."):
+            domain_path /= step
+        return domain_path
+
+    def get_domain_metadata(self, domain: str) -> Optional[dict[str, Any]]:
+        if domain not in self.domain_metadata:
+            return None
+        return self.domain_metadata[domain]
+
+    def set_domain_metadata(self, domain: str, metadata: dict[str, Any]):
+        self.domain_metadata[domain] = metadata.copy()
 
     def get_document(self, id: str) -> DocumentReference | None:
         return self.documents.get(id)
@@ -430,12 +448,6 @@ class DocumentContext(BaseDatorumSettings):
             if doc_path.exists():
                 doc_path.unlink()
         del self.documents[id]
-
-    @model_validator(mode="after")
-    def _set_context(self) -> "DocumentContext":
-        for document in self.documents.values():
-            document._context = self
-        return self
 
 
 # ======================================================

@@ -25,12 +25,13 @@ class AgentWorker(Worker):
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
     def __init__(self,
+        job: Job,
         provider: AIServiceProvider,
         role: AgentRole,
         api_key: str,
         toolkit: list[ToolBoxSetUp] | None = None,
     ):
-        super().__init__()
+        super().__init__(job=job)
         self.provider: AIServiceProvider = provider
         self.role: AgentRole = role
         self.api_key: str = api_key
@@ -259,12 +260,12 @@ class AgentWorker(Worker):
                     toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
                     tool_def = toolbox_def.tools[tool_name]
 
-                    tool_worker = ToolWorker(toolbox=toolbox_setup, tool_name=tool_name)
-                    tool_job = tool_worker.create_delegated_job(origin=job, include_docs={
+                    tool_job = ToolWorker.create_delegated_job(origin=job, include_docs={
                         "tool_params": chat_history_doc,
                         "tool_result": chat_history_doc,
                     })
-                    await tool_worker.run(tool_job)
+                    tool_worker = ToolWorker(job=tool_job, toolbox=toolbox_setup, tool_name=tool_name)
+                    await tool_worker.run()
                     chat_history = chat_history_doc.load()
 
             else:

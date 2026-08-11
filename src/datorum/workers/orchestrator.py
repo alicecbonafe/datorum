@@ -1,50 +1,80 @@
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-
 from ..context import DocumentContext
+from ..exceptions import OrchestratorException
 from ..inference import AIConfig
-from ..pipeline import PipelineCollection
+from ..pipeline import PipelineCollection, PipeFlow
 from ..security import SecurityBackend
-from ..tooling import ToolBoxSetUp
-from .base import Worker
+from ..tooling import ToolBoxSetUp, ToolBoxCollection
+from .base import Broadcaster, Worker, Job
 
 
-class DatorumProfile():
+@dataclass
+class DatorumProfile:
+    ai_config: Optional[AIConfig] = field(default=None)
+    pipeline_collection: Optional[PipelineCollection] = field(default=None)
+    toolbox_collection: Optional[ToolBoxCollection] = field(default=None)
+    contexts: dict[str, DocumentContext] = field(default_factory=dict)
+
+    def load_ai_config(self, settings_path: Path):
+        self.ai_config = AIConfig.load(
+            settings_path=settings_path)
+
+    def load_pipeline_collection(self, settings_path: Path):
+        self.pipeline_collection = PipelineCollection.load(
+            settings_path=settings_path)
+
+    def load_toolbox_collection(self, settings_path: Path):
+        self.toolbox_collection = ToolBoxCollection.load(
+            settings_path=settings_path)
+
+    def load_context(self, settings_path: Path, base_path: Optional[Path] = None) -> DocumentContext:
+        context = DocumentContext.load(
+            settings_path=settings_path)
+        if base_path is not None:
+            context.base_path = base_path
+        self.contexts[context.id] = context
+        return context
+
+
+@dataclass
+class DatorumUserProfile(DatorumProfile):
     username: str
-    ai_config: Optional[AIConfig] = None
-    context_collection: dict[str, DocumentContext]
+    flows: dict[str, PipeFlow] = field(default_factory=dict)
+    jobs: dict[str, Job] = field(default_factory=dict)
 
-    workers: dict[str, Worker] = {}
+    def load_flow(self, settings_path: Path): ...
 
-
-class DatorumOrquestrator():
+class DatorumOrquestrator:
 
     def __init__(self,
         security_backend: SecurityBackend,
-        pipelines: PipelineCollection | Path,
-        ai_config: Optional[AIConfig | Path] = None,
+        global_profile: DatorumProfile,
     ):
         self.security_backend = security_backend
-        self.pipelines: PipelineCollection = pipelines \
-            if isinstance(pipelines, PipelineCollection) \
-                else PipelineCollection.load(pipelines)
-        self.ai_config: Optional[AIConfig] = ai_config \
-            if ai_config is None or isinstance(ai_config, AIConfig) \
-                else AIConfig.load(ai_config)
+        self.global_profile: DatorumProfile = global_profile
 
-        self.context_collection: dict[str, DocumentContext] = {}
-        self.toolbox_collection: dict[str, ToolBoxSetUp] = {}
-
-        self.profiles: dict[str, DatorumProfile] = {}
+        self.user_profiles: dict[str, DatorumProfile] = {}
         self.sessions: dict[str, str] = {}
 
-    def create_profile(self,
-        username: str,
-        ai_config: Optional[AIConfig | Path] = None,
-        context_collection: dict[str, DocumentContext] | None = None) -> DatorumProfile:...
+    def register_user_profile(self, profile: DatorumUserProfile, force: bool = False) -> DatorumProfile:
+        if profile.username in self.user_profiles and not force:
+            raise OrchestratorException(f"Profile already registered for username '{profile.username}', use 'force=True' to overwrite")
+        self.user_profiles[profile.username] = profile
+        return profile
 
-    def get_profile(self, *, username: str | None = None, token: str | None = None) -> Optional[DatorumProfile]:...
+    def get_profile(self, *, username: str | None = None, token: str | None = None) -> Optional[DatorumProfile]:
+        if username is None and token is None:
+            raise OrchestratorException("No profile identifier, one of 'token' and 'username' params must be specified")
+
+        if token is not None and token not in self.sessions:
+            raise OrchestratorException("Invalid session token")
+
+        return self.user_profiles[
+            username or self.sessions[token]
+        ]
 
     def register_session(self, username: str, token: str):
         if token not in self.sessions.items():
@@ -57,64 +87,5 @@ class DatorumOrquestrator():
         if token in self.sessions:
             del self.sessions[token]
 
-    def load_context(self, token: str, context_file_path: Path) -> str:...
-
-    def load_global_context(self, context_file_path: Path) -> str:...
-
-    def load_toolbox(self, toolbox_file_path: Path) -> str:...
-
-    def prepare_tool_worker(self,
-        token: str,
-        toolbox_setup_id: str,
-        tool_name: str,
-    ) -> str:...
-
-    def prepare_agent_worker(self,
-        token: str,
-        provider_id: str,
-        role_id: str,
-    ) -> str:...
-
-    def prepare_pipeline_worker(self,
-        token: str,
-        pipeline_id: str,
-    ) -> str:...
-
-    def prepare_job(self,
-        token: str,
-        worker_id: str,
-        documents: list[tuple[str | None, str]],
-    ) -> str:...
-
-    def prepare_worflow(self,
-        token: str,
-        worker_id: str,
-        contexts: list[str],
-    ) -> str:...
-
-    def start_job(self,
-        token: str,
-        job_id: str,
-    ):...
-
-    def request_job_pause(self,
-        token: str,
-        job_id: str,
-    ):...
-
-    def get_job_status(self,
-        token: str,
-        job_id: str,
-    ) -> dict:...
-
-    async def stream_chunks(self,
-        token: str,
-        job_id: str,
-    ) -> AsyncGenerator[str, None]:...
-
-    async def stream_logs(self,
-        token: str,
-        job_id: str,
-    ) -> AsyncGenerator[str, None]:...
 
 

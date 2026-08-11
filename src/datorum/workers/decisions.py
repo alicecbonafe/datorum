@@ -63,34 +63,33 @@ def _run_code(
 
 class DecisionWorker(Worker):
     required_documents: list[str] = ["input"]
-    required_custom: list[str] = ["code", "code_type"]
 
+    def __init__(self, job: Job, code: str, code_type: CodeType):
+        super().__init__(job=job)
+        self.code = code
+        self.code_type = code_type
 
+    async def work(self):
+        await self.job.update_status(JobStatus.WORKING, "Collecting decision resources")
 
-    async def work(self, job: Job):
-        await job.update_status(JobStatus.WORKING, "Collecting decision resources")
-
-        code: str = job.context.custom["code"]
-        code_type: CodeType = job.context.custom["code_type"]
-
-        input_data = job.context.documents["input"].load()
+        input_data = self.job.context.documents["input"].load()
         if isinstance(input_data, BaseModel):
             input_data = input_data.model_dump(mode="json")
         
         if not isinstance(input_data, dict):
             raise DecisionWorkerException(f"Invalid data input type: '{type(input_data)}'")
 
-        await job.update_status(JobStatus.WORKING, "Running decision code")
+        await self.job.update_status(JobStatus.WORKING, "Running decision code")
         out_queue: "multiprocessing.Queue" = _MP_CONTEXT.Queue()
         process = _MP_CONTEXT.Process(
             target=self._run_code,
-            args=(code, _CODE_MODES[code_type], input_data, out_queue),
+            args=(self.code, _CODE_MODES[self.code_type], input_data, out_queue),
             daemon=True,
         )
         process.start()
         process.join(_CODE_TIMEOUT)
 
-        await job.update_status(JobStatus.WORKING, "Validating results")
+        await self.job.update_status(JobStatus.WORKING, "Validating results")
         if process.is_alive():
             process.terminate()
             process.join()
@@ -103,7 +102,7 @@ class DecisionWorker(Worker):
         if status != "ok":
             raise DecisionWorkerException(f"Process error reported: {result}")
 
-        job.context.custom["target_id"] = result
+        self.job.result = result
 
 
 

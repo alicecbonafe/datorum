@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from .exceptions import InvalidIdentifierException
-from .settings import BaseDatorumSettings
+from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 from .context import doc_model, serializer, deserializer, simple_json_writer, simple_json_reader
 
 
@@ -48,7 +48,7 @@ class AgentRole(BaseDatorumSettings):
     max_tokens: int = Field(default=4096)
 
 
-class AIConfig(BaseDatorumSettings):
+class AIConfig(BaseDatorumPersistentSettings):
     """Daturum configuration data structure."""
 
     providers: list[AIServiceProvider] = Field(default_factory=list)
