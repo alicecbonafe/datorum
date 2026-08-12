@@ -2,8 +2,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from ..binding import (
+    ContentType,
+    Binder, ContextBind, ResourceBind,
+    validate_factory_signature, get_resource_factory
+)
 from ..context import DocumentContext
-from ..exceptions import OrchestratorException
+from ..exceptions import OrchestratorException, InvalidContextBindException
 from ..inference import AIConfig
 from ..pipeline import PipelineCollection, PipeFlow
 from ..security import SecurityBackend
@@ -12,11 +17,13 @@ from .base import Broadcaster, Worker, Job
 
 
 @dataclass
-class DatorumProfile:
+class DatorumProfile(Binder):
     ai_config: Optional[AIConfig] = field(default=None)
     pipeline_collection: Optional[PipelineCollection] = field(default=None)
     toolbox_collection: Optional[ToolBoxCollection] = field(default=None)
     contexts: dict[str, DocumentContext] = field(default_factory=dict)
+    factories: dict[str, Callable] = field(default_factory=dict)
+
 
     def load_ai_config(self, settings_path: Path):
         self.ai_config = AIConfig.load(

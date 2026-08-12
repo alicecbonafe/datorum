@@ -5,7 +5,7 @@ import pytest
 from pydantic import Field
 
 from datorum.exceptions import ConfigException, NoFilePathException
-from datorum.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
+from datorum.settings.base import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class MockedModel(BaseDatorumSettings):
@@ -34,11 +34,16 @@ def test_persistence(tmp_path: Path):
     file_path.write_text(file_content, encoding="utf-8")
 
     child_data1 = MockedModel()
+    child_data2 = MockedPersistentModel(
+        a_file_path=Path(file_name),
+        a_text_content=text_content
+    )
 
     data1 = MockedPersistentModel(
         a_file_path=Path(file_name),
         a_text_content=text_content,
         a_model=child_data1,
+        a_persistent_model=child_data2,
     )
     data1.save_as(settings_path=settings_path)
 
@@ -49,7 +54,9 @@ def test_persistence(tmp_path: Path):
     assert data2.a_file_path == Path(file_name)
     assert data2.a_text_content == text_content
     assert data2.a_model is not None
-    assert data2.a_model.persistent.settings_path == settings_path
+    assert data2.settings_path == settings_path
+    assert data2.a_model.settings_path == settings_path
+    assert data2.a_persistent_model.settings_path == settings_path
 
     file_content2 = (workspace_path / data2.a_file_path).read_text(encoding="utf-8")
     assert file_content == file_content2

@@ -13,6 +13,7 @@ from .base import JobStatus, Job, Worker
 
 class ToolWorker(Worker):
     required_documents: list[str] = ["tool_params", "tool_result"]
+    required_resources: list[str] = ["toolbox_setup"]
 
     def __init__(self, job: Job, toolbox: ToolBoxSetUp, tool_name: str):
         super().__init__(job=job)

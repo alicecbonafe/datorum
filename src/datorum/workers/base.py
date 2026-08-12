@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any, Optional, AsyncGenerator, Callable, Union
 import uuid
 
+from ..binding import ResourceBind, ContextBind, ContentType, get_resource_factory, validate_factory_signature
 from ..context import DocumentContext, DocumentReference
-from ..exceptions import InvalidJobTypeException, MissingContextException, InvalidContextBind
+from ..exceptions import InvalidJobTypeException, MissingContextException, InvalidContextBindException, InvalidResourceBindException
 
 
 tmp_dir = f"/tmp/datorum_{datetime.now().strftime("%Y%m%d_%H%M%S")}"
@@ -104,9 +105,17 @@ DOCUMENT_CONTENT_TYPES = [
 
 class Job:
 
-    def __init__(self, id: str, context: dict[str, DocumentContext]):
+    def __init__(
+        self,
+        id: str,
+        context: dict[str, DocumentContext],
+        context_bindings: Optional[dict[str, ContextBind]] = None,
+        resource_bindings: Optional[dict[str, ResourceBind]] = None,
+    ):
         self.id: str = id
-        self.contexts:dict[str, DocumentContext] = contexts
+        self.contexts: dict[str, DocumentContext] = contexts
+        self.context_bindings: dict[str, ContextBind] = context_bindings or {}
+        self.resource_bindings: dict[str, ResourceBind] = resource_bindings or {}
         self.result: Optional[str] = None
 
         self.status: JobStatus = JobStatus.IDLE
@@ -185,7 +194,7 @@ class Job:
     ) -> bool:
         if content_type not in OUTPUT_CONTENT_TYPES:
             if required:
-                raise InvalidContextBind(
+                raise InvalidContextBindException(
                     f"Content type '{content_type}' is not writable (bind: '{bind_id}')"
                 )
             return False
@@ -231,14 +240,10 @@ class Job:
             return True
 
         if required:
-            raise InvalidContextBind(
+            raise InvalidContextBindException(
                 f"Content type '{content_type}' is unknown (bind: '{bind_id}')"
             )
         return False
-
-
-        
-
 
     def find_context_value(
         self,
@@ -248,7 +253,7 @@ class Job:
     ) -> Any:
         if content_type not in INPUT_CONTENT_TYPES:
             if required:
-                raise InvalidContextBind(
+                raise InvalidContextBindException(
                     f"Content type '{content_type}' is not readable (bind: '{bind_id}')"
                 )
             return None
@@ -299,12 +304,10 @@ class Job:
                 return context.get_domain_metadata(bind_id)
 
         if required:
-            raise InvalidContextBind(
+            raise InvalidContextBindException(
                 f"Content type '{content_type}' is unknown (bind: '{bind_id}')"
             )
         return None
-
-
 
     def _propagate_status(
         self,
@@ -328,27 +331,58 @@ class Job:
 
 class Worker(ABC):
     required_documents: list[str] = []
+    required_resources: list[str] = []
 
-    def __init__(self, job: Job):
-        self.job = job
+    def __init__(self, resource_factories: Optional[dict[str, Callable]] = None):
+        self.factories: dict[str, Callable] = resource_factories or {}
 
     @abstractmethod
-    async def work(self):
+    async def work(self, job: Job):
         """Worker action, implemented by each subclass."""
         ...
 
     async def run(self):
         """Drives one job through its full lifecycle."""
-        token = _current_job.set(self.job)
+        token = _current_job.set(job)
         try:
-            await self.work(self.job)
-            await self.job.update_status(JobStatus.FINISHED, "Worker has finished the job.")
+            await self.work(job)
+            await job.update_status(JobStatus.FINISHED, "Worker has finished the job.")
         except Exception as e:
-            await self.job.update_status(JobStatus.CRASHED, str(e))
+            await job.update_status(JobStatus.CRASHED, str(e))
             raise
         finally:
             _current_job.reset(token)
-            await self.job.finish_broadcasting()
+            await job.finish_broadcasting()
+
+    def start(self):
+        if self.job.status != JobStatus.IDLE:
+            raise InvalidJobTypeException(f"Job '{self.job.id}' is not idle")
+
+        asyncio.create_task(self.job.update_status(JobStatus.STARTING, "Starting worker..."))
+        asyncio.create_task(self._launch())
+
+    async def _launch(self):
+        """Entry point for a job started via a detached Task (start_job).
+        run() already records the failure on job.status — this just keeps
+        the exception from becoming an orphaned Task exception."""
+        try:
+            await self.run()
+        except Exception as e:
+            pass
+
+    def resource_factory(self, name: str):
+        def decorator(func):
+            if not validate_factory_signature(func):
+                raise InvalidResourceBindException(f"Invalid function signature for '{name}' resource factory")
+            self.factories[name] = func
+            return func
+        return decorator
+
+    def resolve_resource(self, name: str, selector: str | None) -> Any:
+        factory = self.factories.get(name)
+        if not factory:
+            factory = get_resource_factory(name)
+        return factory(selector)
 
     @classmethod
     def create_job(cls, context: JobContext) -> Job:
@@ -373,21 +407,5 @@ class Worker(ABC):
         job = cls.create_job(context)
         origin.delegates.append(job)
         return job
-
-    def start(self):
-        if self.job.status != JobStatus.IDLE:
-            raise InvalidJobTypeException(f"Job '{self.job.id}' is not idle")
-
-        asyncio.create_task(self.job.update_status(JobStatus.STARTING, "Starting worker..."))
-        asyncio.create_task(self._launch())
-
-    async def _launch(self):
-        """Entry point for a job started via a detached Task (start_job).
-        run() already records the failure on job.status — this just keeps
-        the exception from becoming an orphaned Task exception."""
-        try:
-            await self.run()
-        except Exception as e:
-            pass
 
 

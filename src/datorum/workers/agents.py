@@ -21,6 +21,7 @@ from .tools import ToolWorker
 
 class AgentWorker(Worker):
     required_documents: list[str] = ["user_prompt", "output"]
+    required_resources: list[str] = ["provider", "role", ]
 
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
