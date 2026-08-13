@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, Optional
 
 import pytest
 from pydantic import BaseModel
@@ -10,23 +11,28 @@ from datorum.context.registry import (
     DocumentHandler,
     DocumentModel,
     doc_model,
+    resource,
     find_handlers,
+    validate_factory_signature,
     register_doc_type,
     register_doc_model,
     register_pydantic_based_handler,
+    register_resource_factory,
     get_doc_type,
     get_doc_model,
     get_doc_handler,
+    get_resource_factory,
     MarkdownDocument,
 )
 from datorum.context.exceptions import (
     DocumentTypeError,
     DocumentModelError,
     DocumentHandlerError,
+    ResourceFactoryError,
 )
 
 
-def test_registry(tmp_path: Path):
+def test_registry_documents(tmp_path: Path):
     doc_type = "text/test"
     doc_extentions = ["tst", "test"]
 
@@ -109,7 +115,57 @@ def test_registry(tmp_path: Path):
         class NotRegisteredMockedModel: ...
 
 
-@pytest.mark.depends(on=["test_registry"])
+def test_registry_resources():
+    def mocked_func_valid_1(param: str | None):...
+    def mocked_func_valid_2(param):...
+    def mocked_func_valid_3(param: Any):...
+    def mocked_func_valid_4(param: Optional[str]):...
+    def mocked_func_valid_5(param: dict | str | type(None)):...
+
+    def mocked_func_invalid_1():...
+    def mocked_func_invalid_2(param: str):...
+    def mocked_func_invalid_3(param: dict):...
+    def mocked_func_invalid_4(*, param: str):...
+    def mocked_func_invalid_5(*args):...
+    def mocked_func_invalid_6(**kwargs):...
+    def mocked_func_invalid_7(param: int | float): ...
+
+    assert validate_factory_signature(mocked_func_valid_1)
+    assert validate_factory_signature(mocked_func_valid_2)
+    assert validate_factory_signature(mocked_func_valid_3)
+    assert validate_factory_signature(mocked_func_valid_4)
+    assert validate_factory_signature(mocked_func_valid_5)
+
+    assert not validate_factory_signature(mocked_func_invalid_1)
+    assert not validate_factory_signature(mocked_func_invalid_2)
+    assert not validate_factory_signature(mocked_func_invalid_3)
+    assert not validate_factory_signature(mocked_func_invalid_4)
+    assert not validate_factory_signature(mocked_func_invalid_5)
+    assert not validate_factory_signature(mocked_func_invalid_6)
+    assert not validate_factory_signature(mocked_func_invalid_7)
+
+    factory_name = "resource-factory-1"
+    
+    with pytest.raises(ResourceFactoryError, match=r"^Resource factory.*?not found$"):
+        get_resource_factory(factory_name)
+
+    @resource(name=factory_name)
+    def mocked_factory(selector: str | None):
+        return f"Selected({selector})"
+
+    assert get_resource_factory(factory_name) is mocked_factory
+    assert get_resource_factory(factory_name)("!") == "Selected(!)"
+
+    with pytest.raises(ResourceFactoryError, match=r"^Resource factory.*?is already registered, use 'force=True' to overwrite$"):
+        @resource(name=factory_name)
+        def mocked_error(selector: str | None):...
+
+    with pytest.raises(ResourceFactoryError, match=r"^Resource factory.*?has not a compatible signature$"):
+        @resource()
+        def mocked_error():...
+
+
+@pytest.mark.depends(on=["test_registry_documents"])
 def test_defaults(tmp_path: Path):
     text_file = tmp_path / "mocked.txt"
     json_file = tmp_path / "mocked.json"

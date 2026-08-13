@@ -25,56 +25,6 @@ from datorum.exceptions import (
 )
 
 
-@pytest.mark.depends(on=["tests/test_settings_context.py"])
-def test_registry():
-    def mocked_func_valid_1(param: str | None):...
-    def mocked_func_valid_2(param):...
-    def mocked_func_valid_3(param: Any):...
-    def mocked_func_valid_4(param: Optional[str]):...
-    def mocked_func_valid_5(param: dict | str | type(None)):...
-
-    def mocked_func_invalid_1():...
-    def mocked_func_invalid_2(param: str):...
-    def mocked_func_invalid_3(param: dict):...
-    def mocked_func_invalid_4(*, param: str):...
-    def mocked_func_invalid_5(*args):...
-    def mocked_func_invalid_6(**kwargs):...
-    def mocked_func_invalid_7(param: int | float): ...
-
-    assert validate_factory_signature(mocked_func_valid_1)
-    assert validate_factory_signature(mocked_func_valid_2)
-    assert validate_factory_signature(mocked_func_valid_3)
-    assert validate_factory_signature(mocked_func_valid_4)
-    assert validate_factory_signature(mocked_func_valid_5)
-
-    assert not validate_factory_signature(mocked_func_invalid_1)
-    assert not validate_factory_signature(mocked_func_invalid_2)
-    assert not validate_factory_signature(mocked_func_invalid_3)
-    assert not validate_factory_signature(mocked_func_invalid_4)
-    assert not validate_factory_signature(mocked_func_invalid_5)
-    assert not validate_factory_signature(mocked_func_invalid_6)
-    assert not validate_factory_signature(mocked_func_invalid_7)
-
-    factory_name = "resource-factory-1"
-    
-    with pytest.raises(InvalidResourceException, match=r"^Resource factory.*?not found$"):
-        get_resource_factory(factory_name)
-
-    @resource(name=factory_name)
-    def mocked_factory(selector: str | None):
-        return f"Selected({selector})"
-
-    assert get_resource_factory(factory_name) is mocked_factory
-    assert get_resource_factory(factory_name)("!") == "Selected(!)"
-
-    with pytest.raises(InvalidResourceException, match=r"^Resource factory.*?is already registered, use 'force=True' to overwrite$"):
-        @resource(name=factory_name)
-        def mocked_error(selector: str | None):...
-
-    with pytest.raises(InvalidResourceException, match=r"^Resource factory.*?has not a compatible signature$"):
-        @resource()
-        def mocked_error():...
-
 
 @pytest.mark.depends(on=["test_registry"])    
 def test_binder(tmp_path: Path,):
