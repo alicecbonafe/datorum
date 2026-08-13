@@ -1,6 +1,6 @@
 # Datorum
 
-Caixa de ferramentas e gerenciador de agentes para engenharia de contexto.
+Um framework para criação de agentes de IA baseada em configurações, com foco alta especialização de modelos menores usando engenharia de contexto.
 
 
 ## Objetivo

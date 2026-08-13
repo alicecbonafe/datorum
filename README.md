@@ -1,7 +1,6 @@
 # Datorum
 
-Tool box and agent manager for context engineering.
-
+A settings-based framework for creating AI agents, focusing on the high specialization of smaller models using context engineering.
 
 ## Goal
 
