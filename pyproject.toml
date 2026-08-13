@@ -32,6 +32,7 @@ dev = [
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
+    "pytest-asyncio>=1.4",
     "ruff>=0.16",
     "mypy>=2.3",
 ]
@@ -40,12 +41,14 @@ test = [
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
+    "pytest-asyncio>=1.4",
 ]
 lint = [
     "pytest>=9.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
+    "pytest-asyncio>=1.4",
     "ruff>=0.16",
     "mypy>=2.3",
 ]
