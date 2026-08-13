@@ -16,10 +16,14 @@ from datorum.context.registry import (
     register_pydantic_based_handler,
     get_doc_type,
     get_doc_model,
-    get_or_create_handler,
+    get_doc_handler,
     MarkdownDocument,
 )
-from datorum.core.exceptions import DocumentFormatException, InvalidIdentifierException
+from datorum.context.exceptions import (
+    DocumentTypeError,
+    DocumentModelError,
+    DocumentHandlerError,
+)
 
 
 def test_registry(tmp_path: Path):
@@ -40,9 +44,9 @@ def test_registry(tmp_path: Path):
     assert DocumentTypeRegistry[doc_type].extentions == doc_extentions
     assert get_doc_type(doc_type).extentions == doc_extentions
 
-    with pytest.raises(DocumentFormatException, match=r"^Doc type '.*?' is already registered$"):
+    with pytest.raises(DocumentTypeError, match=r"^Doc type '.*?' is already registered$"):
         register_doc_type(id=doc_type, extentions=doc_extentions)
-    with pytest.raises(InvalidIdentifierException, match=r"^Doc type '.*?' not found in registry$"):
+    with pytest.raises(DocumentTypeError, match=r"^Doc type '.*?' not found in registry$"):
         get_doc_type(id="invalid")
 
     register_doc_model(id=doc_model_id, clazz=doc_model_clazz, default_doc_type=doc_type)
@@ -50,15 +54,15 @@ def test_registry(tmp_path: Path):
     assert DocumentModelRegistry[doc_model_id].clazz is doc_model_clazz
     assert get_doc_model(doc_model_id).clazz == doc_model_clazz
 
-    with pytest.raises(DocumentFormatException, match=r"^Doc model '.*?' is already registered$"):
+    with pytest.raises(DocumentModelError, match=r"^Doc model '.*?' is already registered$"):
         register_doc_model(id=doc_model_id, clazz=doc_model_clazz)
-    with pytest.raises(InvalidIdentifierException, match=r"^Doc model '.*?' not found in registry$"):
+    with pytest.raises(DocumentModelError, match=r"^Doc model '.*?' not found in registry$"):
         get_doc_model(id="invalid")
 
     register_pydantic_based_handler(
         model_type=PydanticBasedModel,
     )
-    registry_pydantic_handler = get_or_create_handler(
+    registry_pydantic_handler = get_doc_handler(
         doc_type="application/json",
         doc_model=PydanticBasedModel.__name__,
     )
@@ -77,7 +81,7 @@ def test_registry(tmp_path: Path):
     assert isinstance(obj2, PydanticBasedModel)
     assert obj1.var_test == obj2.var_test
 
-    with pytest.raises(DocumentFormatException, match=r"^No dict serializer.*?$"):
+    with pytest.raises(DocumentHandlerError, match=r"^No dict serializer.*?$"):
         register_pydantic_based_handler(
             model_type=PydanticBasedModel, doc_type=doc_type
         )
@@ -100,7 +104,7 @@ def test_registry(tmp_path: Path):
     @doc_model(id="mocked-model-2", doc_type="application/yaml")
     class MockedModel2: ...
 
-    with pytest.raises(DocumentFormatException, match=r"^Doc model '.*?' is already registrered"):
+    with pytest.raises(DocumentModelError, match=r"^Doc model '.*?' is already registrered"):
         @doc_model(id="mocked-model-1")
         class NotRegisteredMockedModel: ...
 
@@ -197,7 +201,7 @@ def test_markdown(tmp_path: Path):
     assert doc.frontmatter == doc_2.frontmatter
     assert doc.frontmatter_format == doc_2.frontmatter_format
 
-    handler = get_or_create_handler(
+    handler = get_doc_handler(
         doc_type="text/markdown",
         doc_model="markdown"
     )

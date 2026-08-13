@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 from pydantic import Field
 
-from datorum.core.exceptions import ConfigException, NoFilePathException
+from datorum.core.exceptions import SettingsError
 from datorum.core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
@@ -64,14 +64,14 @@ def test_persistence(tmp_path: Path):
 
 def test_exceptions():
     child_data = MockedModel()
-    with pytest.raises(ConfigException):
+    with pytest.raises(SettingsError):
         assert child_data.persistent
 
     data = MockedPersistentModel(
         a_file_path=Path("test.yml"),
         a_text_content="test",
     )
-    with pytest.raises(NoFilePathException):
+    with pytest.raises(SettingsError):
         assert data.settings_path
 
 

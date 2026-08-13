@@ -10,37 +10,11 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pydantic import BaseModel, Field, PrivateAttr
 
-from .exceptions import ConfigException
+from .exceptions import SecurityBackendError
 
 
 class SecurityBackend(Protocol):
-    def create_vault(self, username: str, password: str): ...
-
-    def drop_vault(self, username: str, password: str): ...
-
-    def change_vault_password(
-        self, username: str, old_password: str, new_password: str
-    ): ...
-
-    def open_vault(self, username: str, password: str) -> str: ...
-
-    def close_vault(self, token: str): ...
-
-    def is_token_valid(self, token: str) -> bool: ...
-
-    def list_key_names(self, token: str) -> list[str]: ...
-
     def load_key(self, token: str, key_name: str) -> str: ...
-
-    def store_key(self, token: str, key_name: str, key_value: str) -> str: ...
-
-    def drop_key(self, token: str, key_name: str): ...
-
-    def get_metadata(
-        self, token: str, metadata_key: str | None = None
-    ) -> dict[str, str] | str: ...
-
-    def set_metadata(self, token: str, metadata_key: str, metadata_value: str): ...
 
 
 _global_security_backend: SecurityBackend | None = None
@@ -48,7 +22,7 @@ _global_security_backend: SecurityBackend | None = None
 
 def get_security_backend() -> SecurityBackend:
     if _global_security_backend is None:
-        raise ConfigException("Security backend not found")
+        raise SecurityBackendError("Security backend not found")
     return _global_security_backend
 
 
@@ -90,7 +64,7 @@ class LocalVaultSession(BaseModel):
     @property
     def fernet(self) -> Fernet:
         if self._fernet is None:
-            raise ConfigException("Fernet not found")
+            raise SecurityBackendError("Fernet not found")
         return self._fernet
 
     @property
@@ -160,7 +134,7 @@ class LocalVaultBackend:
     def _load_vault(self, username: str) -> LocalVault:
         path = self._vault_path(username)
         if not path.exists():
-            raise ConfigException(f"Vault for user '{username}' does not exist")
+            raise SecurityBackendError(f"Vault for user '{username}' does not exist")
         return LocalVault.model_validate_json(path.read_text())
 
     def _save_vault(self, vault: LocalVault):
@@ -170,7 +144,7 @@ class LocalVaultBackend:
         session = self._sessions.get(token)
         if session is None or not session.is_alive:
             self._sessions.pop(token, None)
-            raise ConfigException("Invalid or expired token")
+            raise SecurityBackendError("Invalid or expired token")
         return session
 
     def _decrypt_keys(self, session: LocalVaultSession) -> dict[str, str]:
@@ -187,7 +161,7 @@ class LocalVaultBackend:
     def create_vault(self, username: str, password: str):
         path = self._vault_path(username)
         if path.exists():
-            raise ConfigException(f"Vault for user '{username}' already exists")
+            raise SecurityBackendError(f"Vault for user '{username}' already exists")
 
         salt = secrets.token_bytes(16)
         key = self._derive_key(password, salt, self.iterations)
@@ -247,7 +221,7 @@ class LocalVaultBackend:
             assert vault.verifier is not None
             fernet.decrypt((vault.verifier).encode())
         except InvalidToken:
-            raise ConfigException("Invalid username or password")
+            raise SecurityBackendError("Invalid username or password")
 
         token = secrets.token_urlsafe(32)
         session = LocalVaultSession(
@@ -283,7 +257,7 @@ class LocalVaultBackend:
         session = self._get_session(token)
         keys = self._decrypt_keys(session)
         if key_name not in keys:
-            raise ConfigException(f"Key '{key_name}' not found")
+            raise SecurityBackendError(f"Key '{key_name}' not found")
         return keys[key_name]
 
     def store_key(self, token: str, key_name: str, key_value: str) -> str:
@@ -297,7 +271,7 @@ class LocalVaultBackend:
         session = self._get_session(token)
         keys = self._decrypt_keys(session)
         if key_name not in keys:
-            raise ConfigException(f"Key '{key_name}' not found")
+            raise SecurityBackendError(f"Key '{key_name}' not found")
         del keys[key_name]
         self._encrypt_keys(session, keys)
 
@@ -308,7 +282,7 @@ class LocalVaultBackend:
         if metadata_key is None:
             return dict(session.vault.metadata)
         if metadata_key not in session.vault.metadata:
-            raise ConfigException(f"Metadata key '{metadata_key}' not found")
+            raise SecurityBackendError(f"Metadata key '{metadata_key}' not found")
         return session.vault.metadata[metadata_key]
 
     def set_metadata(self, token: str, metadata_key: str, metadata_value: str):

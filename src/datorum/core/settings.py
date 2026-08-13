@@ -4,7 +4,7 @@ from typing import Any, Optional, Self
 import yaml
 from pydantic import BaseModel, PrivateAttr, model_validator
 
-from .exceptions import ConfigException, NoFilePathException
+from .exceptions import SettingsError
 
 
 class DatorumDumper(yaml.SafeDumper): ...
@@ -23,7 +23,7 @@ class BaseDatorumSettings(BaseModel):
     @property
     def persistent(self) -> "BaseDatorumPersistentSettings":
         if self._persistent is None:
-            raise ConfigException("Persistent model not defined")
+            raise SettingsError("Persistent model not defined")
         return self._persistent
 
     @property
@@ -117,7 +117,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
     def settings_path(self) -> Path:
         if self._settings_path is None:
             if self.persistent is self:
-                raise NoFilePathException("Settings file path not defined.")
+                raise SettingsError("Settings file path not defined.")
             return self.persistent.settings_path
         return self._settings_path
 

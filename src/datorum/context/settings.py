@@ -5,16 +5,14 @@ from typing import Any, Optional
 
 from pydantic import Field, PrivateAttr
 
-from ..core.exceptions import (
-    DocumentFormatException,
-    DocumentNotFoundException,
-    UnknownDataModelException,
-    InvalidIdentifierException,
+from .exceptions import (
+    DocumentReadingError,
+    DocumentWritingError,
 )
 from .registry import (
     get_doc_type,
     get_doc_model,
-    find_handlers,
+    get_doc_handler,
 )
 from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 
@@ -28,30 +26,15 @@ class DocumentReference(BaseDatorumSettings):
 
     @property
     def registry_doc_type(self) -> DocumentType:
-        try:
-            return get_doc_type(self.doc_type)
-        except InvalidIdentifierException:
-            raise DocumentFormatException(
-                f"Unknown doc_type '{self.doc_type}'"
-            ) from None
+        return get_doc_type(self.doc_type)
 
     @property
     def registry_doc_model(self) -> DocumentModel:
-        try:
-            return get_doc_model(self.doc_model)
-        except InvalidIdentifierException:
-            raise UnknownDataModelException(
-                f"Unknown doc_model '{self.doc_model}'"
-            ) from None
+        return get_doc_model(self.doc_model)
 
     @property
     def registry_doc_handler(self) -> DocumentHandler:
-        handlers = find_handlers(doc_type=self.doc_type, doc_model=self.doc_model)
-        if not handlers:
-            raise DocumentFormatException(
-                f"No handler registered for doc_type='{self.doc_type}', doc_model='{self.doc_model}'"
-            )
-        return handlers[0]
+        return get_doc_handler(doc_type=self.doc_type, doc_model=self.doc_model)
 
     @property
     def base_path(self) -> Path:
@@ -91,13 +74,13 @@ class DocumentReference(BaseDatorumSettings):
     def load(self) -> Any:
         doc_path = self.doc_path
         if not doc_path.exists():
-            raise DocumentNotFoundException(
+            raise DocumentReadingError(
                 f"Document '{self.id}' not found at '{doc_path}'"
             )
 
         handler = self.registry_doc_handler
         if handler.deserializer is None:
-            raise DocumentFormatException(
+            raise DocumentReadingError(
                 f"No deserializer registered for doc_type='{self.doc_type}', doc_model='{self.doc_model}'"
             )
         return handler.deserializer(doc_path)
@@ -112,7 +95,7 @@ class DocumentReference(BaseDatorumSettings):
 
         handler = self.registry_doc_handler
         if handler.serializer is None:
-            raise DocumentFormatException(
+            raise DocumentWritingError(
                 f"No serializer registered for doc_type='{self.doc_type}', doc_model='{self.doc_model}'"
             )
 
@@ -123,13 +106,13 @@ class DocumentReference(BaseDatorumSettings):
 
     def copy_to(self, target: "DocumentReference") -> "DocumentReference":
         if self.doc_model != target.doc_model:
-            raise DocumentFormatException(
+            raise DocumentWritingError(
                 f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'"
             )
 
         src_path = self.doc_path
         if not src_path.exists():
-            raise DocumentNotFoundException(
+            raise DocumentWritingError(
                 f"Document '{self.id}' not found at '{src_path}'"
             )
 

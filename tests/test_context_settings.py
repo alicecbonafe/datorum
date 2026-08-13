@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, Field
 
+from datorum.core.exceptions import SettingsError
 from datorum.context.settings import (
     DocumentContext,
     DocumentReference,
@@ -16,12 +17,12 @@ from datorum.context.registry import (
     register_doc_type,
     doc_model,
 )
-from datorum.core.exceptions import (
-    ConfigException,
-    DocumentFormatException,
-    DocumentNotFoundException,
-    UnknownDataModelException,
-    NoFilePathException,
+from datorum.context.exceptions import (
+    DocumentTypeError,
+    DocumentModelError,
+    DocumentHandlerError,
+    DocumentReadingError,
+    DocumentWritingError,
 )
 from datorum.core.settings import BaseDatorumPersistentSettings
 
@@ -70,23 +71,23 @@ def test_document_reference(tmp_path: Path):
         id="mocked_err", doc_type="not/found", doc_model="missing"
     )
 
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentTypeError):
         assert document_error.registry_doc_type
 
-    with pytest.raises(UnknownDataModelException):
+    with pytest.raises(DocumentModelError):
         assert document_error.registry_doc_model
 
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentHandlerError):
         assert document_error.registry_doc_handler
 
-    with pytest.raises(ConfigException, match="Persistent model not defined"):
+    with pytest.raises(SettingsError, match="Persistent model not defined"):
         assert document_error.base_path
 
     document_error._persistent = context
     register_doc_type("not/found", [".none"])
-    with pytest.raises(DocumentNotFoundException):
+    with pytest.raises(DocumentReadingError):
         document_error.load()
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentTypeError):
         register_doc_type("not/found", [".none"])
 
     document_error.doc_path.touch()
@@ -95,7 +96,7 @@ def test_document_reference(tmp_path: Path):
         doc_type="not/found",
         doc_model="missing",
     )
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentReadingError):
         document_error.load()
 
     DocumentModelRegistry["missing"] = DocumentModel(
@@ -105,10 +106,10 @@ def test_document_reference(tmp_path: Path):
         document_error.save(text_content)
 
     DocumentModelRegistry["missing"].clazz = str
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentWritingError):
         document_error.save(text_content)
 
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentModelError):
         @doc_model(id="missing")
         class OverwriteFailMocked:...
 
@@ -136,11 +137,11 @@ def test_document_reference(tmp_path: Path):
     assert model_1.a_text == model_2.a_text
 
     document_3 = DocumentReference(id="error.mocked")
-    with pytest.raises(DocumentFormatException):
+    with pytest.raises(DocumentWritingError):
         document_1.copy_to(document_3)
 
     document_1.doc_path.unlink()
-    with pytest.raises(DocumentNotFoundException):
+    with pytest.raises(DocumentWritingError):
         document_1.copy_to(document_2)
 
 
@@ -148,7 +149,7 @@ def test_document_reference(tmp_path: Path):
 def test_document_context(tmp_path: Path):
     context_1 = DocumentContext(id="context-1")
 
-    with pytest.raises(NoFilePathException):
+    with pytest.raises(SettingsError):
         assert context_1.base_path
 
     document_1_id = "domain.document"

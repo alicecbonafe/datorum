@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from datorum.core.exceptions import (
-    ConfigException,
+    SecurityBackendError,
 )
 from datorum.core.security import (
     LocalVaultBackend,
@@ -56,7 +56,7 @@ class DummyBackend:
 
 
 def test_registry():
-    with pytest.raises(ConfigException, match=r"^Security backend not found$"):
+    with pytest.raises(SecurityBackendError, match=r"^Security backend not found$"):
         get_security_backend()
     backend = DummyBackend()
     set_security_backend(backend=backend)
@@ -104,9 +104,9 @@ def test_local_vault(tmp_path: Path):
 
     local_vault.drop_key(token=token, key_name=key_name)
     assert len(local_vault.list_key_names(token=token)) == 0
-    with pytest.raises(ConfigException, match=r"Key '.*?' not found"):
+    with pytest.raises(SecurityBackendError, match=r"Key '.*?' not found"):
         local_vault.load_key(token=token, key_name=key_name)
-    with pytest.raises(ConfigException, match=r"Key '.*?' not found"):
+    with pytest.raises(SecurityBackendError, match=r"Key '.*?' not found"):
         local_vault.drop_key(token=token, key_name=key_name)
 
     local_vault.store_key(token=token, key_name=key_name, key_value=api_key)
@@ -136,13 +136,13 @@ def test_local_vault(tmp_path: Path):
         == metadata_alt_value
     )
 
-    with pytest.raises(ConfigException, match=r"Metadata key '.*?' not found"):
+    with pytest.raises(SecurityBackendError, match=r"Metadata key '.*?' not found"):
         local_vault.get_metadata(token=token, metadata_key=metadata_missing_key)
 
     session_1 = local_vault._sessions[token]
     local_vault.close_vault(token=token)
     assert not local_vault.is_token_valid(token=token)
-    with pytest.raises(ConfigException, match="Fernet not found"):
+    with pytest.raises(SecurityBackendError, match="Fernet not found"):
         assert session_1.fernet
 
     local_vault.idle_ttl = 0
@@ -168,12 +168,12 @@ def test_local_vault(tmp_path: Path):
 
     local_vault._sessions[token].last_seen_at -= timedelta(minutes=100)
     assert not local_vault.is_token_valid(token=token)
-    with pytest.raises(ConfigException, match="Invalid or expired token"):
+    with pytest.raises(SecurityBackendError, match="Invalid or expired token"):
         local_vault.list_key_names(token=token)
 
     local_vault.close_vault(token=token)
 
-    with pytest.raises(ConfigException, match=r"^Vault for user '.*?' already exists$"):
+    with pytest.raises(SecurityBackendError, match=r"^Vault for user '.*?' already exists$"):
         local_vault.create_vault(
             username=username,
             password=password,
@@ -188,7 +188,7 @@ def test_local_vault(tmp_path: Path):
         username=username, old_password=password, new_password=password_alt
     )
     assert len(local_vault._sessions) == 0
-    with pytest.raises(ConfigException, match="Invalid username or password"):
+    with pytest.raises(SecurityBackendError, match="Invalid username or password"):
         local_vault.open_vault(
             username=username,
             password=password,
@@ -219,7 +219,7 @@ def test_local_vault(tmp_path: Path):
     assert not (tmp_path / f"{username}.json").exists()
     assert len(local_vault._sessions) == 0
 
-    with pytest.raises(ConfigException, match=r"^Vault for user '.*?' does not exist"):
+    with pytest.raises(SecurityBackendError, match=r"^Vault for user '.*?' does not exist"):
         local_vault.open_vault(
             username=username,
             password=password,

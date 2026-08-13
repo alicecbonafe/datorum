@@ -9,11 +9,10 @@ import tomllib
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from ..core.exceptions import (
-    DocumentFormatException,
-    DocumentNotFoundException,
-    UnknownDataModelException,
-    InvalidIdentifierException,
+from .exceptions import (
+    DocumentTypeError,
+    DocumentModelError,
+    DocumentHandlerError,
 )
 
 # ======================================================
@@ -71,20 +70,20 @@ DocumentHandlerRegistry: dict[tuple[str, str], DocumentHandler] = {}
 
 def register_doc_type(id: str, extentions: list[str], force: bool = False) -> DocumentType:
     if id in DocumentTypeRegistry and not force:
-        raise DocumentFormatException(f"Doc type '{id}' is already registered")
+        raise DocumentTypeError(f"Doc type '{id}' is already registered")
     doc_type = DocumentType(id=id, extentions=extentions)
     DocumentTypeRegistry[id] = doc_type
     return doc_type
 
 def get_doc_type(id: str) -> Optional[DocumentType]:
     if id not in DocumentTypeRegistry:
-        raise InvalidIdentifierException(f"Doc type '{id}' not found in registry")
+        raise DocumentTypeError(f"Doc type '{id}' not found in registry")
     return DocumentTypeRegistry[id]
 
 
 def register_doc_model(id: str, clazz: type, default_doc_type: str | None = None, force: bool = False) -> DocumentModel:
     if id in DocumentModelRegistry and not force:
-        raise DocumentFormatException(f"Doc model '{id}' is already registered")
+        raise DocumentModelError(f"Doc model '{id}' is already registered")
     doc_model = DocumentModel(id=id, clazz=clazz)
     if default_doc_type:
         doc_model.default_doc_type = default_doc_type
@@ -93,7 +92,7 @@ def register_doc_model(id: str, clazz: type, default_doc_type: str | None = None
 
 def get_doc_model(id: str) -> Optional[DocumentType]:
     if id not in DocumentModelRegistry:
-        raise InvalidIdentifierException(f"Doc model '{id}' not found in registry")
+        raise DocumentModelError(f"Doc model '{id}' not found in registry")
     return DocumentModelRegistry[id]
 
 
@@ -128,7 +127,7 @@ def register_pydantic_based_handler(
             or dict_handler.serializer is None
             or dict_handler.deserializer is None
         ):
-            raise DocumentFormatException(
+            raise DocumentHandlerError(
                 f"No dict serializer/deserializer registered for doc_type '{dt}' "
                 f"(register a dict handler before wrapping it for a model)"
             )
@@ -145,17 +144,20 @@ def register_pydantic_based_handler(
 
             return _deserialize
 
-        handler = get_or_create_handler(doc_type=dt, doc_model=model_id)
+        handler = get_doc_handler(doc_type=dt, doc_model=model_id, create=True)
         handler.serializer = _make_serializer(dict_handler.serializer)
         handler.deserializer = _make_deserializer(dict_handler.deserializer, model_type)
 
-def get_or_create_handler(doc_type: str, doc_model: str) -> DocumentHandler:
+def get_doc_handler(doc_type: str, doc_model: str, create: bool = False) -> Optional[DocumentType]:
     id = (doc_type, doc_model)
     if id not in DocumentHandlerRegistry:
-        DocumentHandlerRegistry[id] = DocumentHandler(
-            doc_type=doc_type,
-            doc_model=doc_model,
-        )
+        if create:
+            DocumentHandlerRegistry[id] = DocumentHandler(
+                doc_type=doc_type,
+                doc_model=doc_model,
+            )
+        else:
+            raise DocumentHandlerError(f"Doc model '{id}' not found in registry")
     return DocumentHandlerRegistry[id]
 
 def find_handlers(
@@ -185,7 +187,7 @@ def doc_model(id: str, doc_type: str | None = None, force: bool = False):
                 doc_type=doc_type,
             )
         elif id in DocumentModelRegistry and not force:
-            raise DocumentFormatException(f"Doc model '{id}' is already registrered")
+            raise DocumentModelError(f"Doc model '{id}' is already registrered")
         else:
             DocumentModelRegistry[id] = DocumentModel(
                 id=id,
@@ -199,7 +201,7 @@ def doc_model(id: str, doc_type: str | None = None, force: bool = False):
 
 def serializer(doc_type: str, doc_model: str):
     def decorator(func):
-        get_or_create_handler(doc_type=doc_type, doc_model=doc_model).serializer = func
+        get_doc_handler(doc_type=doc_type, doc_model=doc_model, create=True).serializer = func
         return func
 
     return decorator
@@ -207,8 +209,9 @@ def serializer(doc_type: str, doc_model: str):
 
 def deserializer(doc_type: str, doc_model: str):
     def decorator(func):
-        get_or_create_handler(
-            doc_type=doc_type, doc_model=doc_model
+        get_doc_handler(
+            doc_type=doc_type, doc_model=doc_model,
+            create=True
         ).deserializer = func
         return func
 
