@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from datorum.registry.documents import (
+from datorum.context.registry import (
     DocumentHandlerRegistry,
     DocumentModelRegistry,
     DocumentTypeRegistry,
@@ -19,10 +19,9 @@ from datorum.registry.documents import (
     get_or_create_handler,
     MarkdownDocument,
 )
-from datorum.exceptions import DocumentFormatException, InvalidIdentifierException
+from datorum.core.exceptions import DocumentFormatException, InvalidIdentifierException
 
 
-@pytest.mark.depends(on=["tests/test_settings_base.py"])
 def test_registry(tmp_path: Path):
     doc_type = "text/test"
     doc_extentions = ["tst", "test"]

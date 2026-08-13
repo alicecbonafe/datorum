@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, Field
 
-from datorum.settings.context import (
+from datorum.context.settings import (
     DocumentContext,
     DocumentReference,
     ContextBindType,
 )
-from datorum.registry.documents import (
+from datorum.context.registry import (
     DocumentModel,
     DocumentModelRegistry,
     DocumentHandler,
@@ -16,19 +16,19 @@ from datorum.registry.documents import (
     register_doc_type,
     doc_model,
 )
-from datorum.exceptions import (
+from datorum.core.exceptions import (
     ConfigException,
     DocumentFormatException,
     DocumentNotFoundException,
     UnknownDataModelException,
     NoFilePathException,
 )
-from datorum.settings.base import BaseDatorumPersistentSettings
+from datorum.core.settings import BaseDatorumPersistentSettings
 
 
 @pytest.mark.depends(on=[
-    "tests/test_settings_base.py",
-    "tests/test_registry_documents.py",
+    "tests/test_core_settings.py",
+    "tests/test_context_registry.py",
 ])
 def test_document_reference(tmp_path: Path):
     text_content = "Mocked Data!!!"

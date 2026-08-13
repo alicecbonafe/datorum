@@ -5,18 +5,18 @@ from typing import Any, Optional
 
 from pydantic import Field, PrivateAttr
 
-from ..exceptions import (
+from ..core.exceptions import (
     DocumentFormatException,
     DocumentNotFoundException,
     UnknownDataModelException,
     InvalidIdentifierException,
 )
-from ..registry.documents import (
+from .registry import (
     get_doc_type,
     get_doc_model,
     find_handlers,
 )
-from .base import BaseDatorumSettings, BaseDatorumPersistentSettings
+from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 
 
 class DocumentReference(BaseDatorumSettings):

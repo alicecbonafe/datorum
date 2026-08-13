@@ -9,7 +9,7 @@ import tomllib
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-from ..exceptions import (
+from ..core.exceptions import (
     DocumentFormatException,
     DocumentNotFoundException,
     UnknownDataModelException,
