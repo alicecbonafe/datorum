@@ -16,7 +16,7 @@ from typing import (
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model
 
-from .binding import ContentType
+from .binding import ContextBindType
 from .context import DocumentContext
 from .exceptions import ToolBoxException
 from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
@@ -237,7 +237,7 @@ class BaseToolBoxField(BaseModel):
 
 class ContextField(BaseField):
     field_type: Literal["context"] = "context"
-    content_type: ContentType = Field(default=ContentType.model)
+    context_bind_type: ContextBindType = Field(default=ContextBindType.model)
 
 
 class ResourceField(BaseField):

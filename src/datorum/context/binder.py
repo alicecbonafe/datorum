@@ -1,14 +1,9 @@
-from abc import ABC, abstractmethod
-from collections.abc import Callable
-from enum import Enum
 import inspect
 from pathlib import Path
 import types
 from typing import (
-    Annotated,
     Any,
     Callable,
-    Literal,
     Optional,
     Union,
     get_type_hints,
@@ -16,17 +11,14 @@ from typing import (
     get_args,
 )
 
-from pydantic import Field
-
-from .context import DocumentReference, DocumentContext
-from .exceptions import (
+from ..exceptions import (
     InvalidResourceException,
     InvalidContextBindException,
-    InvalidResourceBindException
 )
-from .settings import BaseDatorumSettings
-
-
+from ..settings.context import (
+    DocumentReference,
+    DocumentContext,
+)
 
 
 ResourceFactoryRegistry: dict[str, Callable] = {}
@@ -107,8 +99,6 @@ def resource(name: str | None = None, force: bool = False):
         ResourceFactoryRegistry[factory_name] = func
         return func
     return decorator
-
-
 
 
 class Binder:
@@ -205,46 +195,43 @@ class Binder:
 
         return document
 
-
     def pull_context(self, bind: ContextBind) -> Any:
-        if not bind.content_type.is_input():
+        if not bind.context_bind_type.is_input():
             raise InvalidContextBindException(
                 f"Cannot pull from an output-only bind ('{str(bind.binded_id)}')")
 
-        if bind.content_type.is_domain():
+        if bind.context_bind_type.is_domain():
             context = self.find_domain_context(
                 domain=bind.binded_id, context=bind.context)
 
-            if bind.content_type.is_metadata():
+            if bind.context_bind_type.is_metadata():
                 return context.get_domain_metadata(domain=bind.binded_id)
             return context.get_domain_path(domain=bind.binded_id)
 
         document = self.find_document(
             document_id=bind.binded_id, context=bind.context)
 
-        if bind.content_type.is_io() and not document.doc_path.exists():
+        if bind.context_bind_type.is_io() and not document.doc_path.exists():
             raise InvalidContextBindException(
                 f"File not found for document '{bind.binded_id}' (path: '{document.doc_path}')")
 
-        if bind.content_type.is_model():
+        if bind.context_bind_type.is_model():
             return document.load()
-        if bind.content_type.is_text():
+        if bind.context_bind_type.is_text():
             return document.doc_path.read_text(encoding="utf-8")
-        if bind.content_type.is_bytes():
+        if bind.context_bind_type.is_bytes():
             return document.doc_path.read_bytes()
-        if bind.content_type.is_metadata():
+        if bind.context_bind_type.is_metadata():
             return document.metadata
         return document.doc_path
 
-
-
     def push_context(self, bind: ContextBind, value: Any):
-        if not bind.content_type.is_output():
+        if not bind.context_bind_type.is_output():
             raise InvalidContextBindException(
                 f"Cannot push to an input-only bind ('{str(bind.binded_id)}')")
 
-        if bind.content_type.is_domain():
-            if not isinstance(value, dict[str, Any]):
+        if bind.context_bind_type.is_domain():
+            if not isinstance(value, dict):
                 raise InvalidContextBindException(
                     f"Wrong metadata type: '{type(value)}'")
             context = self.find_domain_context(
@@ -253,8 +240,8 @@ class Binder:
                 domain=bind.binded_id, metadata=value)
             context.persistent.save()
 
-        elif bind.content_type.is_metadata():
-            if not isinstance(value, dict[str, Any]):
+        elif bind.context_bind_type.is_metadata():
+            if not isinstance(value, dict):
                 raise InvalidContextBindException(
                     f"Wrong metadata type: '{type(value)}'")
             document = self.find_document(
@@ -266,18 +253,16 @@ class Binder:
             document = self.find_document(
                 document_id=bind.binded_id, context=bind.context)
 
-            if bind.content_type.is_model():
+            if bind.context_bind_type.is_model():
                 document.save(value)
-            elif bind.content_type.is_text():
+            elif bind.context_bind_type.is_text():
                 document.doc_path.write_text(str(value), encoding="utf-8")
-            elif bind.content_type.is_bytes():
+            elif bind.context_bind_type.is_bytes():
                 document.doc_path.write_bytes(bytes(value))
-
-
-
 
     def load_resource(self, bind: ResourceBind) -> Any:
         factory: Callable = self.factories[bind.factory_name] \
             if bind.factory_name in self.factories \
                 else get_resource_factory(bind.factory_name)
         return factory(bind.selector)
+
