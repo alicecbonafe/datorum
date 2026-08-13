@@ -27,6 +27,7 @@ from .exceptions import (
     ResourceFactoryError,
 )
 
+
 # ======================================================
 # | Classes
 # ======================================================
@@ -322,143 +323,33 @@ def resource(name: str | None = None, force: bool = False):
 # | Defaults
 # ======================================================
 
-register_doc_type("text/plain", ["txt"])
-register_doc_type("text/markdown", ["md", "markdown", "markdn", "mdown"])
-register_doc_type("application/json", ["json"])
-register_doc_type("application/yaml", ["yml", "yaml"])
-register_doc_type("application/toml", ["toml"])
-
-DocumentModelRegistry["text"] = DocumentModel(id="text", clazz=str)
-DocumentModelRegistry["dict"] = DocumentModel(id="dict", clazz=dict)
-
-
-@serializer(doc_type="text/plain", doc_model="text")
-def simple_text_writer(data: str, file_path: Path):
-    file_path.write_text(data, encoding="utf-8")
-
-
-@deserializer(doc_type="text/plain", doc_model="text")
-def simple_text_reader(file_path: Path) -> str:
-    return file_path.read_text(encoding="utf-8")
-
-
-@serializer(doc_type="application/json", doc_model="dict")
-def simple_json_writer(data: dict, file_path: Path):
-    text = json.dumps(data, indent=2, ensure_ascii=False)
-    file_path.write_text(text)
-
-
-@deserializer(doc_type="application/json", doc_model="dict")
-def simple_json_reader(file_path: Path) -> dict:
-    text = file_path.read_text(encoding="utf-8")
-    return json.loads(text)
-
-
-@serializer(doc_type="application/yaml", doc_model="dict")
-def simple_yaml_writer(data: dict, file_path: Path):
-    text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
-    file_path.write_text(text)
-
-
-@deserializer(doc_type="application/yaml", doc_model="dict")
-def simple_yaml_reader(file_path: Path) -> dict:
-    text = file_path.read_text(encoding="utf-8")
-    return yaml.safe_load(text) or {}
-
-
-@serializer(doc_type="application/toml", doc_model="dict")
-def simple_toml_writer(data: dict, file_path: Path):
-    text = tomli_w.dumps(data)
-    file_path.write_text(text)
-
-
-@deserializer(doc_type="application/toml", doc_model="dict")
-def simple_toml_reader(file_path: Path) -> dict:
-    text = file_path.read_text(encoding="utf-8")
-    return tomllib.loads(text)
-
-
-# ======================================================
-# | Markdown Model
-# ======================================================
-
-
-@doc_model(id="markdown", doc_type="text/markdown")
-class MarkdownDocument:
-
-    FRONTMATTER_YAML = "yaml"
-    FRONTMATTER_JSON = "json"
-    FRONTMATTER_TOML = "toml"
-
-    DELIMITER_YAML = "---\n"
-    DELIMITER_JSON = ";;;\n"
-    DELIMITER_TOML = "+++\n"
-
-    def __init__(self, content: str, frontmatter: dict | None = None, frontmatter_format: str | None = None):
-        self.content = content
-        self.frontmatter = frontmatter
-        self.frontmatter_format = frontmatter_format or self.FRONTMATTER_YAML
-
-    def dumps(self) -> str:
-        raw = self.content
-        if self.frontmatter_format == self.FRONTMATTER_YAML:
-            frontmatter_raw = yaml.safe_dump(self.frontmatter, sort_keys=False, allow_unicode=True)
-            raw = f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
-        elif self.frontmatter_format == self.FRONTMATTER_JSON:
-            frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
-            raw = f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
-        elif self.frontmatter_format == self.FRONTMATTER_TOML:
-            frontmatter_raw = tomli_w.dumps(self.frontmatter)
-            raw = f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
-        return raw
-
-    def dump(self, file_path: Path):
-        file_path.write_text(self.dumps(), encoding="utf-8")
-
-    @classmethod
-    def loads(cls, raw: str) -> Self:
-        content: str = raw
-        frontmatter: dict | None = None
-        frontmatter_format: str | None = None
-
-        if raw.startswith(cls.DELIMITER_YAML):
-            closure = raw.find(cls.DELIMITER_YAML, len(cls.DELIMITER_YAML))
-            if closure > 0:
-                frontmatter_format = cls.FRONTMATTER_YAML
-                frontmatter_raw = raw[len(cls.DELIMITER_YAML):closure]
-                frontmatter = yaml.safe_load(frontmatter_raw) or {}
-                content = raw[closure+len(cls.DELIMITER_YAML):]
-        elif raw.startswith(cls.DELIMITER_JSON):
-            closure = raw.find(cls.DELIMITER_JSON, len(cls.DELIMITER_JSON))
-            if closure > 0:
-                frontmatter_format = cls.FRONTMATTER_JSON
-                frontmatter_raw = raw[len(cls.DELIMITER_JSON):closure]
-                frontmatter = json.loads(frontmatter_raw)
-                content = raw[closure+len(cls.DELIMITER_JSON):]
-        elif raw.startswith(cls.DELIMITER_TOML):
-            closure = raw.find(cls.DELIMITER_TOML, len(cls.DELIMITER_TOML))
-            if closure > 0:
-                frontmatter_format = cls.FRONTMATTER_TOML
-                frontmatter_raw = raw[len(cls.DELIMITER_TOML):closure]
-                frontmatter = tomllib.loads(frontmatter_raw)
-                content = raw[closure+len(cls.DELIMITER_TOML):]
-
-        return cls(
-            content=content.strip(),
-            frontmatter=frontmatter,
-            frontmatter_format=frontmatter_format,
-        )
-
-    @classmethod
-    def load(cls, file_path: Path) -> Self:
-        return cls.loads(file_path.read_text(encoding="utf-8"))
-
-
-@serializer(doc_type="text/markdown", doc_model="markdown")
-def markdown_writer(data: MarkdownDocument, file_path: Path):
-    data.dump(file_path=file_path)
-
-
-@deserializer(doc_type="text/markdown", doc_model="markdown")
-def simple_toml_reader(file_path: Path) -> MarkdownDocument:
-    return MarkdownDocument.load(file_path=file_path)
+from .defaults.simple import (
+    simple_text_writer,
+    simple_text_reader,
+    simple_json_writer,
+    simple_json_reader,
+    simple_yaml_writer,
+    simple_yaml_reader,
+    simple_toml_writer,
+    simple_toml_reader,
+)
+from .defaults.markdown import (
+    MarkdownDocument,
+    markdown_writer,
+    simple_toml_reader,
+)
+from .defaults.chat import (
+    ChatHistory,
+    SystemMessage,
+    UserMessage,
+    AssistantMessage,
+    ToolMessage,
+    FunctionMessage,
+    ChatMessage,
+    ToolCall,
+    ToolFunction,
+    FunctionCall,
+    ImagePart,
+    TextPart,
+    ImageUrl,
+)
