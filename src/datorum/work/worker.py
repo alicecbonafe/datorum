@@ -4,8 +4,6 @@ from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Callable
-import uuid
-
 
 from ..context.binder import Binder
 from ..context.settings import DocumentContext
