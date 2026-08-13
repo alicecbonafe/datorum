@@ -11,6 +11,7 @@ from datorum.work.job import Broadcaster, Job, JobStatus
 # ==============================================================================
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["tests/test_context_settings.py"])
 async def test_broadcaster_history_and_subscribe():
     broadcaster = Broadcaster()
     broadcaster.push("item_1")
@@ -26,6 +27,7 @@ async def test_broadcaster_history_and_subscribe():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_broadcaster_history_and_subscribe"])
 async def test_broadcaster_live_streaming():
     broadcaster = Broadcaster()
     received_items = []
@@ -50,6 +52,7 @@ async def test_broadcaster_live_streaming():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_broadcaster_history_and_subscribe"])
 async def test_broadcaster_cleanup_on_cancel():
     broadcaster = Broadcaster()
 
@@ -73,6 +76,7 @@ async def test_broadcaster_cleanup_on_cancel():
 # Job Tests
 # ==============================================================================
 
+@pytest.mark.depends(on=["tests/test_context_settings.py"])
 def test_job_initialization():
     ctx_bind = ContextBind(binded_id="ctx_1")
     res_bind = ResourceBind(factory_name="res_1")
@@ -93,6 +97,7 @@ def test_job_initialization():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_initialization"])
 async def test_job_update_status():
     job = Job(id="job_status")
 
@@ -109,6 +114,7 @@ async def test_job_update_status():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_initialization", "test_broadcaster_cleanup_on_cancel"])
 async def test_job_push_chunks_logs_and_finish():
     job = Job(id="job_streams")
 
@@ -125,6 +131,7 @@ async def test_job_push_chunks_logs_and_finish():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_update_status", "test_broadcaster_cleanup_on_cancel"])
 async def test_job_pause_and_resume_flow():
     job = Job(id="job_pause_flow")
     await job.update_status(JobStatus.WORKING, message="Processing...")
@@ -148,6 +155,7 @@ async def test_job_pause_and_resume_flow():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_update_status"])
 async def test_job_pause_resume_edge_cases():
     job = Job(id="job_pause_errors")
 
@@ -175,6 +183,7 @@ async def test_job_pause_resume_edge_cases():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_update_status"])
 async def test_job_delegates_active_status_error():
     parent_job = Job(id="parent_job")
     delegate_job = Job(id="delegate_job")
@@ -188,6 +197,7 @@ async def test_job_delegates_active_status_error():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_delegates_active_status_error"])
 async def test_job_delegates_crash_propagation():
     parent_job = Job(id="parent_job")
     delegate_job = Job(id="delegate_job")
@@ -202,6 +212,7 @@ async def test_job_delegates_crash_propagation():
 
 
 @pytest.mark.asyncio
+@pytest.mark.depends(on=["test_job_update_status"])
 async def test_job_delegates_pause_resume():
     parent_job = Job(id="parent_job")
     delegate_job = Job(id="delegate_job")

@@ -55,7 +55,6 @@ class JobStatus(str, Enum):
     CRASHED = "crashed"
 
 
-
 class Job:
 
     def __init__(
