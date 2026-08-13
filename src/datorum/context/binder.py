@@ -12,18 +12,16 @@ from typing import (
 )
 
 from .exceptions import (
-    InvalidResourceException,
-    InvalidContextBindException,
+    ResourceBindingError,
+    ContextBindingError,
+)
+from .registry import (
+    validate_factory_signature,
 )
 from .settings import (
     DocumentReference,
     DocumentContext,
 )
-
-
-ResourceFactoryRegistry: dict[str, Callable] = {}
-
-
 
 
 class Binder:
@@ -55,10 +53,10 @@ class Binder:
         def decorator(func):
             factory_name = name or func.__name__
             if factory_name in self.factories and not force:
-                raise InvalidResourceException(
+                raise ResourceBindingError(
                     f"Resource factory '{factory_name}' is already registered, use 'force=True' to overwrite")
             if not validate_factory_signature(func):
-                raise InvalidResourceException(
+                raise ResourceBindingError(
                     f"Resource factory '{factory_name}' has not a compatible signature")
             self.factories[factory_name] = func
             return func
@@ -73,10 +71,10 @@ class Binder:
 
         if isinstance(context, str):
             if context not in self.contexts:
-                raise InvalidContextBindException(
+                raise ContextBindingError(
                     f"Unknown context '{context}'")
             if not self.contexts[context].knows_domain(domain):
-                raise InvalidContextBindException(
+                raise ContextBindingError(
                     f"Unknown domain '{domain}' in context '{context}'")
             return self.contexts[context]
 
@@ -87,7 +85,7 @@ class Binder:
             if self.contexts[ctx_id].knows_domain(domain):
                 return self.contexts[ctx_id]
 
-        raise InvalidContextBindException(
+        raise ContextBindingError(
             f"Unknown domain '{domain}' in context '{context or 'all'}'")
 
     def find_document(
@@ -99,7 +97,7 @@ class Binder:
 
         if isinstance(context, str):
             if context not in self.contexts:
-                raise InvalidContextBindException(
+                raise ContextBindingError(
                     f"Unknown context '{context}'")
             document = self.contexts[context].get_document(
                 id=document_id)
@@ -115,14 +113,14 @@ class Binder:
                     break
 
         if not document:
-            raise InvalidContextBindException(
+            raise ContextBindingError(
                 f"Unknown document '{document_id}' in context '{context or 'all'}'")
 
         return document
 
     def pull_context(self, bind: ContextBind) -> Any:
         if not bind.context_bind_type.is_input():
-            raise InvalidContextBindException(
+            raise ContextBindingError(
                 f"Cannot pull from an output-only bind ('{str(bind.binded_id)}')")
 
         if bind.context_bind_type.is_domain():
@@ -137,7 +135,7 @@ class Binder:
             document_id=bind.binded_id, context=bind.context)
 
         if bind.context_bind_type.is_io() and not document.doc_path.exists():
-            raise InvalidContextBindException(
+            raise ContextBindingError(
                 f"File not found for document '{bind.binded_id}' (path: '{document.doc_path}')")
 
         if bind.context_bind_type.is_model():
@@ -152,12 +150,12 @@ class Binder:
 
     def push_context(self, bind: ContextBind, value: Any):
         if not bind.context_bind_type.is_output():
-            raise InvalidContextBindException(
+            raise ContextBindingError(
                 f"Cannot push to an input-only bind ('{str(bind.binded_id)}')")
 
         if bind.context_bind_type.is_domain():
             if not isinstance(value, dict):
-                raise InvalidContextBindException(
+                raise ContextBindingError(
                     f"Wrong metadata type: '{type(value)}'")
             context = self.find_domain_context(
                 domain=bind.binded_id, context=bind.context)
@@ -167,7 +165,7 @@ class Binder:
 
         elif bind.context_bind_type.is_metadata():
             if not isinstance(value, dict):
-                raise InvalidContextBindException(
+                raise ContextBindingError(
                     f"Wrong metadata type: '{type(value)}'")
             document = self.find_document(
                 document_id=bind.binded_id, context=bind.context)

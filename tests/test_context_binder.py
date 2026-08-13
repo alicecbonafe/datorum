@@ -3,30 +3,34 @@ from typing import Any, Optional
 
 import pytest
 
-from datorum.registry.documents import (
+from datorum.context.registry import (
     register_doc_type,
     register_doc_model,
     serializer, deserializer,
 )
-from datorum.settings.context import (
+from datorum.context.settings import (
     ContextBindType,
     ContextBind, ResourceBind,
     DocumentReference,
     DocumentContext,
 )
-from datorum.registry.resources import (
+from datorum.context.registry import (
     validate_factory_signature,
     resource, get_resource_factory,
+)
+from datorum.context.binder import (
     Binder,
 )
-from datorum.exceptions import (
-    InvalidContextBindException,
-    InvalidResourceException,
+from datorum.context.exceptions import (
+    ResourceBindingError,
+    ContextBindingError,
 )
 
 
-
-@pytest.mark.depends(on=["test_registry"])    
+@pytest.mark.depends(on=[
+    "tests/test_context_registry.py",
+    "tests/test_context_settings.py",
+])    
 def test_binder(tmp_path: Path,):
     domain_1 = "domain_1"
     domain_2 = "domain_2"
@@ -90,11 +94,11 @@ def test_binder(tmp_path: Path,):
         context=["invalid", ctx_id]
     ).id == ctx.id
 
-    with pytest.raises(InvalidContextBindException, match=r"^Unknown context.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Unknown context.*?"):
         binder.find_domain_context(domain=domain_1, context="invalid")
-    with pytest.raises(InvalidContextBindException, match=r"^Unknown domain.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Unknown domain.*?"):
         binder.find_domain_context(domain="invalid", context=ctx_id)
-    with pytest.raises(InvalidContextBindException, match=r"^Unknown domain.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Unknown domain.*?"):
         binder.find_domain_context(domain=domain_2)
 
     domain_1_path = binder.pull_context(ContextBind(
@@ -119,12 +123,12 @@ def test_binder(tmp_path: Path,):
         context_bind_type=ContextBindType.domain_metadata
     ))["title"] == domain_1_metadata_changed["title"]
 
-    with pytest.raises(InvalidContextBindException, match=r"^Cannot push to an input-only bind.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Cannot push to an input-only bind.*?"):
         binder.push_context(ContextBind(
             binded_id=domain_1,
             context_bind_type=ContextBindType.domain_path
         ), tmp_path)
-    with pytest.raises(InvalidContextBindException, match=r"^Wrong metadata type.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Wrong metadata type.*?"):
         binder.push_context(ContextBind(
             binded_id=domain_1,
             context_bind_type=ContextBindType.domain_metadata
@@ -149,10 +153,10 @@ def test_binder(tmp_path: Path,):
     assert doc_4.id == doc_1.id
     assert doc_4.doc_path == doc_1.doc_path
 
-    with pytest.raises(InvalidContextBindException, match=r"^Unknown context.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Unknown context.*?"):
         binder.find_document(document_id=doc_1_id, context="invalid")
 
-    with pytest.raises(InvalidContextBindException, match=r"^Unknown document.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Unknown document.*?"):
         binder.find_document(document_id="invalid")
 
     ctx_value_1 = binder.pull_context(ContextBind(
@@ -196,14 +200,14 @@ def test_binder(tmp_path: Path,):
     assert ctx_value_metadata["title"] == doc_bytes_metadata["title"]
     assert ctx_value_path == doc_bytes_path
 
-    with pytest.raises(InvalidContextBindException, match=r"^Cannot pull from an output-only bind.*?"):
+    with pytest.raises(ContextBindingError, match=r"^Cannot pull from an output-only bind.*?"):
         ctx_bind_err = ContextBind(
             binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
             context_bind_type=ContextBindType.model_output,
         )
         ctx_value_err = binder.pull_context(ctx_bind_err)
 
-    with pytest.raises(InvalidContextBindException, match=r"^File not found for document.*?"):
+    with pytest.raises(ContextBindingError, match=r"^File not found for document.*?"):
         ctx_value_err = binder.pull_context(ContextBind(
             binded_id=f"{domain_1}.{doc_empty_id}",
             context_bind_type=ContextBindType.model,
@@ -253,7 +257,7 @@ def test_binder(tmp_path: Path,):
         context_bind_type=ContextBindType.document_metadata,
     ))["title"] == doc_bytes_metadata_changed["title"]
 
-    with pytest.raises(InvalidContextBindException, match=r"^Wrong metadata type.*?$"):
+    with pytest.raises(ContextBindingError, match=r"^Wrong metadata type.*?$"):
         binder.push_context(ContextBind(
             binded_id=f"{domain_1}.{doc_bytes_id}",
             context=ctx_id,
@@ -263,11 +267,11 @@ def test_binder(tmp_path: Path,):
     @binder.resource()
     def factory_1(selector): return f"<{selector}>"
 
-    with pytest.raises(InvalidResourceException, match=r"^Resource factory '.*?' is already registered, use 'force=True' to overwrite$"):
+    with pytest.raises(ResourceBindingError, match=r"^Resource factory '.*?' is already registered, use 'force=True' to overwrite$"):
         @binder.resource(name="factory_1")
         def factory_error_1(selector): ...
 
-    with pytest.raises(InvalidResourceException, match=r"^Resource factory '.*?' has not a compatible signature$"):
+    with pytest.raises(ResourceBindingError, match=r"^Resource factory '.*?' has not a compatible signature$"):
         @binder.resource()
         def factory_error_2(): ...
 
