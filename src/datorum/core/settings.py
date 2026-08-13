@@ -4,7 +4,7 @@ from typing import Any, Optional, Self
 import yaml
 from pydantic import BaseModel, PrivateAttr, model_validator
 
-from ..exceptions import ConfigException, NoFilePathException
+from .exceptions import ConfigException, NoFilePathException
 
 
 class DatorumDumper(yaml.SafeDumper): ...

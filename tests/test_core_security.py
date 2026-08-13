@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from datorum.exceptions import (
+from datorum.core.exceptions import (
     ConfigException,
 )
-from datorum.security import (
+from datorum.core.security import (
     LocalVaultBackend,
     get_security_backend,
     set_security_backend,

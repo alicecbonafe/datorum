@@ -4,8 +4,8 @@ from typing import Optional
 import pytest
 from pydantic import Field
 
-from datorum.exceptions import ConfigException, NoFilePathException
-from datorum.settings.base import BaseDatorumPersistentSettings, BaseDatorumSettings
+from datorum.core.exceptions import ConfigException, NoFilePathException
+from datorum.core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class MockedModel(BaseDatorumSettings):
