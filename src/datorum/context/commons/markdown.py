@@ -92,5 +92,5 @@ def markdown_writer(data: MarkdownDocument, file_path: Path):
 
 
 @deserializer(doc_type="text/markdown", doc_model="markdown")
-def simple_toml_reader(file_path: Path) -> MarkdownDocument:
+def markdown_reader(file_path: Path) -> MarkdownDocument:
     return MarkdownDocument.load(file_path=file_path)

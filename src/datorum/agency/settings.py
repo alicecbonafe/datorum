@@ -4,8 +4,9 @@ from typing import Any
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from .exceptions import InvalidIdentifierException
-from .settings import BaseDatorumSettings, BaseDatorumPersistentSettings
-from .context import doc_model, serializer, deserializer, simple_json_writer, simple_json_reader
+from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
+from ..context.registry import doc_model, serializer, deserializer
+from ..context.commons.simple import simple_json_writer, simple_json_reader
 
 
 class AIServiceProvider(BaseDatorumSettings):

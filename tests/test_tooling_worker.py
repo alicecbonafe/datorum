@@ -73,6 +73,35 @@ def greeter_box():
     return GreeterBox
 
 
+class SampleModel(BaseModel):
+    data: str
+
+
+@pytest.fixture
+def multi_type_box():
+    @toolbox(name="MultiTypeBox")
+    class MultiTypeBox:
+        input_only: Optional[str] = ContextField(
+            name="input_only",
+            context_bind_type=ContextBindType.text_input,
+            required=False,
+        )
+        
+        @tool()
+        def return_dict(self) -> dict:
+            return {"status": "ok", "count": 1}
+
+        @tool()
+        def return_model(self) -> SampleModel:
+            return SampleModel(data="test_value")
+
+        @tool()
+        def return_primitive(self) -> int:
+            return 12345
+
+    return MultiTypeBox
+
+
 def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
     ctx = DocumentContext(id=ctx_id)
     ctx.save_as(tmp_path / f"{ctx_id}.yml")
@@ -336,6 +365,103 @@ async def test_tool_worker_chat_history_no_matching_tool_call_runs_with_no_param
     tool_msg = saved.messages[-1]
     assert tool_msg.content == "pong"
     assert tool_msg.tool_call_id == "no-id"
+
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
+async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greeter_box):
+    """Covers `chat_history = ChatHistory()` when result_doc is chat-history,
+
+    does not exist on disk yet, and params_doc is not chat-history.
+    """
+    ctx = _make_context(tmp_path)
+    prefix_doc = ctx.create_document(id="prefix_doc", doc_type="text/plain", doc_model="text")
+    params_doc = ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict")
+    # Reference created, but file not saved to disk -> doc_path.exists() is False
+    result_chat_doc = ctx.create_document(id="new_chat", doc_type="application/json", doc_model="chat-history")
+
+    prefix_doc.save("Hello, ")
+    params_doc.save({"name": "NewUser"})
+
+    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    worker = _make_worker(ctx, toolkit)
+
+    job = Job(
+        id="job_new_chat",
+        context_bindings=[
+            ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
+            ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="new_chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.greet")],
+    )
+
+    await worker.run(job)
+
+    assert job.status == JobStatus.FINISHED
+    saved: ChatHistory = result_chat_doc.load()
+    assert len(saved.messages) == 1
+    assert saved.messages[0].content == "Hello, NewUser"
+
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
+async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_path: Path, multi_type_box):
+    """Covers dict, BaseModel, and primitive formatting branches when saving to chat history,
+
+    as well as skipping input-only fields (`continue`) during output binding serialization.
+    """
+    ctx = _make_context(tmp_path)
+    params_doc = ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict")
+    params_doc.save({})
+
+    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="box1", toolbox_name="MultiTypeBox")])
+    worker = _make_worker(ctx, toolkit)
+
+    # 1. Dict result formatting + triggers continue for input_only field in MultiTypeBox
+    result_dict_doc = ctx.create_document(id="chat_dict", doc_type="application/json", doc_model="chat-history")
+    job_dict = Job(
+        id="job_dict",
+        context_bindings=[
+            ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="chat_dict", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_dict")],
+    )
+    await worker.run(job_dict)
+    assert job_dict.status == JobStatus.FINISHED
+    saved_dict: ChatHistory = result_dict_doc.load()
+    assert saved_dict.messages[-1].content == json.dumps({"status": "ok", "count": 1}, indent=2, ensure_ascii=False)
+
+    # 2. BaseModel result formatting
+    result_model_doc = ctx.create_document(id="chat_model", doc_type="application/json", doc_model="chat-history")
+    job_model = Job(
+        id="job_model",
+        context_bindings=[
+            ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="chat_model", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_model")],
+    )
+    await worker.run(job_model)
+    assert job_model.status == JobStatus.FINISHED
+    saved_model: ChatHistory = result_model_doc.load()
+    assert saved_model.messages[-1].content == SampleModel(data="test_value").model_dump_json(indent=2, ensure_ascii=False)
+
+    # 3. Primitive (e.g. int) result formatting
+    result_int_doc = ctx.create_document(id="chat_int", doc_type="application/json", doc_model="chat-history")
+    job_int = Job(
+        id="job_int",
+        context_bindings=[
+            ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="chat_int", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_primitive")],
+    )
+    await worker.run(job_int)
+    assert job_int.status == JobStatus.FINISHED
+    saved_int: ChatHistory = result_int_doc.load()
+    assert saved_int.messages[-1].content == "12345"
 
 
 # ==============================================================================

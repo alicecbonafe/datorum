@@ -22,7 +22,9 @@ from datorum.context.registry import (
     get_doc_model,
     get_doc_handler,
     get_resource_factory,
-    MarkdownDocument,
+)
+from datorum.context.commons.markdown import MarkdownDocument
+from datorum.context.commons.chat import (
     ChatHistory,
     SystemMessage,
     UserMessage,
