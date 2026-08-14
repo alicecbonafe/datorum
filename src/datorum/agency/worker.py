@@ -3,37 +3,37 @@ from typing import Any
 
 import httpx
 
-from ..context import DocumentReference, MarkdownDocument
-from ..exceptions import AgentWorkerException, InferenceException
-from ..inference import (
-    AIServiceProvider,
-    AgentRole,
+from ..context.settings import DocumentReference
+from ..context.commons.markdown import MarkdownDocument
+from ..context.commons.chat import (
     ChatHistory,
     SystemMessage,
     UserMessage,
     AssistantMessage,
-    ToolMessage
+    ToolMessage,
 )
-from ..tooling import ToolBoxSetUp, get_toolbox_definition
-from .base import JobStatus, Job, Worker, TMP_CONTEXT
-from .tools import ToolWorker
+from .exceptions import AgentWorkerError
+from .settings import (
+    AgencyKit,
+    InferenceServiceProvider,
+    AgentRole,
+)
+from ..tooling.settings import ToolBoxSetUp, ToolKit
+from ..tooling.registry import get_toolbox_definition
+from ..tooling.worker import ToolWorker
+from ..work.job import JobStatus, Job
+from ..work.worker import Worker, TMP_CONTEXT
 
 
 class AgentWorker(Worker):
-    required_documents: list[str] = ["user_prompt", "output"]
-    required_resources: list[str] = ["provider", "role", ]
+    required_context_binds: list[str] = ["user_prompt", "output"]
+    required_resource_binds: list[str] = ["provider", "role", ]
 
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
-    def __init__(self,
-        job: Job,
-        provider: AIServiceProvider,
-        role: AgentRole,
-        api_key: str,
-        toolkit: list[ToolBoxSetUp] | None = None,
-    ):
+    def __init__(self, agency_kit: AgencyKit, toolkit: list[ToolBoxSetUp] | None = None):
         super().__init__(job=job)
-        self.provider: AIServiceProvider = provider
+        self.provider: InferenceServiceProvider = provider
         self.role: AgentRole = role
         self.api_key: str = api_key
         self.toolkit: list[ToolBoxSetUp] = toolkit or []

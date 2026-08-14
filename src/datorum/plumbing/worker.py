@@ -3,7 +3,7 @@ from typing import Optional
 
 from ..context import DocumentReference
 from ..exceptions import PipelineWorkerException
-from ..inference import AIServiceProvider, AgentRole
+from ..inference import InferenceServiceProvider, AgentRole
 from ..pipeline import (
     PipeFlow,
     PipeFlowState,
@@ -25,7 +25,7 @@ class PipelineWorker(Worker):
     def __init__(
         self,
         pipeflow: PipeFlow,
-        providers: dict[str, AIServiceProvider],
+        providers: dict[str, InferenceServiceProvider],
         provider_api_keys: dict[str, str],
         roles: dict[str, AgentRole],
         toolkit: list[ToolBoxSetUp],

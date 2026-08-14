@@ -40,7 +40,7 @@ class ToolWorker(Worker):
             toolbox_name = _selector_parts[0]
             tool_name = _selector_parts[1]
             setup = next(
-                (tb for tb in self.toolkit.toolboxes if tb.toolbox_name == toolbox_name),
+                (tb for tb_id, tb in self.toolkit.toolboxes.items() if tb_id == toolbox_name),
                 None)
             if not setup:
                 raise ToolWorkerError(f"Unknown toolbox '{toolbox_name}'")
@@ -71,7 +71,11 @@ class ToolWorker(Worker):
 
         if setup.active_tool not in toolbox_def.tools:
             raise ToolWorkerError(
-                f"Tool '{setup.active_tool}' not found in ToolBox '{toolbox_def.name}'")
+                f"Tool '{setup.active_tool}' not found in ToolBox '{setup.id}'")
+
+        if setup.active_tool not in setup.tools_enabled:
+            raise ToolWorkerError(
+                f"Tool '{setup.active_tool}' not enabled for ToolBox '{setup.id}'")
 
         toolbox: ToolBox = toolbox_def.create_toolbox()
 
@@ -84,10 +88,15 @@ class ToolWorker(Worker):
                 None
             )
             if not field_bind:
-                if field.required:
-                    raise ToolWorkerError(
-                        f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
-                continue
+                field_bind = next(
+                    (bind for bind in setup.context_bindings if bind.field_id == field.attr_name),
+                    None
+                )
+                if not field_bind:
+                    if field.required:
+                        raise ToolWorkerError(
+                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
+                    continue
 
             field_value: Any = self.pull_context(field_bind)
             setattr(toolbox, field.attr_name, field_value)

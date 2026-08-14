@@ -10,14 +10,13 @@ class ToolBoxSetUp(BaseDatorumSettings):
     id: str
     toolbox_name: str
 
-    tools_enabled: list[str] = Field(default_factory=list)
+    tools_enabled: set[str] = Field(default_factory=set)
 
-    context_bindings: dict[str, str] = Field(default_factory=dict)
-    resource_bindings: dict[str, ResourceBind] = Field(default_factory=dict)
+    context_bindings: list[ContextBindType] = Field(default_factory=list)
+    resource_bindings: list[ResourceBind] = Field(default_factory=list)
 
     active_tool: Optional[str] = Field(default=None, exclude=True)
 
 
 class ToolKit(BaseDatorumPersistentSettings):
-    toolboxes: list[ToolBoxSetUp] = Field(default_factory=list)
-
+    toolboxes: dict[str, ToolBoxSetUp] = Field(default_factory=dict)

@@ -117,7 +117,7 @@ def _make_worker(ctx: DocumentContext, toolkit: ToolKit) -> ToolWorker:
 def _job(
     params_bind_type=ContextBindType.model,
     result_bind_type=ContextBindType.model_output,
-    selector: str = "GreeterBox.greet",
+    selector: str = "greeter1.greet",
     extra_bindings: Optional[list[ContextBind]] = None,
 ) -> Job:
     return Job(
@@ -150,7 +150,11 @@ async def test_tool_worker_success_dict_params_with_bindings(tmp_path: Path, gre
     echo_doc.save("placeholder")
     params_doc.save({"name": "World"})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"],
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(extra_bindings=[
@@ -177,7 +181,11 @@ async def test_tool_worker_optional_context_field_not_bound_is_skipped(tmp_path:
     prefix_doc.save("Hi, ")
     params_doc.save({"name": "Ana"})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(extra_bindings=[
@@ -199,7 +207,11 @@ async def test_tool_worker_required_context_field_missing_raises(tmp_path: Path,
     ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
     params_doc.save({"name": "Ana"})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = _job()
@@ -233,7 +245,11 @@ async def test_tool_worker_chat_history_same_document(tmp_path: Path, greeter_bo
     ])
     chat_doc.save(history)
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = Job(
@@ -243,7 +259,7 @@ async def test_tool_worker_chat_history_same_document(tmp_path: Path, greeter_bo
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
     )
 
     await worker.run(job)
@@ -276,7 +292,11 @@ async def test_tool_worker_chat_history_separate_documents(tmp_path: Path, greet
     ]))
     out_chat_doc.save(ChatHistory(messages=[UserMessage(content="pre-existing log entry")]))
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"],
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = Job(
@@ -286,7 +306,7 @@ async def test_tool_worker_chat_history_separate_documents(tmp_path: Path, greet
             ContextBind(binded_id="in_chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="out_chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
     )
 
     await worker.run(job)
@@ -311,7 +331,11 @@ async def test_tool_worker_chat_history_no_tool_calls_raises(tmp_path: Path, gre
     prefix_doc.save("Hello, ")
     chat_doc.save(ChatHistory(messages=[AssistantMessage(content="no tool calls here")]))
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = Job(
@@ -321,7 +345,7 @@ async def test_tool_worker_chat_history_no_tool_calls_raises(tmp_path: Path, gre
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
     )
 
     with pytest.raises(ToolWorkerError, match="Agent's tool call is empty"):
@@ -345,7 +369,11 @@ async def test_tool_worker_chat_history_no_matching_tool_call_runs_with_no_param
         ]),
     ]))
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["ping"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = Job(
@@ -355,7 +383,7 @@ async def test_tool_worker_chat_history_no_matching_tool_call_runs_with_no_param
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.ping")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.ping")],
     )
 
     await worker.run(job)
@@ -383,7 +411,11 @@ async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greete
     prefix_doc.save("Hello, ")
     params_doc.save({"name": "NewUser"})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = Job(
@@ -393,7 +425,7 @@ async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greete
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="new_chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="GreeterBox.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
     )
 
     await worker.run(job)
@@ -415,7 +447,11 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
     params_doc = ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict")
     params_doc.save({})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="box1", toolbox_name="MultiTypeBox")])
+    toolkit = ToolKit(toolboxes={"box1": ToolBoxSetUp(
+        id="box1",
+        toolbox_name="MultiTypeBox",
+        tools_enabled=["return_dict", "return_model", "return_primitive"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     # 1. Dict result formatting + triggers continue for input_only field in MultiTypeBox
@@ -426,7 +462,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_dict", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_dict")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_dict")],
     )
     await worker.run(job_dict)
     assert job_dict.status == JobStatus.FINISHED
@@ -441,7 +477,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_model", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_model")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_model")],
     )
     await worker.run(job_model)
     assert job_model.status == JobStatus.FINISHED
@@ -456,7 +492,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_int", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="MultiTypeBox.return_primitive")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_primitive")],
     )
     await worker.run(job_int)
     assert job_int.status == JobStatus.FINISHED
@@ -475,7 +511,7 @@ async def test_tool_worker_missing_selector_raises(tmp_path: Path, greeter_box):
     ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict").save({"name": "x"})
     ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(selector="")
@@ -491,7 +527,7 @@ async def test_tool_worker_bad_selector_format_raises(tmp_path: Path, greeter_bo
     ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict").save({"name": "x"})
     ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(selector="GreeterBoxOnly")
@@ -507,7 +543,7 @@ async def test_tool_worker_unknown_toolbox_in_toolkit_raises(tmp_path: Path, gre
     ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict").save({"name": "x"})
     ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(selector="NotConfiguredBox.greet")
@@ -523,12 +559,28 @@ async def test_tool_worker_unknown_tool_on_toolbox_raises(tmp_path: Path, greete
     ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict").save({"name": "x"})
     ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")})
     worker = _make_worker(ctx, toolkit)
 
-    job = _job(selector="GreeterBox.nonexistent")
+    job = _job(selector="greeter1.nonexistent")
 
-    with pytest.raises(ToolWorkerError, match="Tool 'nonexistent' not found in ToolBox 'GreeterBox'"):
+    with pytest.raises(ToolWorkerError, match="Tool 'nonexistent' not found in ToolBox 'greeter1'"):
+        await worker.run(job)
+
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_success_dict_params_with_bindings"])
+async def test_tool_worker_disabled_tool_on_toolbox_raises(tmp_path: Path, greeter_box):
+    ctx = _make_context(tmp_path)
+    ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict").save({"name": "x"})
+    ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
+
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")})
+    worker = _make_worker(ctx, toolkit)
+
+    job = _job(selector="greeter1.greet")
+
+    with pytest.raises(ToolWorkerError, match="Tool 'greet' not enabled for ToolBox 'greeter1'"):
         await worker.run(job)
 
 
@@ -544,7 +596,11 @@ async def test_tool_worker_selector_lookup_leaves_toolkit_entry_untouched(tmp_pa
     prefix_doc.save("Hi, ")
     params_doc.save({"name": "A"})
 
-    toolkit = ToolKit(toolboxes=[ToolBoxSetUp(id="greeter1", toolbox_name="GreeterBox")])
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["greet", "ping"]
+    )})
     worker = _make_worker(ctx, toolkit)
 
     job = _job(extra_bindings=[
@@ -554,11 +610,11 @@ async def test_tool_worker_selector_lookup_leaves_toolkit_entry_untouched(tmp_pa
 
     assert job.status == JobStatus.FINISHED
     # the ToolKit's own stored setup was never mutated with an active_tool
-    assert toolkit.toolboxes[0].active_tool is None
+    assert toolkit.toolboxes["greeter1"].active_tool is None
 
     # and running it again (e.g. for a different tool) still works
     params_doc.save({"name": "B"})
-    job2 = _job(selector="GreeterBox.ping", extra_bindings=[
+    job2 = _job(selector="greeter1.ping", extra_bindings=[
         ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
     ])
     await worker.run(job2)
