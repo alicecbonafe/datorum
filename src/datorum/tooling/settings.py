@@ -1,29 +1,9 @@
-import inspect
-from collections.abc import Callable
-import types
-from typing import (
-    Any,
-    Literal,
-    Protocol,
-    Optional,
-    Self,
-    Union,
-    get_args,
-    get_origin,
-    get_type_hints,
-    runtime_checkable,
-)
+from typing import Optional
 
-from pydantic import BaseModel, Field, PrivateAttr, create_model
+from pydantic import Field
 
-from .binding import ContextBindType
-from .context import DocumentContext
-from .exceptions import ToolBoxException
-from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
-
-# ======================================================
-# | Settings
-# ======================================================
+from ..context.settings import ContextBindType, ResourceBind
+from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class ToolBoxSetUp(BaseDatorumSettings):
@@ -38,6 +18,6 @@ class ToolBoxSetUp(BaseDatorumSettings):
     active_tool: Optional[str] = Field(default=None, exclude=True)
 
 
-class ToolBoxCollection(BaseDatorumPersistentSettings):
+class ToolKit(BaseDatorumPersistentSettings):
     toolboxes: list[ToolBoxSetUp] = Field(default_factory=list)
 

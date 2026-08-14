@@ -1,141 +1,173 @@
+from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Any, Optional, Literal
 
 from pydantic import BaseModel
 
-from ..context import DocumentContext, DocumentReference
-from ..exceptions import ToolWorkerException, MissingContextException
-from ..inference import ChatHistory, AssistantMessage, ToolMessage
-from ..tooling import ToolBoxSetUp, get_toolbox_definition
-from .base import JobStatus, Job, Worker
+from ..context.settings import (
+    DocumentContext,
+    DocumentReference,
+    ContextBind,
+    ResourceBind,
+)
+from ..context.commons.chat import ChatHistory, AssistantMessage, ToolMessage
+from ..work.job import JobStatus, Job
+from ..work.worker import Worker
+from .exceptions import ToolWorkerError
+from .registry import ToolBox, ToolBoxDefinition, get_toolbox_definition
+from .settings import ToolBoxSetUp, ToolKit
+
 
 
 class ToolWorker(Worker):
-    required_documents: list[str] = ["tool_params", "tool_result"]
-    required_resources: list[str] = ["toolbox_setup"]
+    required_context_binds: list[str] = ["tool_params", "tool_result"]
+    required_resource_binds: list[str] = ["toolbox_setup"]
 
-    def __init__(self, job: Job, toolbox: ToolBoxSetUp, tool_name: str):
-        super().__init__(job=job)
-        self.toolbox = toolbox
-        self.tool_name = tool_name
+    def __init__(self, toolkit: ToolKit):
+        self.toolkit: ToolKit = toolkit
 
-    async def work(self):
-        await self.job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
+        @self.resource(name="toolbox_setup")
+        def _toolbox_setup(selector: str | None) -> ToolBoxSetUp:
+            if not selector:
+                raise ToolWorkerError("Missing toolbox selector")
 
-        toolbox_def = get_toolbox_definition(self.toolbox.toolbox_name)
-        if self.tool_name not in toolbox_def.tools:
-            raise ToolWorkerException(f"Tool '{self.tool_name}' not found in ToolBox '{toolbox_def.name}'")
-        # tool_def = toolbox_def.tools[self.tool_name]
-        toolbox = toolbox_def.create_toolbox()
+            _selector_parts = selector.split(".")
+            if len(_selector_parts) != 2:
+                raise ToolWorkerError(
+                    f"Wrong selector format in '{selector}' (expected: 'toolbox_name.tool_name')")
 
-        for field_name, field in toolbox_def.context_fields.items():
-            if field.content_type.endswith("-output"):
-                continue
+            toolbox_name = _selector_parts[0]
+            tool_name = _selector_parts[1]
+            setup = next(
+                (tb for tb in self.toolkit.toolboxes if tb.toolbox_name == toolbox_name),
+                None)
+            if not setup:
+                raise ToolWorkerError(f"Unknown toolbox '{toolbox_name}'")
 
-            if field_name not in self.toolbox.context_bindings:
-                if field.required:
-                    raise ToolWorkerException(f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
-                continue
+            setup = setup.model_copy(update={"active_tool": tool_name})
 
-            field_value: Any = None
-            bind_id = self.toolbox.context_bindings[field_name]
+            return setup
 
-            if field.content_type.startswith("domain-"):
-                context: Optional[DocumentContext] = None
-                for ctx in self.job.contexts.values():
-                    if ctx.knows_domain(bind_id):
-                        context = ctx
-                        break
-                
-                if context is None:
-                    if field.required:
-                        raise ToolWorkerException(f"Required domain '{bind_id}' not found")
-                    continue
+    async def work(self, job: Job):
+        await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
-                if field.content_type == "domain-path":
-                    field_value = context.get_domain_path(bind_id)
-                elif field.content_type == "domain-metadata":
-                    field_value = context.get_domain_metadata(bind_id)
-
-            else:
-                document: Optional[DocumentReference] = None
-                for ctx in self.job.contexts.values():
-                    document = ctx.get_document(bind_id)
-                    if document:
-                        break
-                
-                if not document:
-                    if field.required:
-                        raise ToolWorkerException(f"Required document '{bind_id}' not found")
-                    continue
-
-                if field.content_type == "document-path":
-                    field_value = document.doc_path
-                elif field.content_type == "document-metadata":
-                    field_value = document.metadata
-                elif not document.doc_path.exists():
-                    raise ToolWorkerException(f"Required document '{bind_id}' not found")
-                elif field.content_type.startswith("model"):
-                    field_value = document.load()
-                elif field.content_type.startswith("text"):
-                    field_value = document.doc_path.read_text(encoding="utf-8")
-                elif field.content_type.startswith("bytes"):
-                    field_value = document.doc_path.read_bytes()
-
-            setattr(toolbox, field.attr_name, field_value)
-
-        tool_params_doc = self.job.context.documents["tool_params"]
-        tool_result_doc = self.job.context.documents["tool_result"]
-
-        tool_params = None
-        tool_call_id = "no-id"
-        chat_history: Optional[ChatHistory] = None
-        if tool_params_doc.doc_path.exists():
-            if tool_params_doc.doc_model == "chat-history":
-                chat_history = tool_params_doc.load()
-                assistant_message: AssistantMessage = chat_history.messages[-1]
-                if not assistant_message.tool_calls:
-                    raise ToolWorkerException(f"Agent's tool call is empty")
-                for tool_call in assistant_message.tool_calls:
-                    if tool_call.function.name == f"{self.toolbox.id}.{self.tool_name}":
-                        tool_params = json.loads(tool_call.function.arguments)
-                        tool_call_id = tool_call.id
-                        break
-            else:
-                tool_params = tool_params_doc.load()
-
-        await self.job.update_status(JobStatus.WORKING, "Starting tool")
-
-        output = await toolbox.run_tool(
-            tool_name = self.tool_name,
-            params = tool_params
+        setup_bind: ResourceBind = next(
+            bind for bind in job.resource_bindings \
+                if bind.factory_name == "toolbox_setup"
+        )
+        params_bind: ContextBind = next(
+            bind for bind in job.context_bindings \
+                if bind.field_id == "tool_params"
+        )
+        result_bind: ContextBind = next(
+            bind for bind in job.context_bindings \
+                if bind.field_id == "tool_result"
         )
 
-        await self.job.update_status(JobStatus.WORKING, "Saving results")
-        if tool_result_doc.doc_model == "chat-history":
-            if chat_history is None or tool_result_doc.doc_path != tool_params_doc.doc_path:
-                if tool_result_doc.doc_path.exists():
-                    chat_history = tool_result_doc.load()
+        setup: ToolBoxSetUp = self.load_resource(setup_bind)
+        toolbox_def: ToolBoxDefinition = get_toolbox_definition(
+            setup.toolbox_name)
+
+        if setup.active_tool not in toolbox_def.tools:
+            raise ToolWorkerError(
+                f"Tool '{setup.active_tool}' not found in ToolBox '{toolbox_def.name}'")
+
+        toolbox: ToolBox = toolbox_def.create_toolbox()
+
+        for field_name, field in toolbox_def.context_fields.items():
+            if not field.context_bind_type.is_input():
+                continue
+
+            field_bind: Optional[ContextBind] = next(
+                (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
+                None
+            )
+            if not field_bind:
+                if field.required:
+                    raise ToolWorkerError(
+                        f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
+                continue
+
+            field_value: Any = self.pull_context(field_bind)
+            setattr(toolbox, field.attr_name, field_value)
+
+        params_doc = self.find_document(
+            document_id=params_bind.binded_id,
+            context=params_bind.context
+        )
+        result_doc = self.find_document(
+            document_id=result_bind.binded_id,
+            context=result_bind.context
+        )
+
+        params = None
+        call_id = "no-id"
+        chat_history: Optional[ChatHistory] = None
+
+        if params_doc.doc_model == "chat-history":
+            chat_history: ChatHistory = params_doc.load()
+            assistant_message: AssistantMessage = chat_history.messages[-1]
+            if not assistant_message.tool_calls:
+                raise ToolWorkerError(
+                    f"Agent's tool call is empty")
+            for tool_call in assistant_message.tool_calls:
+                if tool_call.function.name == f"{setup.id}.{setup.active_tool}":
+                    params = json.loads(tool_call.function.arguments)
+                    call_id = tool_call.id
+                    break
+        else:
+            params = params_doc.load()
+
+
+        await job.update_status(JobStatus.WORKING, "Starting tool")
+        result = await toolbox.run_tool(
+            tool_name=setup.active_tool,
+            params=params
+        )
+
+
+        await job.update_status(JobStatus.WORKING, "Saving results")
+        if result_doc.doc_model == "chat-history":
+            if chat_history is None or result_doc.doc_path != params_doc.doc_path:
+                if result_doc.doc_path.exists():
+                    chat_history = result_doc.load()
                 else:
                     chat_history = ChatHistory()
 
-            output_text: str
-            if isinstance(output, str):
-                output_text = output
-            elif isinstance(output, dict):
-                output_text = json.dumps(
-                    output, indent=2, ensure_ascii=False)
-            elif isinstance(output, BaseModel):
-                output_text = output.model_dump_json(
+            result_text: str
+            if isinstance(result, str):
+                result_text = result
+            elif isinstance(result, dict):
+                result_text = json.dumps(
+                    result, indent=2, ensure_ascii=False)
+            elif isinstance(result, BaseModel):
+                result_text = result.model_dump_json(
                     indent=2, ensure_ascii=False)
             else:
-                output_text = str(output)
+                result_text = str(result)
             chat_history.messages.append(ToolMessage(
-                content=output_text,
-                tool_call_id=tool_call_id,
+                content=result_text,
+                tool_call_id=call_id,
             ))
 
-            tool_result_doc.save(chat_history)
+            result_doc.save(chat_history)
         else:
-            tool_result_doc.save(output)
+            result_doc.save(result)
+
+
+        await job.update_status(JobStatus.WORKING, "Saving bindings")
+        for field_name, field in toolbox_def.context_fields.items():
+            if not field.context_bind_type.is_output():
+                continue
+
+            field_bind: Optional[ContextBind] = next(
+                (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
+                None
+            )
+            if not field_bind:
+                continue
+
+            field_value: Any = getattr(toolbox, field.attr_name)
+            self.push_context(field_bind, field_value)
+

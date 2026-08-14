@@ -323,7 +323,7 @@ def resource(name: str | None = None, force: bool = False):
 # | Defaults
 # ======================================================
 
-from .defaults.simple import (
+from .commons.simple import (
     simple_text_writer,
     simple_text_reader,
     simple_json_writer,
@@ -333,12 +333,12 @@ from .defaults.simple import (
     simple_toml_writer,
     simple_toml_reader,
 )
-from .defaults.markdown import (
+from .commons.markdown import (
     MarkdownDocument,
     markdown_writer,
     simple_toml_reader,
 )
-from .defaults.chat import (
+from .commons.chat import (
     ChatHistory,
     SystemMessage,
     UserMessage,

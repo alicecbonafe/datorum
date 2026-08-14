@@ -12,7 +12,7 @@ from ..exceptions import OrchestratorException, InvalidContextBindException
 from ..inference import AIConfig
 from ..pipeline import PipelineCollection, PipeFlow
 from ..security import SecurityBackend
-from ..tooling import ToolBoxSetUp, ToolBoxCollection
+from ..tooling import ToolBoxSetUp, ToolKit
 from .base import Broadcaster, Worker, Job
 
 
@@ -20,7 +20,7 @@ from .base import Broadcaster, Worker, Job
 class DatorumProfile(Binder):
     ai_config: Optional[AIConfig] = field(default=None)
     pipeline_collection: Optional[PipelineCollection] = field(default=None)
-    toolbox_collection: Optional[ToolBoxCollection] = field(default=None)
+    toolkit: Optional[ToolKit] = field(default=None)
     contexts: dict[str, DocumentContext] = field(default_factory=dict)
     factories: dict[str, Callable] = field(default_factory=dict)
 
@@ -33,8 +33,8 @@ class DatorumProfile(Binder):
         self.pipeline_collection = PipelineCollection.load(
             settings_path=settings_path)
 
-    def load_toolbox_collection(self, settings_path: Path):
-        self.toolbox_collection = ToolBoxCollection.load(
+    def load_toolkit(self, settings_path: Path):
+        self.toolkit = ToolKit.load(
             settings_path=settings_path)
 
     def load_context(self, settings_path: Path, base_path: Optional[Path] = None) -> DocumentContext:

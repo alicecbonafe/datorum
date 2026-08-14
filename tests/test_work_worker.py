@@ -103,8 +103,8 @@ async def test_worker_start_and_launch_success():
     job = Job(
         id="job_valid_binds",
         context_bindings=[
-            ContextBind(binded_id="req_ctx_1"),
-            ContextBind(binded_id="req_ctx_2"),
+            ContextBind(binded_id="req_ctx_1", field_id="req_ctx_1"),
+            ContextBind(binded_id="req_ctx_2", field_id="req_ctx_2"),
         ],
         resource_bindings=[
             ResourceBind(factory_name="req_res_1"),

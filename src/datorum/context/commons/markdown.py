@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Self
 
 import tomli_w
 import tomllib

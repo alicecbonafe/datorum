@@ -17,6 +17,7 @@ from .exceptions import (
 )
 from .registry import (
     validate_factory_signature,
+    get_resource_factory,
 )
 from .settings import (
     DocumentReference,

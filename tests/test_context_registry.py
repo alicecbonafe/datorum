@@ -23,6 +23,9 @@ from datorum.context.registry import (
     get_doc_handler,
     get_resource_factory,
     MarkdownDocument,
+    ChatHistory,
+    SystemMessage,
+    UserMessage,
 )
 from datorum.context.exceptions import (
     DocumentTypeError,
@@ -166,7 +169,7 @@ def test_registry_resources():
 
 
 @pytest.mark.depends(on=["test_registry_documents"])
-def test_defaults(tmp_path: Path):
+def test_commons(tmp_path: Path):
     text_file = tmp_path / "mocked.txt"
     json_file = tmp_path / "mocked.json"
     yaml_file = tmp_path / "mocked.yaml"
@@ -214,7 +217,7 @@ def test_defaults(tmp_path: Path):
     assert toml_data == data
 
 
-@pytest.mark.depends(on=["test_defaults"])
+@pytest.mark.depends(on=["test_commons"])
 def test_markdown(tmp_path: Path):
     markdown_file = tmp_path / "test.md"
     frontmatter = {"title": "Mocked MarkDown", "author": "Mocked Author"}
@@ -268,4 +271,16 @@ def test_markdown(tmp_path: Path):
     assert doc_2.frontmatter_format == doc_3.frontmatter_format
     
 
+@pytest.mark.depends(on=["test_commons"])
+def test_chat():
+    sys_msg = SystemMessage(content="You are a friendly chatbot.")
+    usr_msg = UserMessage(content="Mocked user message.")
+    chat = ChatHistory(messages=[sys_msg, usr_msg])
+    chat_dict = chat.prepare_request()
+
+    assert len(chat_dict["messages"]) == 2
+    assert chat_dict["messages"][0]["role"] == "system"
+    assert chat_dict["messages"][0]["content"] == "You are a friendly chatbot."
+    assert chat_dict["messages"][1]["role"] == "user"
+    assert chat_dict["messages"][1]["content"] == "Mocked user message."
 

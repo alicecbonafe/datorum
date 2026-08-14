@@ -102,11 +102,11 @@ def test_binder(tmp_path: Path,):
         binder.find_domain_context(domain=domain_2)
 
     domain_1_path = binder.pull_context(ContextBind(
-        binded_id=domain_1,
+        binded_id=domain_1, field_id="domain_path",
         context_bind_type=ContextBindType.domain_path
     ))
     domain_1_metadata_1 = binder.pull_context(ContextBind(
-        binded_id=domain_1,
+        binded_id=domain_1, field_id="domain_metadata",
         context_bind_type=ContextBindType.domain_metadata
     ))
 
@@ -114,23 +114,23 @@ def test_binder(tmp_path: Path,):
     assert domain_1_metadata_1["title"] == domain_1_metadata["title"]
 
     binder.push_context(ContextBind(
-        binded_id=domain_1,
+        binded_id=domain_1, field_id="domain_metadata",
         context_bind_type=ContextBindType.domain_metadata
     ), domain_1_metadata_changed)
 
     assert binder.pull_context(ContextBind(
-        binded_id=domain_1,
+        binded_id=domain_1, field_id="domain_metadata",
         context_bind_type=ContextBindType.domain_metadata
     ))["title"] == domain_1_metadata_changed["title"]
 
     with pytest.raises(ContextBindingError, match=r"^Cannot push to an input-only bind.*?"):
         binder.push_context(ContextBind(
-            binded_id=domain_1,
+            binded_id=domain_1, field_id="domain_path",
             context_bind_type=ContextBindType.domain_path
         ), tmp_path)
     with pytest.raises(ContextBindingError, match=r"^Wrong metadata type.*?"):
         binder.push_context(ContextBind(
-            binded_id=domain_1,
+            binded_id=domain_1, field_id="domain_metadata",
             context_bind_type=ContextBindType.domain_metadata
         ), tmp_path)
 
@@ -161,32 +161,37 @@ def test_binder(tmp_path: Path,):
 
     ctx_value_1 = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=ctx_id,
+        field_id="doc_model", context=ctx_id,
         context_bind_type=ContextBindType.model,
     ))
     ctx_value_2 = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=["invalid", ctx_id],
+        field_id="doc_model", context=["invalid", ctx_id],
         context_bind_type=ContextBindType.model,
     ))
     ctx_value_3 = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
+        field_id="doc_model",
         context_bind_type=ContextBindType.model,
     ))
     ctx_value_text = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
+        field_id="doc_text",
         context_bind_type=ContextBindType.text,
     ))
     ctx_value_bytes = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
+        field_id="doc_bytes",
         context_bind_type=ContextBindType.bytes,
     ))
     ctx_value_metadata = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
+        field_id="doc_metadata",
         context_bind_type=ContextBindType.document_metadata,
     ))
     ctx_value_path = binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
+        field_id="doc_path",
         context_bind_type=ContextBindType.document_path,
     ))
     doc_bytes_path = tmp_path / domain_1 / f"{doc_bytes_id}.bin"
@@ -203,6 +208,7 @@ def test_binder(tmp_path: Path,):
     with pytest.raises(ContextBindingError, match=r"^Cannot pull from an output-only bind.*?"):
         ctx_bind_err = ContextBind(
             binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
+            field_id="doc_model",
             context_bind_type=ContextBindType.model_output,
         )
         ctx_value_err = binder.pull_context(ctx_bind_err)
@@ -210,57 +216,58 @@ def test_binder(tmp_path: Path,):
     with pytest.raises(ContextBindingError, match=r"^File not found for document.*?"):
         ctx_value_err = binder.pull_context(ContextBind(
             binded_id=f"{domain_1}.{doc_empty_id}",
+            field_id="doc_model",
             context_bind_type=ContextBindType.model,
         ))
 
     binder.push_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=ctx_id,
+        field_id="doc_model", context=ctx_id,
         context_bind_type=ContextBindType.model,
     ), doc_1_content_changed)
     assert binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=ctx_id,
+        field_id="doc_model", context=ctx_id,
         context_bind_type=ContextBindType.model,
     )) == doc_1_content_changed
 
     binder.push_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=ctx_id,
+        field_id="doc_text", context=ctx_id,
         context_bind_type=ContextBindType.text,
     ), doc_1_content_changed)
     assert binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{domain_2}.{doc_1_id}",
-        context=ctx_id,
+        field_id="doc_text", context=ctx_id,
         context_bind_type=ContextBindType.text,
     )) == doc_1_content_changed
 
     binder.push_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
-        context=ctx_id,
+        field_id="doc_bytes", context=ctx_id,
         context_bind_type=ContextBindType.bytes,
     ), doc_bytes_content_changed)
     assert binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
-        context=ctx_id,
+        field_id="doc_bytes", context=ctx_id,
         context_bind_type=ContextBindType.bytes,
     )) == doc_bytes_content_changed
 
     binder.push_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
-        context=ctx_id,
+        field_id="doc_metadata", context=ctx_id,
         context_bind_type=ContextBindType.document_metadata,
     ), doc_bytes_metadata_changed)
     assert binder.pull_context(ContextBind(
         binded_id=f"{domain_1}.{doc_bytes_id}",
-        context=ctx_id,
+        field_id="doc_metadata", context=ctx_id,
         context_bind_type=ContextBindType.document_metadata,
     ))["title"] == doc_bytes_metadata_changed["title"]
 
     with pytest.raises(ContextBindingError, match=r"^Wrong metadata type.*?$"):
         binder.push_context(ContextBind(
             binded_id=f"{domain_1}.{doc_bytes_id}",
-            context=ctx_id,
+            field_id="doc_metadata", context=ctx_id,
             context_bind_type=ContextBindType.document_metadata,
         ), tmp_path)
 

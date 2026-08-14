@@ -50,7 +50,7 @@ class Worker(ABC, Binder):
             raise WorkerStartUpError(f"Job '{job.id}' is not idle")
 
         missing_bindings: list[str] = []
-        binds = {bind.binded_id for bind in job.context_bindings}
+        binds = {bind.field_id for bind in job.context_bindings}
         for req in self.required_context_binds:
             if req not in binds:
                 missing_bindings.append(f"ctx:{req}")
