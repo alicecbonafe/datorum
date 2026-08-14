@@ -54,7 +54,7 @@ class ToolWorker(Worker):
 
         setup_bind: ResourceBind = next(
             bind for bind in job.resource_bindings \
-                if bind.factory_name == "toolbox_setup"
+                if bind.field_id == "toolbox_setup"
         )
         params_bind: ContextBind = next(
             bind for bind in job.context_bindings \
@@ -99,6 +99,25 @@ class ToolWorker(Worker):
                     continue
 
             field_value: Any = self.pull_context(field_bind)
+            setattr(toolbox, field.attr_name, field_value)
+
+        for field_name, field in toolbox_def.resource_fields.items():
+            field_bind: Optional[ResourceBind] = next(
+                (bind for bind in job.resource_bindings if bind.field_id == field.attr_name),
+                None
+            )
+            if not field_bind:
+                field_bind = next(
+                    (bind for bind in setup.resource_bindings if bind.field_id == field.attr_name),
+                    None
+                )
+                if not field_bind:
+                    if field.required:
+                        raise ToolWorkerError(
+                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
+                    continue
+
+            field_value: Any = self.load_resource(field_bind)
             setattr(toolbox, field.attr_name, field_value)
 
         params_doc = self.find_document(

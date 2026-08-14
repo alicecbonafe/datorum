@@ -102,6 +102,26 @@ def multi_type_box():
     return MultiTypeBox
 
 
+@pytest.fixture
+def resourceful_box():
+    @toolbox(name="ResourcefulBox")
+    class ResourcefulBox:
+        req_res: Optional[str] = ResourceField(
+            name="req_res",
+            required=True,
+        )
+        opt_res: Optional[str] = ResourceField(
+            name="opt_res",
+            required=False,
+        )
+
+        @tool()
+        def check_resources(self) -> str:
+            return f"req_res:{self.req_res}, opt_res:{self.opt_res}"
+
+    return ResourcefulBox
+
+
 def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
     ctx = DocumentContext(id=ctx_id)
     ctx.save_as(tmp_path / f"{ctx_id}.yml")
@@ -118,17 +138,19 @@ def _job(
     params_bind_type=ContextBindType.model,
     result_bind_type=ContextBindType.model_output,
     selector: str = "greeter1.greet",
-    extra_bindings: Optional[list[ContextBind]] = None,
+    extra_context_bindings: Optional[list[ContextBind]] = None,
+    extra_resource_bindings: Optional[list[ResourceBind]] = None,
 ) -> Job:
     return Job(
         id="job1",
         context_bindings=[
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=params_bind_type),
             ContextBind(binded_id="tool_result", field_id="tool_result", context_bind_type=result_bind_type),
-            *(extra_bindings or []),
+            *(extra_context_bindings or []),
         ],
         resource_bindings=[
-            ResourceBind(factory_name="toolbox_setup", selector=selector),
+            ResourceBind(factory_name="toolbox_setup", selector=selector, field_id="toolbox_setup"),
+            *(extra_resource_bindings or []),
         ],
     )
 
@@ -157,7 +179,7 @@ async def test_tool_worker_success_dict_params_with_bindings(tmp_path: Path, gre
     )})
     worker = _make_worker(ctx, toolkit)
 
-    job = _job(extra_bindings=[
+    job = _job(extra_context_bindings=[
         ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
         ContextBind(binded_id="echo_doc", field_id="echo", context_bind_type=ContextBindType.text_output),
     ])
@@ -188,7 +210,7 @@ async def test_tool_worker_optional_context_field_not_bound_is_skipped(tmp_path:
     )})
     worker = _make_worker(ctx, toolkit)
 
-    job = _job(extra_bindings=[
+    job = _job(extra_context_bindings=[
         ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
     ])
 
@@ -259,7 +281,7 @@ async def test_tool_worker_chat_history_same_document(tmp_path: Path, greeter_bo
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet", field_id="toolbox_setup")],
     )
 
     await worker.run(job)
@@ -306,7 +328,7 @@ async def test_tool_worker_chat_history_separate_documents(tmp_path: Path, greet
             ContextBind(binded_id="in_chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="out_chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet", field_id="toolbox_setup")],
     )
 
     await worker.run(job)
@@ -345,7 +367,7 @@ async def test_tool_worker_chat_history_no_tool_calls_raises(tmp_path: Path, gre
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet", field_id="toolbox_setup")],
     )
 
     with pytest.raises(ToolWorkerError, match="Agent's tool call is empty"):
@@ -383,7 +405,7 @@ async def test_tool_worker_chat_history_no_matching_tool_call_runs_with_no_param
             ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.ping")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.ping", field_id="toolbox_setup")],
     )
 
     await worker.run(job)
@@ -399,7 +421,6 @@ async def test_tool_worker_chat_history_no_matching_tool_call_runs_with_no_param
 @pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
 async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greeter_box):
     """Covers `chat_history = ChatHistory()` when result_doc is chat-history,
-
     does not exist on disk yet, and params_doc is not chat-history.
     """
     ctx = _make_context(tmp_path)
@@ -425,7 +446,7 @@ async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greete
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="new_chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet", field_id="toolbox_setup")],
     )
 
     await worker.run(job)
@@ -440,7 +461,6 @@ async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greete
 @pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
 async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_path: Path, multi_type_box):
     """Covers dict, BaseModel, and primitive formatting branches when saving to chat history,
-
     as well as skipping input-only fields (`continue`) during output binding serialization.
     """
     ctx = _make_context(tmp_path)
@@ -462,7 +482,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_dict", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_dict")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_dict", field_id="toolbox_setup")],
     )
     await worker.run(job_dict)
     assert job_dict.status == JobStatus.FINISHED
@@ -477,7 +497,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_model", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_model")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_model", field_id="toolbox_setup")],
     )
     await worker.run(job_model)
     assert job_model.status == JobStatus.FINISHED
@@ -492,7 +512,7 @@ async def test_tool_worker_chat_history_formatting_and_input_only_fields(tmp_pat
             ContextBind(binded_id="tool_params", field_id="tool_params", context_bind_type=ContextBindType.model),
             ContextBind(binded_id="chat_int", field_id="tool_result", context_bind_type=ContextBindType.model_output),
         ],
-        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_primitive")],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="box1.return_primitive", field_id="toolbox_setup")],
     )
     await worker.run(job_int)
     assert job_int.status == JobStatus.FINISHED
@@ -603,7 +623,7 @@ async def test_tool_worker_selector_lookup_leaves_toolkit_entry_untouched(tmp_pa
     )})
     worker = _make_worker(ctx, toolkit)
 
-    job = _job(extra_bindings=[
+    job = _job(extra_context_bindings=[
         ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
     ])
     await worker.run(job)
@@ -614,8 +634,75 @@ async def test_tool_worker_selector_lookup_leaves_toolkit_entry_untouched(tmp_pa
 
     # and running it again (e.g. for a different tool) still works
     params_doc.save({"name": "B"})
-    job2 = _job(selector="greeter1.ping", extra_bindings=[
+    job2 = _job(selector="greeter1.ping", extra_context_bindings=[
         ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
     ])
     await worker.run(job2)
     assert job2.status == JobStatus.FINISHED
+
+
+# ==============================================================================
+# Resource bindings
+# ==============================================================================
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_required_context_field_missing_raises"])
+async def test_tool_worker_resource_bindings(tmp_path: Path, resourceful_box):
+    ctx = _make_context(tmp_path)
+    params_doc = ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict")
+    result_doc = ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
+    params_doc.save({"name": "A"})
+
+    toolkit = ToolKit(toolboxes={"resourceful_1": ToolBoxSetUp(
+        id="resourceful_1",
+        toolbox_name="ResourcefulBox",
+        tools_enabled=["check_resources"]
+    )})
+    worker = _make_worker(ctx, toolkit)
+
+    @worker.resource(name="in_parentheses")
+    def in_parentheses(text):
+        return f"({text})"
+
+    assert "in_parentheses" in worker.factories.keys()
+
+    binding1 = ResourceBind(field_id="req_res", factory_name="in_parentheses", selector="req")
+    binding2 = ResourceBind(field_id="opt_res", factory_name="in_parentheses", selector="opt")
+    job = _job(selector="resourceful_1.check_resources", extra_resource_bindings=[binding1, binding2])
+    await worker.run(job)
+
+    assert result_doc.load() == "req_res:(req), opt_res:(opt)"
+    assert job.status == JobStatus.FINISHED
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_required_context_field_missing_raises"])
+async def test_tool_worker_resource_bindings(tmp_path: Path, resourceful_box):
+    ctx = _make_context(tmp_path)
+    params_doc = ctx.create_document(id="tool_params", doc_type="application/json", doc_model="dict")
+    result_doc = ctx.create_document(id="tool_result", doc_type="text/plain", doc_model="text")
+    params_doc.save({"name": "A"})
+
+    toolkit = ToolKit(toolboxes={"resourceful_1": ToolBoxSetUp(
+        id="resourceful_1",
+        toolbox_name="ResourcefulBox",
+        tools_enabled=["check_resources"]
+    )})
+    worker = _make_worker(ctx, toolkit)
+
+    @worker.resource(name="in_parentheses")
+    def in_parentheses(text):
+        return f"({text})"
+
+    assert "in_parentheses" in worker.factories.keys()
+
+    binding1 = ResourceBind(field_id="req_res", factory_name="in_parentheses", selector="req")
+
+    job = _job(selector="resourceful_1.check_resources", extra_resource_bindings=[binding1])
+    await worker.run(job)
+
+    assert result_doc.load() == "req_res:(req), opt_res:None"
+    assert job.status == JobStatus.FINISHED
+
+    job_err = _job(selector="resourceful_1.check_resources")
+    with pytest.raises(ToolWorkerError, match="Context field 'req_res' is required for ToolBox 'ResourcefulBox'"):
+        await worker.run(job_err)

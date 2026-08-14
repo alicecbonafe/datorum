@@ -236,12 +236,13 @@ class ContextBindType(str, Enum):
 
 
 class ContextBind(BaseDatorumSettings):
-    binded_id: str
     field_id: str
+    binded_id: str
     context: str | list[str] | None = Field(default=None)
     context_bind_type: ContextBindType = Field(default=ContextBindType.model)
 
 
 class ResourceBind(BaseDatorumSettings):
+    field_id: str
     factory_name: str
     selector: str | None = None

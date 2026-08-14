@@ -107,7 +107,7 @@ async def test_worker_start_and_launch_success():
             ContextBind(binded_id="req_ctx_2", field_id="req_ctx_2"),
         ],
         resource_bindings=[
-            ResourceBind(factory_name="req_res_1"),
+            ResourceBind(factory_name="req_res_1", field_id="req_res_1"),
         ],
     )
 

@@ -79,7 +79,7 @@ async def test_broadcaster_cleanup_on_cancel():
 @pytest.mark.depends(on=["tests/test_context_settings.py"])
 def test_job_initialization():
     ctx_bind = ContextBind(binded_id="ctx_1", field_id="ctx_doc")
-    res_bind = ResourceBind(factory_name="res_1")
+    res_bind = ResourceBind(factory_name="res_1", field_id="resource")
 
     job = Job(
         id="job_1",

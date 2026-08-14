@@ -283,6 +283,7 @@ def test_binder(tmp_path: Path,):
         def factory_error_2(): ...
 
     assert binder.load_resource(ResourceBind(
+        field_id="resoure_field",
         factory_name="factory_1",
         selector="test"
     )) == "<test>"
