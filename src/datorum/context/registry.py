@@ -164,7 +164,7 @@ def register_doc_model(id: str, clazz: type, default_doc_type: str | None = None
     DocumentModelRegistry[id] = doc_model
     return doc_model
 
-def get_doc_model(id: str) -> Optional[DocumentType]:
+def get_doc_model(id: str) -> Optional[DocumentModel]:
     if id not in DocumentModelRegistry:
         raise DocumentModelError(f"Doc model '{id}' not found in registry")
     return DocumentModelRegistry[id]
@@ -222,7 +222,7 @@ def register_pydantic_based_handler(
         handler.serializer = _make_serializer(dict_handler.serializer)
         handler.deserializer = _make_deserializer(dict_handler.deserializer, model_type)
 
-def get_doc_handler(doc_type: str, doc_model: str, create: bool = False) -> Optional[DocumentType]:
+def get_doc_handler(doc_type: str, doc_model: str, create: bool = False) -> Optional[DocumentHandler]:
     id = (doc_type, doc_model)
     if id not in DocumentHandlerRegistry:
         if create:

@@ -1,10 +1,16 @@
 import json
-from typing import Any
+from typing import Any, Optional
+import uuid
 
 import httpx
+from pydantic import BaseModel
 
-from ..context.settings import DocumentReference
-from ..context.commons.markdown import MarkdownDocument
+from ..context.settings import (
+    ResourceBind,
+    ContextBind,
+    ContextBindType,
+)
+from ..context.registry import get_doc_model, DocumentModel
 from ..context.commons.chat import (
     ChatHistory,
     SystemMessage,
@@ -14,58 +20,130 @@ from ..context.commons.chat import (
 )
 from .exceptions import AgentWorkerError
 from .settings import (
+    AgentRole,
     AgencyKit,
     InferenceServiceProvider,
-    AgentRole,
 )
 from ..tooling.settings import ToolBoxSetUp, ToolKit
-from ..tooling.registry import get_toolbox_definition
+from ..tooling.registry import get_toolbox_definition, ToolBoxDefinition
 from ..tooling.worker import ToolWorker
 from ..work.job import JobStatus, Job
-from ..work.worker import Worker, TMP_CONTEXT
+from ..work.worker import Worker
 
 
 class AgentWorker(Worker):
-    required_context_binds: list[str] = ["user_prompt", "output"]
-    required_resource_binds: list[str] = ["provider", "role", ]
+    required_context_binds: list[str] = ["chat_history"]
+    required_resource_binds: list[str] = ["inference_provider", "agent_role"]
 
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
-    def __init__(self, agency_kit: AgencyKit, toolkit: list[ToolBoxSetUp] | None = None):
-        super().__init__(job=job)
-        self.provider: InferenceServiceProvider = provider
-        self.role: AgentRole = role
-        self.api_key: str = api_key
-        self.toolkit: list[ToolBoxSetUp] = toolkit or []
+    def __init__(self,
+        agency_kit: AgencyKit,
+        tool_worker: ToolWorker,
+    ):
+        self.agency_kit: AgencyKit = agency_kit
+        self.tool_worker: ToolWorker = tool_worker
 
-    def _select_model(self) -> str:
-        for candidate in self.role.preferred_models:
-            if not self.provider.models or candidate in self.provider.models:
+        @self.resource(name="inference_provider")
+        def _inference_provider(provider_id: str) -> InferenceServiceProvider:
+            return self.get_provider(provider_id)
+
+        @self.resource(name="agent_role")
+        def _agent_role(role_id: str) -> AgentRole:
+            return self.get_role(role_id)
+
+    def get_role(self, role_id: str) -> AgentRole:
+        if role_id not in self.agency_kit.roles:
+            raise AgentWorkerError(f"Role not found: '{role_id}'")
+        return self.agency_kit.roles[role_id]
+
+    def get_provider(self, provider_id: str) -> InferenceServiceProvider:
+        if provider_id not in self.agency_kit.providers:
+            raise AgentWorkerError(f"Provider not found: '{provider_id}'")
+        return self.agency_kit.providers[provider_id]
+
+    def get_preferred_provider(self, preferred_models: list[str]) -> InferenceServiceProvider:
+        for model in preferred_models:
+            for provider in self.agency_kit.providers.values():
+                if model in provider.models:
+                    return provider
+        raise AgentWorkerError(f"No provider found for models: {preferred_models}")
+
+    def _select_model(self, role: AgentRole, provider: InferenceServiceProvider) -> str:
+        for candidate in role.preferred_models:
+            if candidate in provider.models:
                 return candidate
-        if self.provider.default_model is not None:
-            return self.provider.default_model
-        raise AgentWorkerException(
-            f"Can not determine model name for role '{self.role.id}' on provider '{self.provider.id}'"
+        raise AgentWorkerError(
+            f"Can not determine model for role '{role.id}' on provider '{provider.id}'"
         )
 
-    def _toolbox_schema(self, toolbox: ToolBoxSetUp) -> list[dict[str, Any]]:
+    def _strict_json_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        """Recursively enforce OpenAI's structured-output constraints on a
+        pydantic JSON schema: every object gets additionalProperties=false,
+        and `required` must list ALL properties (optional fields become
+        nullable via a type union, since strict mode has no concept of
+        'optional')."""
+        schema.pop("title", None)
+        schema.pop("default", None)
+
+        if schema.get("type") == "object" and "properties" in schema:
+            schema["additionalProperties"] = False
+            props = schema["properties"]
+            for prop_schema in props.values():
+                self._strict_json_schema(prop_schema)
+            schema["required"] = list(props.keys())
+
+        elif schema.get("type") == "array" and "items" in schema:
+            self._strict_json_schema(schema["items"])
+
+        for key in ("anyOf", "oneOf", "allOf"):
+            if key in schema:
+                for sub in schema[key]:
+                    self._strict_json_schema(sub)
+
+        return schema
+
+    def _toolkit_schema(self, role: AgentRole) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
-        for tool_name in toolbox.tools_enabled:
-            toolbox_def = get_toolbox_definition(toolbox.toolbox_name)
+        for full_name in role.tools_enabled:
+            setup_id, tool_name = full_name.rsplit(".", 1)
+            setup: ToolBoxSetUp = self.tool_worker.toolkit.toolboxes[setup_id]
+            toolbox_def: ToolBoxDefinition = get_toolbox_definition(setup.toolbox_name)
             tool_def = toolbox_def.tools[tool_name]
             tool_data = tool_def.model_dump(mode="json", exclude={"name"})
             function_name = tool_data["function"]["name"]
-            tool_data["function"]["name"] = f"{toolbox.id}.{function_name}"
+            tool_data["function"]["name"] = f"{setup.id}.{function_name}"
             result.append(tool_data)
         return result
 
-    def _toolkit_schema(self) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        for toolbox in self.toolkit:
-            result.extend(self._toolbox_schema(toolbox=toolbox))
-        return result
+    def _response_format(self,
+        clazz: type[BaseModel],
+        name: str | None = None,
+        strict: bool = True
+    ) -> dict[str, Any]:
+        """Build an OpenAI-compatible `response_format` payload from a
+        pydantic model, for structured-output / JSON-schema-constrained
+        completions."""
+        schema = clazz.model_json_schema()
+        defs = schema.pop("$defs", {})
+        for def_schema in defs.values():
+            self._strict_json_schema(def_schema)
+        self._strict_json_schema(schema)
 
-    async def _call_streamer(self, request_payload: dict[str, Any], job: Job) -> tuple[dict[str, Any], dict[str, Any]]:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": name or clazz.__name__,
+                "schema": {**schema, "$defs": defs} if defs else schema,
+                "strict": strict
+            }
+        }
+
+    async def _call_streamer(self,
+        request_payload: dict[str, Any],
+        provider: InferenceServiceProvider,
+        api_key: str, job: Job,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         request_payload = {**request_payload, "stream": True}
         content_parts: list[str] = []
         tool_call_parts: dict[int, dict[str, Any]] = {}
@@ -75,10 +153,10 @@ class AgentWorker(Worker):
 
         job.is_streaming = True
         try:
-            async with httpx.AsyncClient(base_url=self.provider.base_url, timeout=120.0) as client:
+            async with httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client:
                 async with client.stream(
                     "POST", "chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json=request_payload,
                 ) as response:
                     response.raise_for_status()
@@ -124,7 +202,7 @@ class AgentWorker(Worker):
                                 # this will be handled when a concrete case appears
                                 extra_parts[key] = value
         except httpx.HTTPError as e:
-            raise InferenceException(f"Failed to call inference provider '{self.provider.id}': {e}") from e
+            raise AgentWorkerError(f"Failed to call inference provider '{provider.id}': {e}") from e
         finally:
             job.is_streaming = False
 
@@ -138,18 +216,22 @@ class AgentWorker(Worker):
 
         return message, response_meta
 
-    async def _call_fetcher(self, request_payload: dict[str, Any], job: Job) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def _call_fetcher(self,
+        request_payload: dict[str, Any],
+        provider: InferenceServiceProvider,
+        api_key: str, job: Job,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
-            async with httpx.AsyncClient(base_url=self.provider.base_url, timeout=120.0) as client:
+            async with httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client:
                 response = await client.post(
                     "chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json=request_payload,
                 )
                 response.raise_for_status()
         except httpx.HTTPError as e:
-            raise InferenceException(
-                f"Failed to call inference provider '{self.provider.id}': {e}"
+            raise AgentWorkerError(
+                f"Failed to call inference provider '{provider.id}': {e}"
             ) from e
 
         response_data = response.json()
@@ -166,111 +248,141 @@ class AgentWorker(Worker):
     async def work(self, job: Job):
         await job.update_status(JobStatus.WORKING, "Collecting agent resources")
 
-        chat_history_doc: DocumentReference
-        if "chat_history" in job.context.documents:
-            chat_history_doc = job.context.documents["chat_history"]
-        else:
-            chat_history_doc = TMP_CONTEXT.create_document(
-                id="chat-history",
-                doc_model="chat-history",
-                doc_type="application/json"
+        role_bind: ResourceBind = next(
+            bind for bind in job.resource_bindings \
+                if bind.field_id == "agent_role"
+        )
+        provider_bind: ResourceBind = next(
+            (bind for bind in job.resource_bindings \
+                if bind.field_id == "inference_provider"), None
+        )
+        chat_bind: ContextBind = next(
+            bind for bind in job.context_bindings \
+                if bind.field_id == "chat_history"
+        )
+
+        if chat_bind.context_bind_type != ContextBindType.model:
+            raise AgentWorkerError(
+                f"The field 'chat_history' must be binded to an input-output model (received: '{chat_bind.context_bind_type}')")
+
+        role: AgentRole = self.load_resource(role_bind)
+        provider: InferenceServiceProvider = self.load_resource(provider_bind) \
+            if provider_bind else self.get_preferred_provider(role.preferred_models)
+
+        api_key: str = self.load_resource(ResourceBind(
+            field_id="api_key",
+            factory_name="api_key",
+            selector=provider.api_key_selector or provider.id,
+        ))
+
+        chat_doc = self.find_document(
+            document_id=chat_bind.binded_id,
+            context=chat_bind.context
+        )
+        chat: ChatHistory = chat_doc.load()
+        if len(chat.messages) == 0:
+            raise AgentWorkerError(
+                "Chat history document must have at least one message")
+
+
+        model = self._select_model(role, provider)
+        toolkit_schema = self._toolkit_schema(role)
+        response_format: dict[str, Any] | None = None
+        if role.output_doc_model:
+            doc_model: DocumentModel = get_doc_model(role.output_doc_model)
+            response_format = self._response_format(
+                clazz=doc_model.clazz,
+                name=doc_model.id,
             )
 
-        chat_history: ChatHistory
-        if chat_history_doc.doc_path.exists():
-            chat_history = chat_history_doc.load()
-        else:
-            chat_history = ChatHistory()
-
-        system_instructions = self.role.system_instructions
-        system_instructions_doc = job.context.documents["system_instructions"] \
-            if "system_instructions" in job.context.documents else None
-        if system_instructions_doc is not None:
-            system_instructions = system_instructions_doc.load()
-            if isinstance(system_instructions, MarkdownDocument):
-                system_instructions = system_instructions.content
-
-        if system_instructions:
-            if len(chat_history.messages) == 0:
-                chat_history.messages.append(SystemMessage(content=system_instructions))
-            else:
-                if chat_history.messages[0].role == "system":
-                    chat_history.messages[0].content = system_instructions
-                else:
-                    chat_history.messages.insert(0, SystemMessage(content=system_instructions))
-
-        user_prompt_doc = job.context.documents["user_prompt"]
-        if user_prompt_doc is None:
-            if len(chat_history.messages) == 0 or chat_history.messages[len(chat_history.messages)-1].role != "user":
-                raise AgentWorkerException("User prompt not found")
-        else:
-            user_prompt = user_prompt_doc.load()
-            if isinstance(user_prompt, MarkdownDocument):
-                user_prompt = user_prompt.content
-            chat_history.messages.append(UserMessage(content=user_prompt))
-
-        model = self._select_model()
-        toolkit_schema = self._toolkit_schema()
-
-        while True:
-            await job.update_status(JobStatus.WORKING, f"Calling model '{model}' at provider '{self.provider.id}'")
+        for i in range(role.tool_max_iter):
+            await job.update_status(JobStatus.WORKING, f"Calling model '{model}' at provider '{provider.id}' (round {i})")
             request_payload: dict[str, Any] = {
                 "model": model,
-                "messages": chat_history.prepare_request(),
-                "temperature": self.role.temperature,
-                "top_p": self.role.top_p,
-                "max_tokens": self.role.max_tokens,
+                "messages": chat.prepare_request(),
+                "temperature": role.temperature,
+                "top_p": role.top_p,
+                "max_tokens": role.max_tokens,
             }
 
             if len(toolkit_schema) > 0:
                 request_payload["tools"] = toolkit_schema
+                request_payload["tool_choice"] = role.tool_choice
+            if response_format:
+                request_payload["response_format"] = response_format
 
-            if self.provider.supports_streaming:
+            if provider.supports_streaming:
                 message, response_meta = await self._call_streamer(
-                    request_payload=request_payload, job=job)
+                    request_payload=request_payload,
+                    provider=provider,
+                    api_key=api_key,
+                    job=job
+                )
             else:
                 message, response_meta = await self._call_fetcher(
-                    request_payload=request_payload, job=job)
+                    request_payload=request_payload,
+                    provider=provider,
+                    api_key=api_key,
+                    job=job,
+                )
 
             assistant_message: AssistantMessage = AssistantMessage.model_validate(message)
             assistant_message.metadata = response_meta
 
-            chat_history.messages.append(assistant_message)
-            chat_history_doc.save(chat_history)
+            chat.messages.append(assistant_message)
+            chat_doc.save(chat)
 
-            if response_meta["finish_reason"] == "tool_calls":
+            if response_meta.get("finish_reason") == "tool_calls":
                 if not assistant_message.tool_calls:
-                    raise AgentWorkerException(f"Agent's tool call is empty")
+                    raise AgentWorkerError(f"Agent's tool call is empty")
                 for tool_call in assistant_message.tool_calls:
-                    toolbox_setup_id, _, tool_name = tool_call.function.name.partition(".")
-                    toolbox_setup: Optional[ToolBoxSetUp] = None
-                    for _setup in self.toolkit:
-                        if _setup.id == toolbox_setup_id:
-                            toolbox_setup = _setup
-                            break
+                    await job.update_status(JobStatus.WORKING, f"Preparing tool call for '{tool_call.function.name}' (round {i})")
+
+                    toolbox_setup_id, tool_name = tool_call.function.name.rsplit(".", 1)
+                    toolbox_setup: Optional[ToolBoxSetUp] = self.tool_worker.toolkit.toolboxes.get(toolbox_setup_id)
 
                     if toolbox_setup is None:
                         tool_message = ToolMessage(
                             content=f"ToolBox '{toolbox_setup_id}' not found.",
                             tool_call_id=tool_call.id,
                         )
-                        chat_history.messages.append(tool_message)
-                        chat_history_doc.save(chat_history)
+                        chat.messages.append(tool_message)
+                        chat_doc.save(chat)
                         continue
 
                     toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
-                    tool_def = toolbox_def.tools[tool_name]
+                    # tool_def = toolbox_def.tools[tool_name]
 
-                    tool_job = ToolWorker.create_delegated_job(origin=job, include_docs={
-                        "tool_params": chat_history_doc,
-                        "tool_result": chat_history_doc,
-                    })
-                    tool_worker = ToolWorker(job=tool_job, toolbox=toolbox_setup, tool_name=tool_name)
-                    await tool_worker.run()
-                    chat_history = chat_history_doc.load()
+                    tool_job = Job(
+                        id=f"{job.id}_tool_{uuid.uuid4().hex[:6]}",
+                        context_bindings=[
+                            ContextBind(
+                                field_id="tool_params",
+                                binded_id=chat_bind.binded_id,
+                                context=chat_bind.context,
+                                context_bind_type=ContextBindType.model
+                            ),
+                            ContextBind(
+                                field_id="tool_result",
+                                binded_id=chat_bind.binded_id,
+                                context=chat_bind.context,
+                                context_bind_type=ContextBindType.model
+                            ),
+                        ],
+                        resource_bindings=[
+                            ResourceBind(
+                                field_id="toolbox_setup",
+                                factory_name="toolbox_setup",
+                                selector=tool_call.function.name
+                            )
+                        ]
+                    )
+                    job.delegates.append(tool_job)
+
+                    await job.update_status(JobStatus.WORKING, f"Calling tool '{tool_call.function.name}' (round {i})")
+                    await self.tool_worker.run(tool_job)
+                    chat = chat_doc.load()
 
             else:
-                if assistant_message.content:
-                    job.context.documents["output"].doc_path.write_text(assistant_message.content)
                 break
 

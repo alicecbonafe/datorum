@@ -32,7 +32,7 @@ class ToolWorker(Worker):
             if not selector:
                 raise ToolWorkerError("Missing toolbox selector")
 
-            _selector_parts = selector.split(".")
+            _selector_parts = selector.rsplit(".", 1)
             if len(_selector_parts) != 2:
                 raise ToolWorkerError(
                     f"Wrong selector format in '{selector}' (expected: 'toolbox_name.tool_name')")

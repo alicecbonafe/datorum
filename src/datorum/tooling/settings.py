@@ -10,7 +10,7 @@ class ToolBoxSetUp(BaseDatorumSettings):
     id: str
     toolbox_name: str
 
-    tools_enabled: set[str] = Field(default_factory=set)
+    tools_enabled: list[str] = Field(default_factory=list)
 
     context_bindings: list[ContextBindType] = Field(default_factory=list)
     resource_bindings: list[ResourceBind] = Field(default_factory=list)
