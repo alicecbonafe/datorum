@@ -143,6 +143,12 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         with self.settings_path.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, sort_keys=False, Dumper=DatorumDumper)
 
+    def reload(self):
+        with self.settings_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        updated_instance = self.__class__.model_validate(data)
+        self.__dict__.update(updated_instance.__dict__)
+
     @model_validator(mode="after")
     def _root_model(self) -> "BaseDatorumPersistentSettings":
         self._set_persistent_recursive(self)

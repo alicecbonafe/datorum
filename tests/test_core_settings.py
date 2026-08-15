@@ -29,6 +29,7 @@ def test_persistence(tmp_path: Path):
     file_path = workspace_path / file_name
     file_content = "Persistence ok!"
     text_content = "This goes inside the YAML file."
+    text_content_changed = "File content has changed."
 
     workspace_path.mkdir(parents=True, exist_ok=True)
     file_path.write_text(file_content, encoding="utf-8")
@@ -60,6 +61,12 @@ def test_persistence(tmp_path: Path):
 
     file_content2 = (workspace_path / data2.a_file_path).read_text(encoding="utf-8")
     assert file_content == file_content2
+
+    data2.a_text_content = text_content_changed
+    data2.save()
+    data1.reload()
+
+    assert data1.a_text_content == text_content_changed
 
 
 def test_exceptions():
