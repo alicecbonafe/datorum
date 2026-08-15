@@ -2,21 +2,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from ..binding import (
-    ContentType,
-    Binder, ContextBind, ResourceBind,
-    validate_factory_signature, get_resource_factory
+from .context.registry import (
+    validate_factory_signature,
+    get_resource_factory,
 )
-from ..context import DocumentContext
-from ..exceptions import OrchestratorException, InvalidContextBindException
-from ..inference import AgencyKit
-from ..pipeline import PipelineCollection, PipeFlow
-from ..security import SecurityBackend
-from ..tooling import ToolBoxSetUp, ToolKit
-from .base import Broadcaster, Worker, Job
+from .context.settings import (
+    DocumentContext,
+    ContextBind,
+    ResourceBind,
+)
+from .context.binder import Binder
+from .core.security import SecurityBackend
+from .work.job import Broadcaster, Job
+from .work.worker import Worker
+from .tooling.settings import ToolKit, ToolBoxSetUp
+from .agency.settings import AgencyKit
+from .plumbing.settings import PlumbingKit, PipeFlow
 
 
-@dataclass
+
+
+
 class DatorumProfile(Binder):
     ai_config: Optional[AgencyKit] = field(default=None)
     pipeline_collection: Optional[PipelineCollection] = field(default=None)

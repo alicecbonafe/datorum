@@ -96,7 +96,7 @@ class PipelineWorker(Worker):
                 raise PipelineWorkerError("Flow ID is required")
             if flow_id not in self.flows:
                 raise PipelineWorkerError(f"Flow '{flow_id}' not found")
-            return self.plumbing_kit.pipelines[flow_id]
+            return self.flows[flow_id]
 
     def get_flow_path(self, flow_id: str) -> Path:
         return self.flow_settings_path / f"{flow_id}.yml"
@@ -176,7 +176,7 @@ class PipelineWorker(Worker):
                 )
                 job.delegates.append(tool_job)
 
-                await job.update_status(JobStatus.WORKING, f"Calling tool '{tool_call.function.name}'")
+                await job.update_status(JobStatus.WORKING, f"Calling tool '{current_step.toolbox_setup.selector}'")
                 await self.tool_worker.run(tool_job)
                 await job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
 

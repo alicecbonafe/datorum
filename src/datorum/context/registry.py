@@ -114,11 +114,8 @@ def validate_factory_signature(func: Callable) -> bool:
         return True
 
     origin = get_origin(param_type)
-    if origin is Union:
+    if origin in (Union, types.UnionType):
         args = get_args(param_type)
-    # *** unreachable? ***
-    # elif hasattr(param_type, "__origin__") and param_type.__origin__ in (Union, types.UnionType):
-    #     args = param_type.__args__
     else:
         args = None
 
