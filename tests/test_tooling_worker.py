@@ -370,7 +370,7 @@ async def test_tool_worker_chat_history_no_tool_calls_raises(tmp_path: Path, gre
         resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.greet", field_id="toolbox_setup")],
     )
 
-    with pytest.raises(ToolWorkerError, match="Agent's tool call is empty"):
+    with pytest.raises(ToolWorkerError, match="Assistant's tool call is empty"):
         await worker.run(job)
 
     assert job.status == JobStatus.CRASHED
@@ -455,6 +455,72 @@ async def test_tool_worker_chat_history_new_file_creation(tmp_path: Path, greete
     saved: ChatHistory = result_chat_doc.load()
     assert len(saved.messages) == 1
     assert saved.messages[0].content == "Hello, NewUser"
+
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
+async def test_tool_worker_chat_history_user_message_only_raises(tmp_path: Path, greeter_box):
+    """Chat history contains only a UserMessage -> break on UserMessage and raise."""
+    ctx = _make_context(tmp_path)
+    prefix_doc = ctx.create_document(id="prefix_doc", doc_type="text/plain", doc_model="text")
+    chat_doc = ctx.create_document(id="chat", doc_type="application/json", doc_model="chat-history")
+    prefix_doc.save("Hi, ")
+    chat_doc.save(ChatHistory(messages=[UserMessage(content="Hello")]))
+
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["ping"]
+    )})
+    worker = _make_worker(ctx, toolkit)
+
+    job = Job(
+        id="job_chat_user",
+        context_bindings=[
+            ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
+            ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.ping", field_id="toolbox_setup")],
+    )
+
+    with pytest.raises(ToolWorkerError, match="Assistant's message not found"):
+        await worker.run(job)
+
+    assert job.status == JobStatus.CRASHED
+
+
+@pytest.mark.asyncio
+@pytest.mark.depends(on=["test_tool_worker_chat_history_same_document"])
+async def test_tool_worker_chat_history_empty_raises(tmp_path: Path, greeter_box):
+    """Empty chat history -> no break, but assistant_message remains None and raise."""
+    ctx = _make_context(tmp_path)
+    prefix_doc = ctx.create_document(id="prefix_doc", doc_type="text/plain", doc_model="text")
+    chat_doc = ctx.create_document(id="chat", doc_type="application/json", doc_model="chat-history")
+    prefix_doc.save("Hi, ")
+    chat_doc.save(ChatHistory(messages=[]))  # empty history
+
+    toolkit = ToolKit(toolboxes={"greeter1": ToolBoxSetUp(
+        id="greeter1",
+        toolbox_name="GreeterBox",
+        tools_enabled=["ping"]
+    )})
+    worker = _make_worker(ctx, toolkit)
+
+    job = Job(
+        id="job_chat_empty",
+        context_bindings=[
+            ContextBind(binded_id="prefix_doc", field_id="prefix", context_bind_type=ContextBindType.text),
+            ContextBind(binded_id="chat", field_id="tool_params", context_bind_type=ContextBindType.model),
+            ContextBind(binded_id="chat", field_id="tool_result", context_bind_type=ContextBindType.model_output),
+        ],
+        resource_bindings=[ResourceBind(factory_name="toolbox_setup", selector="greeter1.ping", field_id="toolbox_setup")],
+    )
+
+    with pytest.raises(ToolWorkerError, match="Assistant's message not found"):
+        await worker.run(job)
+
+    assert job.status == JobStatus.CRASHED
 
 
 @pytest.mark.asyncio

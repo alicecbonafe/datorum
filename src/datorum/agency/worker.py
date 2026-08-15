@@ -45,11 +45,15 @@ class AgentWorker(Worker):
         self.tool_worker: ToolWorker = tool_worker
 
         @self.resource(name="inference_provider")
-        def _inference_provider(provider_id: str) -> InferenceServiceProvider:
+        def _inference_provider(provider_id: str | None) -> InferenceServiceProvider:
+            if not provider_id:
+                raise AgentWorkerError("Provider ID is required")
             return self.get_provider(provider_id)
 
         @self.resource(name="agent_role")
-        def _agent_role(role_id: str) -> AgentRole:
+        def _agent_role(role_id: str | None) -> AgentRole:
+            if not role_id:
+                raise AgentWorkerError("Role ID is required")
             return self.get_role(role_id)
 
     def get_role(self, role_id: str) -> AgentRole:
@@ -334,7 +338,7 @@ class AgentWorker(Worker):
 
             if response_meta.get("finish_reason") == "tool_calls":
                 if not assistant_message.tool_calls:
-                    raise AgentWorkerError(f"Agent's tool call is empty")
+                    raise AgentWorkerError(f"Assistant's tool call is empty")
                 for tool_call in assistant_message.tool_calls:
                     await job.update_status(JobStatus.WORKING, f"Preparing tool call for '{tool_call.function.name}' (round {i})")
 

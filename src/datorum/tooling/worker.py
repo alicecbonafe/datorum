@@ -11,7 +11,12 @@ from ..context.settings import (
     ContextBind,
     ResourceBind,
 )
-from ..context.commons.chat import ChatHistory, AssistantMessage, ToolMessage
+from ..context.commons.chat import (
+    ChatHistory,
+    UserMessage,
+    AssistantMessage,
+    ToolMessage,
+)
 from ..work.job import JobStatus, Job
 from ..work.worker import Worker
 from .exceptions import ToolWorkerError
@@ -135,10 +140,19 @@ class ToolWorker(Worker):
 
         if params_doc.doc_model == "chat-history":
             chat_history: ChatHistory = params_doc.load()
-            assistant_message: AssistantMessage = chat_history.messages[-1]
-            if not assistant_message.tool_calls:
-                raise ToolWorkerError(
-                    f"Agent's tool call is empty")
+            assistant_message: Optional[AssistantMessage] = None
+            for msg in reversed(chat_history.messages):
+                if isinstance(msg, AssistantMessage):
+                    if not msg.tool_calls:
+                        raise ToolWorkerError("Assistant's tool call is empty")
+                    assistant_message = msg
+                    break
+                elif isinstance(msg, UserMessage):
+                    break
+            
+            if not assistant_message:
+                raise ToolWorkerError("Assistant's message not found")
+
             for tool_call in assistant_message.tool_calls:
                 if tool_call.function.name == f"{setup.id}.{setup.active_tool}":
                     params = json.loads(tool_call.function.arguments)
