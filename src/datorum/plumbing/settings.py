@@ -5,9 +5,8 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import Field, PrivateAttr, model_validator
 
-from .exceptions import InvalidIdentifierException
-from .settings import BaseDatorumPersistentSettings, BaseDatorumSettings
-from .wiring import InputPort, LivePort, OutputPort, ResourcePort
+from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
+from ..context.settings import ResourceBind, ContextBind
 
 
 class BasePipelineStep(BaseDatorumSettings):
@@ -16,56 +15,40 @@ class BasePipelineStep(BaseDatorumSettings):
     target_id: str | None = None
     description: str | None = None
 
-    _pipeline: Optional["Pipeline"] = PrivateAttr(default=None)
-
-    @property
-    def pipeline(self) -> "Pipeline":
-        if self._pipeline is None:
-            raise ValueError("Pipeline not found")
-        return self._pipeline
-
 
 class HumanInteractionStep(BasePipelineStep):
     type: Literal["human"] = "human"
 
-    dialog_port: LivePort = Field(default_factory=LivePort)
-    reference_ports: dict[str, LivePort] = Field(default_factory=dict)
+    chat_history: ContextBind
 
 
 class ToolStep(BasePipelineStep):
     type: Literal["tool"] = "tool"
 
-    toolbox_setup_id: str
-    tool_name: str
-    tool_params_port: InputPort = Field(default_factory=InputPort)
-    tool_result_port: OutputPort = Field(default_factory=OutputPort)
+    tool_params: ContextBind
+    tool_result: ContextBind
+    toolbox_setup: ResourceBind
+
+    custom_context: list[ContextBind] = Field(default_factory=list)
+    custom_resources: list[ResourceBind] = Field(default_factory=list)
 
 
 class AgentStep(BasePipelineStep):
     type: Literal["agent"] = "agent"
-    provider_id: str
-    role_id: str
 
-    system_instructions_port: InputPort = Field(default_factory=InputPort)
-    user_prompt_port: InputPort = Field(default_factory=InputPort)
-    chat_history_port: LivePort = Field(default_factory=LivePort)
-    output_port: OutputPort = Field(default_factory=OutputPort)
-
-    tools: list[str] = Field(default_factory=list)
-
-
-class CodeType(str, Enum):
-    FORMULA = "formula"
-    SNIPPET = "snippet"
+    chat_history: ContextBind
+    inference_provider: ResourceBind
+    agent_role: ResourceBind
 
 
 class DecisionStep(BasePipelineStep):
     type: Literal["decision"] = "decision"
+
     target_options: list[str] = Field(default_factory=list)
-    code_type: CodeType = CodeType.FORMULA
+    code_type: Literal["formula", "snippet"] = "formula"
     code: str = ""
 
-    input_port: InputPort = Field(default_factory=InputPort)
+    input_data: ContextBind
 
 
 class Pipeline(BaseDatorumSettings):
@@ -79,33 +62,8 @@ class Pipeline(BaseDatorumSettings):
     ] = Field(default_factory=dict)
     first_step_id: str = "in"
 
-    _parent: Union["PipelineCollection", "PipeFlow"] | None = PrivateAttr(default=None)
-
-    @property
-    def parent(self) -> Union["PipelineCollection", "PipeFlow"]:
-        if self._parent is None:
-            raise ValueError(f"Pipeline '{id}' has no parent")
-        return self._parent
-
-    @parent.setter
-    def parent(self, value: Union["PipelineCollection", "PipeFlow"]):
-        self._parent = value
-
-    @model_validator(mode="after")
-    def _post_init_setup(self) -> "Pipeline":
-        step_ids = [step.id for step in self.steps]
-        if len(step_ids) != len(set(step_ids)):
-            duplicates = [id for id, count in Counter(step_ids).items() if count > 1]
-            raise InvalidIdentifierException(
-                f"Duplicate step IDs found in '{self.id}': {duplicates}"
-            )
-        for step in self.steps:
-            step._pipeline = self
-        return self
-
 
 class PipeFlowState(str, Enum):
-    id: str
     planning = "planning"
     started = "started"
     paused = "paused"
@@ -114,6 +72,7 @@ class PipeFlowState(str, Enum):
 
 
 class PipeFlow(BaseDatorumPersistentSettings):
+    id: str
     pipeline: Pipeline
 
     state: PipeFlowState = PipeFlowState.planning
@@ -124,27 +83,15 @@ class PipeFlow(BaseDatorumPersistentSettings):
     last_updated_at: datetime | None = None
     finished_at: datetime | None = None
 
-    @model_validator(mode="after")
-    def _post_init_setup(self) -> "PipeFlow":
-        self.pipeline.parent = self
-        return self
+    def save(self):
+        now = datetime.now().astimezone()
+        if self.state != PipeFlowState.planning and self.started_at is None:
+            self.started_at = now
+        self.last_updated_at = now
+        if self.state in [PipeFlowState.finished, PipeFlowState.crashed] and self.finished_at is None:
+            self.finished_at = now
+        super().save()
 
 
-class PipelineCollection(BaseDatorumPersistentSettings):
-    pipelines: list[Pipeline] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _post_init_setup(self) -> "PipelineCollection":
-        pipeline_ids = [pipeline.id for pipeline in self.pipelines]
-        if len(pipeline_ids) != len(set(pipeline_ids)):
-            duplicates = [
-                id for id, count in Counter(pipeline_ids).items() if count > 1
-            ]
-            raise InvalidIdentifierException(
-                f"Duplicate pipeline IDs found in pipeline collection: {duplicates}"
-            )
-
-        for pipeline in self.pipelines:
-            pipeline.parent = self
-
-        return self
+class PlumbingKit(BaseDatorumPersistentSettings):
+    pipelines: dict[str, Pipeline] = Field(default_factory=dict)

@@ -1,10 +1,30 @@
 from datetime import datetime
-from typing import Optional
+import multiprocessing
+from pathlib import Path
+from typing import Optional, Any, Literal
+import uuid
 
-from ..context import DocumentReference
-from ..exceptions import PipelineWorkerException
-from ..inference import InferenceServiceProvider, AgentRole
-from ..pipeline import (
+from pydantic import BaseModel
+from RestrictedPython import compile_restricted_eval, compile_restricted_exec
+from RestrictedPython import safe_globals
+from RestrictedPython.Eval import default_guarded_getitem, default_guarded_getiter
+from RestrictedPython.Guards import (
+    safer_getattr,
+    guarded_iter_unpack_sequence,
+    guarded_unpack_sequence,
+)
+
+from ..agency.settings import InferenceServiceProvider, AgentRole
+from ..agency.worker import AgentWorker
+from ..context.settings import DocumentReference, ContextBind, ResourceBind
+from ..tooling.settings import ToolBoxSetUp
+from ..tooling.worker import ToolWorker
+from ..work.job import Job, JobStatus
+from ..work.worker import Worker
+from .exceptions import PipelineWorkerError
+from .settings import (
+    PlumbingKit,
+    Pipeline,
     PipeFlow,
     PipeFlowState,
     HumanInteractionStep,
@@ -12,187 +32,213 @@ from ..pipeline import (
     AgentStep,
     DecisionStep,
 )
-from ..tooling import ToolBoxSetUp
-from ..wiring import BasePort, DocumentBind
-from .base import Worker, Job, JobStatus
-from .agents import AgentWorker
-from .decisions import DecisionWorker
-from .tools import ToolWorker
+
+
+_MP_CONTEXT = multiprocessing.get_context("spawn")
+
+_CODE_TIMEOUT: float = 5.0
+
+_RESULT_VAR: str = "target"
+
+def _restricted_globals() -> dict[str, Any]:
+    g = dict(safe_globals)
+    g["_getattr_"] = safer_getattr               # blocks `_private`/dunder access
+    g["_getitem_"] = default_guarded_getitem      # input_data['field']
+    g["_getiter_"] = default_guarded_getiter      # for/comprehension support
+    g["_iter_unpack_sequence_"] = guarded_iter_unpack_sequence
+    g["_unpack_sequence_"] = guarded_unpack_sequence
+    return g
+
+def _run_code(
+    code: str,
+    mode: Literal["formula", "snippet"],
+    input_data: dict,
+    out_queue: "multiprocessing.Queue",
+) -> None:
+    try:
+        glb = _restricted_globals()
+        if mode == "formula":
+            compiled = compile_restricted_eval(code, filename=f"<{_RESULT_VAR}>")
+            if compiled.errors:
+                raise SyntaxError("; ".join(compiled.errors))
+            result = eval(compiled.code, glb, {"input_data": input_data})
+        else:
+            compiled = compile_restricted_exec(code, filename=f"<{_RESULT_VAR}>")
+            if compiled.errors:
+                raise SyntaxError("; ".join(compiled.errors))
+            loc: dict[str, Any] = {"input_data": input_data}
+            exec(compiled.code, glb, loc)
+            if _RESULT_VAR not in loc:
+                raise NameError(f"Snippet did not assign a value to '{_RESULT_VAR}'")
+            result = loc[_RESULT_VAR]
+        out_queue.put(("ok", result))
+    except BaseException as exc:
+        out_queue.put(("error", f"{type(exc).__name__}: {exc}"))
 
 
 class PipelineWorker(Worker):
+    required_resource_binds: list[str] = ["pipeflow"]
 
-    def __init__(
-        self,
-        pipeflow: PipeFlow,
-        providers: dict[str, InferenceServiceProvider],
-        provider_api_keys: dict[str, str],
-        roles: dict[str, AgentRole],
-        toolkit: list[ToolBoxSetUp],
+    def __init__(self,
+        flow_settings_path: Path,
+        agent_worker: AgentWorker,
+        tool_worker: ToolWorker,
     ):
-        super().__init__()
-        self.pipeflow = pipeflow
-        self.providers = providers
-        self.provider_api_keys = provider_api_keys
-        self.roles = roles
-        self.toolkit = toolkit
+        self.flow_settings_path: Path = flow_settings_path
+        self.agent_worker: AgentWorker = agent_worker
+        self.tool_worker: ToolWorker = tool_worker
 
-    async def _get_document(self, job: Job, port: BasePort) -> Optional[DocumentReference]:
-        if port.bind is None:
-            return None
-        if not isinstance(port.bind, DocumentBind):
-            raise PipelineWorkerException("Port is not binded to a document")
-        doc_id = port.bind.document_id
-        return job.context.documents.get(doc_id)
+        self.flows: dict[str, PipeFlow] = {}
 
-    async def save_flow(
-        self, *,
-        state: Optional[PipeFlowState] = None,
-        step_id: Optional[str] = None
-    ):
-        self.pipeflow.state = state or self.pipeflow.state
-        now = datetime.now().astimezone()
-        if state != PipeFlowState.planning and self.pipeflow.started_at is None:
-            self.pipeflow.started_at = now
-        self.pipeflow.last_updated_at = now
-        if state in [PipeFlowState.finished, PipeFlowState.crashed] and self.pipeflow.finished_at is None:
-            self.pipeflow.finished_at = now
-        self.pipeflow.save()
+        @self.resource(name="pipeflow")
+        def _pipeflow(flow_id: str | None):
+            if not flow_id:
+                raise PipelineWorkerError("Flow ID is required")
+            if flow_id not in self.flows:
+                raise PipelineWorkerError(f"Flow '{flow_id}' not found")
+            return self.plumbing_kit.pipelines[flow_id]
+
+    def get_flow_path(self, flow_id: str) -> Path:
+        return self.flow_settings_path / f"{flow_id}.yml"
+
+    def create_flow(self, pipeline: Pipeline) -> PipeFlow:
+        # TODO Should this be threadsafe?
+        _flow_id = f"pipeflow_{datetime.now().strftime("%Y%m%d_%H%M%S")}"
+        flow_id = _flow_id
+        flow_iter = 0
+        while flow_id in self.flows:
+            flow_id = f"{_flow_id}_{flow_iter}"
+            flow_iter += 1
+
+        pipeline_copy: Pipeline = pipeline.model_copy(deep=True)
+        pipeflow: PipeFlow = PipeFlow(
+            id=flow_id,
+            pipeline=pipeline_copy,
+        )
+        pipeflow.save_as(self.get_flow_path(flow_id))
+
+        self.flows[flow_id] = pipeflow
+        return pipeflow
+
+    def load_flow(self, flow_id: str) -> PipeFlow:
+        flow_path = self.get_flow_path(flow_id)
+        if not flow_path.exists():
+            raise PipelineWorkerError(f"Pipe flow '{flow_id}' not found")
+        pipeflow: PipeFlow = PipeFlow.load(flow_path)
+
+        self.flows[flow_id] = pipeflow
+        return pipeflow
 
     async def work(self, job: Job):
-        current_step_id: str | None = self.pipeflow.current_step_id
+        await job.update_status(JobStatus.WORKING, "Collecting pipeflow resources")
 
-        if current_step_id is None and self.pipeflow.started_at is None:
-            current_step_id = self.pipeflow.pipeline.first_step_id
-            self.pipeflow.current_step_id = current_step_id
-            await self.save_flow(state=PipeFlowState.started)
+        pipeflow_bind: ResourceBind = next(
+            bind for bind in job.resource_bindings \
+                if bind.field_id == "pipeflow"
+        )
+        pipeflow: PipeFlow = self.load_resource(pipeflow_bind)
 
-        while current_step_id is not None:
-            if current_step_id not in self.pipeflow.pipeline.steps:
-                raise PipelineWorkerException(f"Step '{current_step_id}' not found in Pipeline '{self.pipeflow.pipeline.id}'")
+        if pipeflow.state == PipeFlowState.planning:
+            await job.update_status(JobStatus.WORKING, "Initializing pipeflow")
+            pipeflow.current_step_id = pipeflow.pipeline.first_step_id
+            pipeflow.state = PipeFlowState.started
+            pipeflow.save()
+        else:
+            await job.update_status(JobStatus.WORKING, "Recovering pipeflow")
+            pipeflow.state = PipeFlowState.started
+            pipeflow.save()
 
-            current_step = self.pipeflow.pipeline.steps[current_step_id]
-            if current_step.type == "human":
-                assert isinstance(current_step, HumanInteractionStep)
+        while pipeflow.current_step_id is not None:
+            if pipeflow.current_step_id not in pipeflow.pipeline.steps:
+                raise PipelineWorkerError(f"Step '{pipeflow.current_step_id}' not found in Pipeline '{pipeflow.pipeline.id}'")
+
+            current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
+            if isinstance(current_step, HumanInteractionStep):
+                pipeflow.state = PipeFlowState.paused
+                pipeflow.save()
                 await job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")
-                await job.update_status(JobStatus.WORKING, "Resuming pipeline...")
-            elif current_step.type == "tool":
-                assert isinstance(current_step, ToolStep)
-                await job.update_status(JobStatus.WORKING, f"Running tool step '{current_step_id}'...")
+                await job.update_status(JobStatus.WORKING, "Resuming pipeflow...")
 
-                tool_params_doc = await self._get_document(
-                    job=job, port=current_step.tool_params_port)
-                tool_result_doc = await self._get_document(
-                    job=job, port=current_step.tool_result_port)
+            elif isinstance(current_step, ToolStep):
+                await job.update_status(JobStatus.WORKING, f"Running tool step '{pipeflow.current_step_id}'...")
 
-                documents = {}
-                if tool_params_doc is not None:
-                    documents["tool_params"] = tool_params_doc
-                if tool_result_doc is not None:
-                    documents["tool_result"] = tool_result_doc
-                tool_job = ToolWorker.create_delegated_job(
-                    origin=job, include_docs=documents)
-
-                toolbox = next((
-                    toolbox for toolbox in self.toolkit \
-                        if toolbox.id == current_step.toolbox_setup_id
-                ), None)
-                if toolbox is None:
-                    raise PipelineWorkerException(f"Toolbox '{current_step.toolbox_setup_id}' not found")
-                tool_worker = ToolWorker(
-                    job=tool_job,
-                    toolbox=toolbox,
-                    tool_name=current_step.tool_name,
+                tool_job: Job = Job(
+                    id=f"{job.id}_tool_{uuid.uuid4().hex[:6]}",
+                    context_bindings=[
+                        current_step.tool_params,
+                        current_step.tool_result,
+                        *current_step.custom_context
+                    ],
+                    resource_bindings=[
+                        current_step.toolbox_setup,
+                        *current_step.custom_resources
+                    ]
                 )
+                job.delegates.append(tool_job)
 
-                await job.update_status(JobStatus.WORKING, "Starting tool worker...")
-                await tool_worker.run()
+                await job.update_status(JobStatus.WORKING, f"Calling tool '{tool_call.function.name}'")
+                await self.tool_worker.run(tool_job)
                 await job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
 
-            elif current_step.type == "agent":
-                assert isinstance(current_step, AgentStep)
-                await job.update_status(JobStatus.WORKING, f"Running agent step '{current_step_id}'...")
+            elif isinstance(current_step, AgentStep):
+                await job.update_status(JobStatus.WORKING, f"Running agent step '{pipeflow.current_step_id}'...")
 
-                system_instructions_doc = await self._get_document(
-                    job=job, port=current_step.system_instructions_port)
-                user_prompt_doc = await self._get_document(
-                    job=job, port=current_step.user_prompt_port)
-                chat_history_doc = await self._get_document(
-                    job=job, port=current_step.chat_history_port)
-                output_doc = await self._get_document(
-                    job=job, port=current_step.output_port)
-
-                documents = {}
-                if system_instructions_doc is not None:
-                    documents["system_instructions"] = system_instructions_doc
-                if user_prompt_doc is not None:
-                    documents["user_prompt"] = user_prompt_doc
-                if chat_history_doc is not None:
-                    documents["chat_history"] = chat_history_doc
-                if output_doc is not None:
-                    documents["output"] = output_doc
-                agent_job = AgentWorker.create_delegated_job(
-                    origin=job, include_docs=documents)
-
-                agent_toolkit: list[ToolBoxSetUp] = []
-                for toolbox_setup in self.toolkit:
-                    toolbox_setup_new: Optional[ToolBoxSetUp] = None
-                    for tool in toolbox_setup.tools_enabled:
-                        tool_id = f"{toolbox_setup.id}.{tool}"
-                        if tool_id in current_step.tools:
-                            if toolbox_setup_new is None:
-                                toolbox_setup_new = ToolBoxSetUp(
-                                    id=f"{toolbox_setup.id}-subset-{uuid.uuid4().hex[:6]}",
-                                    toolbox_name=toolbox_setup.toolbox_name,
-                                    custom_ports=toolbox_setup.custom_ports
-                                )
-                            toolbox_setup_new.tools_enabled.append(tool)
-                    if toolbox_setup_new is not None:
-                        agent_toolkit.append(toolbox_setup_new)
-
-                agent_worker = AgentWorker(
-                    job=agent_job,
-                    provider=self.providers[current_step.provider_id],
-                    role=self.roles[current_step.role_id],
-                    api_key=self.provider_api_keys[current_step.provider_id],
-                    toolkit=agent_toolkit,
+                agent_job: Job = Job(
+                    id=f"{job.id}_tool_{uuid.uuid4().hex[:6]}",
+                    context_bindings=[
+                        current_step.chat_history,
+                    ],
+                    resource_bindings=[
+                        current_step.inference_provider,
+                        current_step.agent_role,
+                    ]
                 )
+                job.delegates.append(agent_job)
 
                 await job.update_status(JobStatus.WORKING, "Starting agent worker...")
-                await agent_worker.run(job=agent_job)
+                await self.agent_worker.run(job=agent_job)
                 await job.update_status(JobStatus.WORKING, "Agent worker has completed the job.")
 
-            elif current_step.type == "decision":
-                assert isinstance(current_step, DecisionStep)
-                await job.update_status(JobStatus.WORKING, f"Running decision step '{current_step_id}'...")
+            elif isinstance(current_step, DecisionStep):
+                await job.update_status(JobStatus.WORKING, f"Running decision step '{pipeflow.current_step_id}'...")
 
-                input_doc = await self._get_document(
-                    job=job, port=current_step.input_port)
-                include_docs = {"input": input_doc} if input_doc else {}
-                decision_job = DecisionWorker.create_delegated_job(
-                    origin=job, include_docs=include_docs)
+                input_data = self.pull_context(current_step.input_data)
+                if isinstance(input_data, BaseModel):
+                    input_data = input_data.model_dump(mode="json")
+        
+                if not isinstance(input_data, dict):
+                    raise PipelineWorkerError(f"Invalid data input type: '{type(input_data)}'")
 
-                decision_job.context.custom["code"] = current_step.code
-                decision_job.context.custom["code_type"] = current_step.code_type
+                await job.update_status(JobStatus.WORKING, "Running decision code")
+                out_queue: "multiprocessing.Queue" = _MP_CONTEXT.Queue()
+                process = _MP_CONTEXT.Process(
+                    target=_run_code,
+                    args=(current_step.code, current_step.code_type, input_data, out_queue),
+                    daemon=True,
+                )
+                process.start()
+                process.join(_CODE_TIMEOUT)
 
-                await job.update_status(JobStatus.WORKING, "Starting decision worker...")
-                await DecisionWorker(
-                    job=decision_job,
-                    code=current_step.code,
-                    code_type=current_step.code_type,
-                ).run()
+                await job.update_status(JobStatus.WORKING, "Validating results")
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+                    raise PipelineWorkerError(f"Timed out after {_CODE_TIMEOUT}s")
 
-                await job.update_status(JobStatus.WORKING, "Validating target...")
-                if decision_job.result is None:
-                    raise PipelineWorkerException(f"Decision step '{current_step_id}' did not select a target")
-                target_id = decision_job.result
-                if target_id not in current_step.target_options:
-                    raise PipelineWorkerException(f"Decision step '{current_step_id}' selected an invalid target: '{target_id}'")
-                current_step.target_id = target_id
+                if out_queue.empty():
+                    raise PipelineWorkerError(f"Process exited without a result (exit code {process.exitcode})",)
 
-                await job.update_status(JobStatus.WORKING, "Decision worker has completed the job.")
+                status, result = out_queue.get()
+                if status != "ok":
+                    raise PipelineWorkerError(f"Process error reported: {result}")
 
-            self.pipeflow.step_history.append(current_step_id)
-            current_step_id = current_step.target_id
-            self.pipeflow.current_step_id = current_step_id
-            await self.save_flow()
+                if result not in current_step.target_options:
+                    raise PipelineWorkerError(f"Target step '{result}' is not a valid option")
+
+                current_step.target_id = result
+
+                await job.update_status(JobStatus.WORKING, f"Chosen target: {result}")
+
+            pipeflow.step_history.append(pipeflow.current_step_id)
+            pipeflow.current_step_id = current_step.target_id
+            pipeflow.save()
