@@ -11,24 +11,20 @@ license = "Apache-2.0"
 authors = [{ name = "Datorum Team" }]
 requires-python = ">=3.14"
 dependencies = [
-    "cryptography>=49.0",
-    "openai>=2.47",
     "pydantic>=2.13",
+    "httpx>=0.28"
     "python-dotenv>=1.2",
-    "pytest_httpserver>=1.1",
     "beautifulsoup4>=4.15",
     "pyyaml>=6.0",
     "requests>=2.34",
-    "typer>=0.27",
-    "keyring>=25.7",
     "tomli_w>=1.2",
-    "RestrictedPython>=8.4",
-    "dataclasses>=0.6"
+    "RestrictedPython>=8.4"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9.1",
+    "pytest_httpserver>=1.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
@@ -38,6 +34,7 @@ dev = [
 ]
 test = [
     "pytest>=9.1",
+    "pytest_httpserver>=1.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
@@ -45,6 +42,7 @@ test = [
 ]
 lint = [
     "pytest>=9.1",
+    "pytest_httpserver>=1.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
@@ -54,7 +52,7 @@ lint = [
 ]
 
 [project.scripts]
-datorum = "datorum.cli:app"
+# datorum = "datorum.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
