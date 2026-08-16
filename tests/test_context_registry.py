@@ -11,16 +11,17 @@ from datorum.context.registry import (
     DocumentHandler,
     DocumentModel,
     doc_model,
-    resource,
     find_handlers,
-    validate_factory_signature,
     register_doc_type,
     register_doc_model,
     register_pydantic_based_handler,
-    register_resource_factory,
     get_doc_type,
     get_doc_model,
     get_doc_handler,
+)
+from datorum.binding.registry import (  # TODO New tester
+    validate_factory_signature,
+    resource,
     get_resource_factory,
 )
 from datorum.context.commons.markdown import MarkdownDocument

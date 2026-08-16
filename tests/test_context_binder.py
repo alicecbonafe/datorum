@@ -9,19 +9,21 @@ from datorum.context.registry import (
     serializer, deserializer,
 )
 from datorum.context.settings import (
-    ContextBindType,
-    ContextBind, ResourceBind,
     DocumentReference,
     DocumentContext,
 )
-from datorum.context.registry import (
+from datorum.binding.settings import (
+    ContextBindType,
+    ContextBind, ResourceBind,
+)
+from datorum.binding.registry import (
     validate_factory_signature,
     resource, get_resource_factory,
 )
-from datorum.context.binder import (
+from datorum.binding.binder import (
     Binder,
 )
-from datorum.context.exceptions import (
+from datorum.binding.exceptions import (
     ResourceBindingError,
     ContextBindingError,
 )

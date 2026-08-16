@@ -11,6 +11,10 @@ from typing import (
     get_args,
 )
 
+from ..context.settings import (
+    DocumentReference,
+    DocumentContext,
+)
 from .exceptions import (
     ResourceBindingError,
     ContextBindingError,
@@ -18,10 +22,6 @@ from .exceptions import (
 from .registry import (
     validate_factory_signature,
     get_resource_factory,
-)
-from .settings import (
-    DocumentReference,
-    DocumentContext,
 )
 
 

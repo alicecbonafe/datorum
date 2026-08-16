@@ -1,9 +1,9 @@
 import os
 import re
-from collections.abc import Mapping
-from typing import Callable
+from collections.abc import Mapping, Callable
 
-from .exceptions import InvalidKeyNameError, KeyNotFoundError
+from .registry import resource, ResourceFactoryRegistry
+from .exceptions import KeyNotFoundError, InvalidKeyNameError
 
 
 DEFAULT_KEY_NAME_MATCH = r"^[A-Za-z_][A-Za-z0-9_]*$"
