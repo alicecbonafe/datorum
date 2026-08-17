@@ -1,13 +1,12 @@
 data
-llm_context.txt
 .env
 __pycache__
 venv
 datorum-env
 .context.json
 *.egg-info
-test_results.txt
 .coverage
 .mypy_cache
 .pytest_cache
 .ruff_cache
+.tmp
