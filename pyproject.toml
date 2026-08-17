@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=70.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,16 +22,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=9.1",
-    "pytest_httpserver>=1.1",
-    "pytest-cov>=7.1",
-    "pytest-mock>=3.15",
-    "pytest-depends>=1.0",
-    "pytest-asyncio>=1.4",
-    "ruff>=0.16",
-    "mypy>=2.3",
-]
 test = [
     "pytest>=9.1",
     "pytest_httpserver>=1.1",
@@ -41,14 +31,12 @@ test = [
     "pytest-asyncio>=1.4",
 ]
 lint = [
-    "pytest>=9.1",
-    "pytest_httpserver>=1.1",
-    "pytest-cov>=7.1",
-    "pytest-mock>=3.15",
-    "pytest-depends>=1.0",
-    "pytest-asyncio>=1.4",
+    "datorum[test]",
     "ruff>=0.16",
     "mypy>=2.3",
+]
+dev = [
+    "datorum[lint]",
 ]
 
 # [project.scripts]
@@ -61,8 +49,10 @@ include = ["datorum*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# No --cov-fail-under here on purpose: local/dev runs should show coverage
+# without failing the run. The 100% gate is enforced in CI (.woodpecker.yml).
 addopts = "-v --cov=datorum --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py314"

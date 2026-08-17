@@ -5,7 +5,7 @@ import uuid
 import httpx
 from pydantic import BaseModel
 
-from ..context.settings import (
+from ..binding.settings import (
     ResourceBind,
     ContextBind,
     ContextBindType,

@@ -20,7 +20,7 @@ steps:
     commands:
       - pip install --upgrade pip
       - pip install -e .[test]
-      - pytest --cov=datorum --cov-fail-under=100 -v
+      - pytest --cov-fail-under=100
     when:
       - event: push
         branch: main
