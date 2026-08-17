@@ -5,6 +5,7 @@ from typing import Any, Optional, Literal
 
 from pydantic import BaseModel
 
+from ..binding.binder import Binder
 from ..context.settings import (
     DocumentContext,
     DocumentReference,
@@ -24,15 +25,15 @@ from .registry import ToolBox, ToolBoxDefinition, get_toolbox_definition
 from .settings import ToolBoxSetUp, ToolKit
 
 
-
 class ToolWorker(Worker):
     required_context_binds: list[str] = ["tool_params", "tool_result"]
     required_resource_binds: list[str] = ["toolbox_setup"]
 
-    def __init__(self, toolkit: ToolKit):
+    def __init__(self, binder: Binder, toolkit: ToolKit):
+        super().__init__(binder)
         self.toolkit: ToolKit = toolkit
 
-        @self.resource(name="toolbox_setup")
+        @self.binder.resource(name="toolbox_setup")
         def _toolbox_setup(selector: str | None) -> ToolBoxSetUp:
             if not selector:
                 raise ToolWorkerError("Missing toolbox selector")
@@ -70,7 +71,7 @@ class ToolWorker(Worker):
                 if bind.field_id == "tool_result"
         )
 
-        setup: ToolBoxSetUp = self.load_resource(setup_bind)
+        setup: ToolBoxSetUp = self.binder.load_resource(setup_bind)
         toolbox_def: ToolBoxDefinition = get_toolbox_definition(
             setup.toolbox_name)
 
@@ -103,7 +104,7 @@ class ToolWorker(Worker):
                             f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
                     continue
 
-            field_value: Any = self.pull_context(field_bind)
+            field_value: Any = self.binder.pull_context(field_bind)
             setattr(toolbox, field.attr_name, field_value)
 
         for field_name, field in toolbox_def.resource_fields.items():
@@ -122,14 +123,14 @@ class ToolWorker(Worker):
                             f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
                     continue
 
-            field_value: Any = self.load_resource(field_bind)
+            field_value: Any = self.binder.load_resource(field_bind)
             setattr(toolbox, field.attr_name, field_value)
 
-        params_doc = self.find_document(
+        params_doc = self.binder.find_document(
             document_id=params_bind.binded_id,
             context=params_bind.context
         )
-        result_doc = self.find_document(
+        result_doc = self.binder.find_document(
             document_id=result_bind.binded_id,
             context=result_bind.context
         )
@@ -211,5 +212,5 @@ class ToolWorker(Worker):
                 continue
 
             field_value: Any = getattr(toolbox, field.attr_name)
-            self.push_context(field_bind, field_value)
+            self.binder.push_context(field_bind, field_value)
 

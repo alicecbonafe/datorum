@@ -43,10 +43,6 @@ class Binder:
         return self._factories
 
     def add_context(self, context: DocumentContext) -> DocumentContext:
-        context = DocumentContext.load(
-            settings_path=settings_path)
-        if base_path is not None:
-            context.base_path = base_path
         self.contexts[context.id] = context
         return context
 

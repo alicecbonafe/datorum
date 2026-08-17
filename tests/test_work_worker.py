@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 
+from datorum.binding.binder import Binder
 from datorum.context.settings import ContextBind, ResourceBind
 from datorum.work.exceptions import WorkerStartUpError
 from datorum.work.job import Job, JobStatus
@@ -41,7 +42,7 @@ class BoundWorker(Worker):
 @pytest.mark.asyncio
 @pytest.mark.depends(on=["tests/test_work_job.py"])
 async def test_worker_run_success():
-    worker = DummyWorker()
+    worker = DummyWorker(binder=Binder())
     job = Job(id="job_run_success")
 
     await worker.run(job)
@@ -58,7 +59,7 @@ async def test_worker_run_success():
 @pytest.mark.asyncio
 @pytest.mark.depends(on=["test_worker_run_success"])
 async def test_worker_run_failure():
-    worker = FailingWorker()
+    worker = FailingWorker(binder=Binder())
     job = Job(id="job_run_failure")
 
     with pytest.raises(ValueError, match="Worker process crashed unexpectedly!"):
@@ -79,7 +80,7 @@ async def test_worker_run_failure():
 
 @pytest.mark.depends(on=["test_worker_run_failure"])
 def test_worker_start_non_idle_raises_error():
-    worker = DummyWorker()
+    worker = DummyWorker(binder=Binder())
     job = Job(id="job_not_idle")
     job.status = JobStatus.WORKING
 
@@ -89,7 +90,7 @@ def test_worker_start_non_idle_raises_error():
 
 @pytest.mark.depends(on=["test_worker_run_failure"])
 def test_worker_start_missing_bindings_raises_error():
-    worker = BoundWorker()
+    worker = BoundWorker(binder=Binder())
     job = Job(id="job_missing_binds")
 
     with pytest.raises(WorkerStartUpError, match="Missing bindings for job 'job_missing_binds'"):
@@ -99,7 +100,7 @@ def test_worker_start_missing_bindings_raises_error():
 @pytest.mark.asyncio
 @pytest.mark.depends(on=["test_worker_run_success"])
 async def test_worker_start_and_launch_success():
-    worker = BoundWorker()
+    worker = BoundWorker(binder=Binder())
     job = Job(
         id="job_valid_binds",
         context_bindings=[
@@ -122,7 +123,7 @@ async def test_worker_start_and_launch_success():
 @pytest.mark.asyncio
 @pytest.mark.depends(on=["test_worker_run_failure"])
 async def test_worker_launch_suppresses_background_exception():
-    worker = FailingWorker()
+    worker = FailingWorker(binder=Binder())
     job = Job(id="job_background_crash")
 
     # start() schedules _launch as an asyncio task

@@ -5,6 +5,7 @@ from typing import Optional
 import pytest
 from pydantic import BaseModel
 
+from datorum.binding.binder import Binder
 from datorum.context.settings import (
     ContextBind,
     ContextBindType,
@@ -129,8 +130,9 @@ def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
 
 
 def _make_worker(ctx: DocumentContext, toolkit: ToolKit) -> ToolWorker:
-    worker = ToolWorker(toolkit=toolkit)
-    worker.contexts[ctx.id] = ctx
+    binder = Binder()
+    binder.contexts[ctx.id] = ctx
+    worker = ToolWorker(binder=binder, toolkit=toolkit)
     return worker
 
 
@@ -755,11 +757,11 @@ async def test_tool_worker_resource_bindings(tmp_path: Path, resourceful_box):
     )})
     worker = _make_worker(ctx, toolkit)
 
-    @worker.resource(name="in_parentheses")
+    @worker.binder.resource(name="in_parentheses")
     def in_parentheses(text):
         return f"({text})"
 
-    assert "in_parentheses" in worker.factories.keys()
+    assert "in_parentheses" in worker.binder.factories.keys()
 
     binding1 = ResourceBind(field_id="req_res", factory_name="in_parentheses", selector="req")
 

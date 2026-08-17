@@ -79,10 +79,9 @@ def test_binder(tmp_path: Path,):
     doc_bytes.save(doc_bytes_content)
 
     binder = Binder()
-    binder.add_context(
-        settings_path=tmp_path / f"{ctx_id}.yml",
-        base_path=tmp_path
-    )
+    context: DocumentContext = DocumentContext.load(tmp_path / f"{ctx_id}.yml")
+    context.base_path = tmp_path
+    binder.add_context(context)
 
     assert binder.find_domain_context(
         domain=f"{domain_1}.{domain_2}"

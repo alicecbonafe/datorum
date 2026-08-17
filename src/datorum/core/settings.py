@@ -137,15 +137,25 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
 
     def save_as(self, settings_path: Path):
         self.settings_path = settings_path
+        if self.persistent is not self:
+            self._set_persistent_recursive(self)
         self.save()
 
     def save(self):
+        if self.persistent is not self:
+            self.persistent.save()
+            return
+
         data = self.model_dump(mode="python")
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
         with self.settings_path.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, sort_keys=False, Dumper=DatorumDumper)
 
     def reload(self):
+        if self.persistent is not self:
+            self.persistent.reload()
+            return
+
         with self.settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         updated_instance = self.__class__.model_validate(data)

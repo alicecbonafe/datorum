@@ -17,6 +17,7 @@ from RestrictedPython.Guards import (
 
 from ..agency.settings import InferenceServiceProvider, AgentRole
 from ..agency.worker import AgentWorker
+from ..binding.binder import Binder
 from ..context.settings import DocumentReference, ContextBind, ResourceBind
 from ..tooling.settings import ToolBoxSetUp
 from ..tooling.worker import ToolWorker
@@ -78,10 +79,12 @@ def _run_code(
 class PipelineWorker(Worker):
 
     def __init__(self,
+        binder: Binder,
         plumbingkit: PlumbingKit,
         agent_worker: AgentWorker,
         tool_worker: ToolWorker,
     ):
+        super().__init__(binder)
         self.plumbingkit: PlumbingKit = plumbingkit
         self.agent_worker: AgentWorker = agent_worker
         self.tool_worker: ToolWorker = tool_worker
@@ -108,7 +111,7 @@ class PipelineWorker(Worker):
                     flow_files[flow_id] = candidate
                     last_index = max(index, last_index)
 
-        @self.resource(name="create_pipeflow", force=True)
+        @self.binder.resource(name="create_pipeflow", force=True)
         def _create_pipeflow(pipeline_id) -> PipeFlow:
             nonlocal last_index
 
@@ -140,7 +143,7 @@ class PipelineWorker(Worker):
             pipeflow.save_as(flow_file)
             return pipeflow
 
-        @self.resource(name="restore_pipeflow", force=True)
+        @self.binder.resource(name="restore_pipeflow", force=True)
         def _restore_pipeflow(flow_id) -> PipeFlow:
             if not flow_id:
                 raise PipelineWorkerError("Pipeflow ID is required")
@@ -154,7 +157,7 @@ class PipelineWorker(Worker):
             return PipeFlow.load(flow_files[flow_id])
 
     def create_flow(self, pipeline_id: str):
-        return self.load_resource(ResourceBind(
+        return self.binder.load_resource(ResourceBind(
             field_id="pipeflow",
             factory_name="create_pipeflow",
             selector=pipeline_id,
@@ -169,7 +172,7 @@ class PipelineWorker(Worker):
                 if bind.factory_name == "restore_pipeflow"), None
         )
         if pipeflow_bind:
-            pipeflow = self.load_resource(pipeflow_bind)
+            pipeflow = self.binder.load_resource(pipeflow_bind)
         else:
             pipeline_bind: ResourceBind = next(
                 (bind for bind in job.resource_bindings \
@@ -177,7 +180,7 @@ class PipelineWorker(Worker):
             )
             if not pipeline_bind:
                 raise PipelineWorkerError(f"Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'")
-            pipeflow = self.load_resource(pipeline_bind)
+            pipeflow = self.binder.load_resource(pipeline_bind)
 
         if pipeflow.id in self._active_flows:
             raise PipelineWorkerError(f"Pipeflow '{pipeflow.id}' already running in job '{job.id}'")
@@ -250,7 +253,7 @@ class PipelineWorker(Worker):
                 elif isinstance(current_step, DecisionStep):
                     await job.update_status(JobStatus.WORKING, f"Running decision step '{pipeflow.current_step_id}'...")
 
-                    input_data = self.pull_context(current_step.input_data)
+                    input_data = self.binder.pull_context(current_step.input_data)
                     if isinstance(input_data, BaseModel):
                         input_data = input_data.model_dump(mode="json")
             

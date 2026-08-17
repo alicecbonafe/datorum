@@ -10,6 +10,7 @@ from ..binding.settings import (
     ContextBind,
     ContextBindType,
 )
+from ..binding.binder import Binder
 from ..context.registry import get_doc_model, DocumentModel
 from ..context.commons.chat import (
     ChatHistory,
@@ -38,19 +39,21 @@ class AgentWorker(Worker):
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
     def __init__(self,
+        binder: Binder,
         agencykit: AgencyKit,
         tool_worker: ToolWorker,
     ):
+        super().__init__(binder)
         self.agencykit: AgencyKit = agencykit
         self.tool_worker: ToolWorker = tool_worker
 
-        @self.resource(name="inference_provider")
+        @self.binder.resource(name="inference_provider")
         def _inference_provider(provider_id: str | None) -> InferenceServiceProvider:
             if not provider_id:
                 raise AgentWorkerError("Provider ID is required")
             return self.get_provider(provider_id)
 
-        @self.resource(name="agent_role")
+        @self.binder.resource(name="agent_role")
         def _agent_role(role_id: str | None) -> AgentRole:
             if not role_id:
                 raise AgentWorkerError("Role ID is required")
@@ -269,17 +272,17 @@ class AgentWorker(Worker):
             raise AgentWorkerError(
                 f"The field 'chat_history' must be binded to an input-output model (received: '{chat_bind.context_bind_type}')")
 
-        role: AgentRole = self.load_resource(role_bind)
-        provider: InferenceServiceProvider = self.load_resource(provider_bind) \
+        role: AgentRole = self.binder.load_resource(role_bind)
+        provider: InferenceServiceProvider = self.binder.load_resource(provider_bind) \
             if provider_bind else self.get_preferred_provider(role.preferred_models)
 
-        api_key: str = self.load_resource(ResourceBind(
+        api_key: str = self.binder.load_resource(ResourceBind(
             field_id="api_key",
             factory_name="api_key",
             selector=provider.api_key_selector or provider.id,
         ))
 
-        chat_doc = self.find_document(
+        chat_doc = self.binder.find_document(
             document_id=chat_bind.binded_id,
             context=chat_bind.context
         )

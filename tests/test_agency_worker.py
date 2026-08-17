@@ -9,6 +9,7 @@ from werkzeug.wrappers import Response
 from datorum.agency.exceptions import AgentWorkerError
 from datorum.agency.settings import AgencyKit, AgentRole, InferenceServiceProvider
 from datorum.agency.worker import AgentWorker
+from datorum.binding.binder import Binder
 from datorum.context.commons.chat import ChatHistory, SystemMessage, UserMessage
 from datorum.context.registry import DocumentModelRegistry, register_doc_model
 from datorum.context.settings import (
@@ -61,12 +62,12 @@ def _make_agent_worker(
     """Build an AgentWorker + ToolWorker pair wired to the same context, with a
     stubbed `api_key` resource factory (a real deployment would resolve this
     from a secrets store, which is out of scope here)."""
-    tool_worker = ToolWorker(toolkit=toolkit or ToolKit())
-    worker = AgentWorker(agencykit=agencykit, tool_worker=tool_worker)
-    worker.contexts[ctx.id] = ctx
-    tool_worker.contexts[ctx.id] = ctx
+    binder: Binder = Binder()
+    binder.contexts[ctx.id] = ctx
+    tool_worker = ToolWorker(binder=binder, toolkit=toolkit or ToolKit())
+    worker = AgentWorker(binder=binder, agencykit=agencykit, tool_worker=tool_worker)
 
-    @worker.resource(name="api_key")
+    @binder.resource(name="api_key")
     def _api_key(selector: Optional[str]) -> str:
         return api_key
 

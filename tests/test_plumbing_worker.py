@@ -6,6 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 import datorum.plumbing.worker as worker_mod
+from datorum.binding.binder import Binder
 from datorum.context.settings import (
     ContextBind,
     ContextBindType,
@@ -69,7 +70,9 @@ def _make_pipeline_worker(
     construct with a PlumbingKit, then separately call
     register_flow_factories() to hook up `create_pipeflow`/`restore_pipeflow`
     against a directory on disk."""
+    binder: Binder = Binder()
     worker = PipelineWorker(
+        binder=binder,
         plumbingkit=plumbingkit or PlumbingKit(),
         agent_worker=agent_worker or _StubWorker(),
         tool_worker=tool_worker or _StubWorker(),
@@ -249,20 +252,20 @@ def test_run_code_runtime_exception_is_captured():
 
 def test_register_flow_factories_registers_create_and_restore(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
-    assert "create_pipeflow" in worker.factories
-    assert "restore_pipeflow" in worker.factories
+    assert "create_pipeflow" in worker.binder.factories
+    assert "restore_pipeflow" in worker.binder.factories
 
 
 def test_create_pipeflow_requires_pipeline_id(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     with pytest.raises(PipelineWorkerError, match="Pipeline ID is required"):
-        worker.factories["create_pipeflow"](None)
+        worker.binder.factories["create_pipeflow"](None)
 
 
 def test_create_pipeflow_unknown_pipeline(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     with pytest.raises(PipelineWorkerError, match="Pipeline 'missing' not found"):
-        worker.factories["create_pipeflow"]("missing")
+        worker.binder.factories["create_pipeflow"]("missing")
 
 
 def test_create_pipeflow_generates_id_and_persists(tmp_path):
@@ -271,7 +274,7 @@ def test_create_pipeflow_generates_id_and_persists(tmp_path):
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
 
-    flow = worker.factories["create_pipeflow"]("pipe1")
+    flow = worker.binder.factories["create_pipeflow"]("pipe1")
 
     assert flow.id == "flow_0"
     assert flow.pipeline is not pipeline  # deep-copied
@@ -285,8 +288,8 @@ def test_create_pipeflow_resolves_id_collisions(tmp_path):
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
 
-    first = worker.factories["create_pipeflow"]("pipe1")
-    second = worker.factories["create_pipeflow"]("pipe1")
+    first = worker.binder.factories["create_pipeflow"]("pipe1")
+    second = worker.binder.factories["create_pipeflow"]("pipe1")
 
     assert first.id == "flow_0"
     assert second.id == "flow_1"
@@ -305,7 +308,7 @@ def test_create_pipeflow_skips_index_of_preexisting_file_on_disk(tmp_path):
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
 
-    flow = worker.factories["create_pipeflow"]("pipe1")
+    flow = worker.binder.factories["create_pipeflow"]("pipe1")
     assert flow.id == "flow_1"
 
 
@@ -317,7 +320,7 @@ def test_create_pipeflow_respects_custom_id_template(tmp_path):
         flow_id_template="pf_{index}_run",
     )
 
-    flow = worker.factories["create_pipeflow"]("pipe1")
+    flow = worker.binder.factories["create_pipeflow"]("pipe1")
     assert flow.id == "pf_0_run"
     assert (tmp_path / "flows" / "pf_0_run.yml").exists()
 
@@ -325,13 +328,13 @@ def test_create_pipeflow_respects_custom_id_template(tmp_path):
 def test_restore_pipeflow_requires_flow_id(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     with pytest.raises(PipelineWorkerError, match="Pipeflow ID is required"):
-        worker.factories["restore_pipeflow"](None)
+        worker.binder.factories["restore_pipeflow"](None)
 
 
 def test_restore_pipeflow_unknown_flow(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     with pytest.raises(PipelineWorkerError, match="Pipeflow 'missing' not found"):
-        worker.factories["restore_pipeflow"]("missing")
+        worker.binder.factories["restore_pipeflow"]("missing")
 
 
 def test_restore_pipeflow_loads_created_flow(tmp_path):
@@ -339,9 +342,9 @@ def test_restore_pipeflow_loads_created_flow(tmp_path):
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
-    created = worker.factories["create_pipeflow"]("pipe1")
+    created = worker.binder.factories["create_pipeflow"]("pipe1")
 
-    restored = worker.factories["restore_pipeflow"](created.id)
+    restored = worker.binder.factories["restore_pipeflow"](created.id)
 
     assert restored.id == created.id
     assert restored.pipeline.id == "pipe1"
@@ -357,7 +360,7 @@ def test_restore_pipeflow_finds_flow_file_not_yet_seen_this_session(tmp_path):
     flow.save_as(flow_dir / "flow_7.yml")
 
     worker = _make_pipeline_worker(tmp_path)
-    restored = worker.factories["restore_pipeflow"]("flow_7")
+    restored = worker.binder.factories["restore_pipeflow"]("flow_7")
     assert restored.id == "flow_7"
 
 
@@ -401,7 +404,7 @@ async def test_work_recovers_non_planning_flow(tmp_path):
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
 
-    created = worker.factories["create_pipeflow"]("pipe1")
+    created = worker.binder.factories["create_pipeflow"]("pipe1")
     # simulate a flow that was already mid-run and persisted in that state
     created.state = PipeFlowState.paused
     created.current_step_id = "only"
@@ -438,7 +441,7 @@ async def test_work_rejects_concurrent_run_of_same_pipeflow(tmp_path):
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
-    created = worker.factories["create_pipeflow"]("pipe1")
+    created = worker.binder.factories["create_pipeflow"]("pipe1")
 
     job1 = _restore_job(created.id, job_id="job1")
     task1 = asyncio.create_task(worker.run(job1))
@@ -464,7 +467,7 @@ async def test_work_human_interaction_step_pauses_then_resumes(tmp_path):
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )
-    created = worker.factories["create_pipeflow"]("pipe1")
+    created = worker.binder.factories["create_pipeflow"]("pipe1")
 
     job = _restore_job(created.id)
     task = asyncio.create_task(worker.run(job))
@@ -594,7 +597,7 @@ async def test_work_decision_step_invalid_input_type_raises(tmp_path):
         target_options=["a"],
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="raw", doc_type="text/plain", doc_model="text")
     doc.save("just some text")
 
@@ -623,7 +626,7 @@ async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch
         steps={"decide": step, "route_a": route_a},
     )
     worker = _decision_worker(tmp_path, pipeline)
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="decision_in", doc_type="application/json", doc_model="decision-input")
     doc.save(DecisionInput(score=7))
 
@@ -651,7 +654,7 @@ async def test_work_decision_step_process_error_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -673,7 +676,7 @@ async def test_work_decision_step_timeout_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -697,7 +700,7 @@ async def test_work_decision_step_empty_queue_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -719,7 +722,7 @@ async def test_work_decision_step_invalid_target_option_raises(tmp_path, monkeyp
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -751,7 +754,7 @@ async def test_work_decision_step_real_subprocess_execution(tmp_path):
         steps={"decide": step, "big": big},
     )
     worker = _decision_worker(tmp_path, pipeline)
-    worker.contexts[ctx.id] = ctx
+    worker.binder.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"score": 10})
 

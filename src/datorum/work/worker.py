@@ -22,10 +22,13 @@ _current_job: ContextVar[Job | None] = ContextVar(
 )
 
 
-class Worker(ABC, Binder):
+class Worker(ABC):
     required_context_binds: list[str] = []
     required_resource_binds: list[str] = []
 
+    def __init__(self, binder: Binder):
+        self.binder: Binder = binder
+        self.jobs: dict[str, Job] = {}
 
     @abstractmethod
     async def work(self, job: Job):
@@ -35,6 +38,8 @@ class Worker(ABC, Binder):
     async def run(self, job: Job):
         """Drives one job through its full lifecycle."""
         token = _current_job.set(job)
+        if job.id not in self.jobs:
+            self.jobs[job.id] = job
         try:
             await self.work(job)
             await job.update_status(JobStatus.FINISHED, "Worker has finished the job.")
