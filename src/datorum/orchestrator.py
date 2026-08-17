@@ -16,14 +16,49 @@ from .core.security import SecurityBackend
 from .work.job import Broadcaster, Job
 from .work.worker import Worker
 from .tooling.settings import ToolKit, ToolBoxSetUp
+from .tooling.worker import ToolWorker
 from .agency.settings import AgencyKit
+from .agency.worker import AgentWorker
 from .plumbing.settings import PlumbingKit, PipeFlow
+from .plumbing.worker import PipelineWorker
+
+
+
+
+class DatorumProfile:
+
+    def __init__(self,
+        username: str,
+        toolkit_path: Path,
+        agencykit_path: Path,
+        plumbingkit_path: Path,
+        flow_settings_path: Path,
+    ):
+        self.toolkit: ToolKit = ToolKit.load(toolkit_path)
+        self.agencykit: AgencyKit = AgencyKit.load(agencykit_path)
+        self.plumbingkit: PlumbingKit = PlumbingKit.load(plumbingkit_path)
+
+        username: str
+        flows: dict[str, PipeFlow] = field(default_factory=dict)
+        jobs: dict[str, Job] = field(default_factory=dict)
+
+        self.tool_worker: ToolWorker = ToolWorker(
+            toolkit=self.toolkit
+        )
+        self.agent_worker: AgentWorker = AgentWorker(
+            agency_kit=self.agencykit,
+            tool_worker=self.tool_worker
+        )
+        self.pipeline_worker: PipelineWorker = PipelineWorker(
+            flow_settings_path=flow_settings_path,
+            agent_worker=self.agent_worker,
+            tool_worker=self.tool_worker,
+        )
 
 
 
 
 
-class DatorumProfile(Binder):
     ai_config: Optional[AgencyKit] = field(default=None)
     pipeline_collection: Optional[PipelineCollection] = field(default=None)
     toolkit: Optional[ToolKit] = field(default=None)

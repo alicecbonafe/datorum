@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Callable
 
-from ..context.binder import Binder
+from ..binding.binder import Binder
 from ..context.settings import DocumentContext
 from .exceptions import WorkerStartUpError
 from .job import Job, JobStatus

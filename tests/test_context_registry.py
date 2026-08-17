@@ -19,11 +19,6 @@ from datorum.context.registry import (
     get_doc_model,
     get_doc_handler,
 )
-from datorum.binding.registry import (  # TODO New tester
-    validate_factory_signature,
-    resource,
-    get_resource_factory,
-)
 from datorum.context.commons.markdown import MarkdownDocument
 from datorum.context.commons.chat import (
     ChatHistory,
@@ -34,8 +29,14 @@ from datorum.context.exceptions import (
     DocumentTypeError,
     DocumentModelError,
     DocumentHandlerError,
-    ResourceFactoryError,
 )
+
+from datorum.binding.registry import (  # TODO New tester
+    validate_factory_signature,
+    resource,
+    get_resource_factory,
+)
+from datorum.binding.exceptions import ResourceFactoryError
 
 
 def test_registry_documents(tmp_path: Path):

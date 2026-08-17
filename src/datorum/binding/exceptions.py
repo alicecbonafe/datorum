@@ -1,4 +1,4 @@
-from ..core.exceptions import DatorumBaseError
+from ..core.exceptions import DatorumBaseError, RegistryError
 
 
 class CredentialError(DatorumBaseError): ...

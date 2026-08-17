@@ -24,7 +24,6 @@ from .exceptions import (
     DocumentTypeError,
     DocumentModelError,
     DocumentHandlerError,
-    ResourceFactoryError,
 )
 
 
