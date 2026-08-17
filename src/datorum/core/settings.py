@@ -20,6 +20,8 @@ yaml.add_multi_representer(Enum, represent_enum, Dumper=DatorumDumper)
 
 
 class BaseDatorumSettings(BaseModel):
+    """Base class for Datorum settings."""
+
     _persistent: Optional["BaseDatorumPersistentSettings"] = PrivateAttr(default=None)
 
     @property
@@ -113,6 +115,8 @@ class BaseDatorumSettings(BaseModel):
 
 
 class BaseDatorumPersistentSettings(BaseDatorumSettings):
+    """Base class for Datorum persistent settings."""
+
     _settings_path: Path | None = PrivateAttr(default=None)
 
     @property
@@ -129,6 +133,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
 
     @classmethod
     def load(cls, settings_path: Path) -> Self:
+        """Loads settings from a file."""
         with settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         instance = cls.model_validate(data)
@@ -136,12 +141,14 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         return instance
 
     def save_as(self, settings_path: Path):
+        """Changes the settings path and save the file."""
         self.settings_path = settings_path
         if self.persistent is not self:
             self._set_persistent_recursive(self)
         self.save()
 
     def save(self):
+        """Saves the settings file. If this object belongs to another persistent model, calls its save method and returns."""
         if self.persistent is not self:
             self.persistent.save()
             return
@@ -152,6 +159,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
             yaml.dump(data, f, sort_keys=False, Dumper=DatorumDumper)
 
     def reload(self):
+        """Reloads settings from file."""
         if self.persistent is not self:
             self.persistent.reload()
             return
