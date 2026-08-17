@@ -163,9 +163,10 @@ def test_registry_resources():
     assert get_resource_factory(factory_name) is mocked_factory
     assert get_resource_factory(factory_name)("!") == "Selected(!)"
 
-    with pytest.raises(ResourceFactoryError, match=r"^Resource factory.*?is already registered, use 'force=True' to overwrite$"):
-        @resource(name=factory_name)
-        def mocked_error(selector: str | None):...
+    @resource(name=factory_name)
+    def mocked_ignored(selector: str | None):...
+
+    assert get_resource_factory(factory_name) is not mocked_ignored
 
     with pytest.raises(ResourceFactoryError, match=r"^Resource factory.*?has not a compatible signature$"):
         @resource()

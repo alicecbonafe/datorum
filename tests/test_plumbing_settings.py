@@ -203,12 +203,12 @@ def test_pipe_flow_roundtrip_load(tmp_path: Path):
 # PlumbingKit
 # ==============================================================================
 
-def test_plumbing_kit_defaults():
+def test_plumbingkit_defaults():
     kit = PlumbingKit()
     assert kit.pipelines == {}
 
 
-def test_plumbing_kit_holds_pipelines():
+def test_plumbingkit_holds_pipelines():
     pipeline = Pipeline(id="pipe1")
     kit = PlumbingKit(pipelines={"pipe1": pipeline})
     assert kit.pipelines["pipe1"] is pipeline

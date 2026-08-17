@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime as real_datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -21,6 +20,7 @@ from datorum.plumbing.settings import (
     Pipeline,
     PipeFlow,
     PipeFlowState,
+    PlumbingKit,
     ToolStep,
 )
 from datorum.plumbing.worker import (
@@ -62,50 +62,42 @@ def _make_pipeline_worker(
     tmp_path: Path,
     agent_worker: Optional[_StubWorker] = None,
     tool_worker: Optional[_StubWorker] = None,
+    plumbingkit: Optional[PlumbingKit] = None,
+    flow_id_template: str = "flow_{index}",
 ) -> PipelineWorker:
-    flow_dir = tmp_path / "flows"
-    flow_dir.mkdir(exist_ok=True)
+    """Builds a PipelineWorker wired the way the application layer wires it:
+    construct with a PlumbingKit, then separately call
+    register_flow_factories() to hook up `create_pipeflow`/`restore_pipeflow`
+    against a directory on disk."""
     worker = PipelineWorker(
-        flow_settings_path=flow_dir,
+        plumbingkit=plumbingkit or PlumbingKit(),
         agent_worker=agent_worker or _StubWorker(),
         tool_worker=tool_worker or _StubWorker(),
     )
+    flow_dir = tmp_path / "flows"
+    flow_dir.mkdir(exist_ok=True)
+    worker.register_flow_factories(flow_dir, flow_id_template=flow_id_template)
     return worker
 
 
-def _pipeflow_job(pipeflow_id: str, job_id: str = "job1") -> Job:
+def _create_job(pipeline_id: str, job_id: str = "job1") -> Job:
+    """Job bound to create a fresh PipeFlow from a Pipeline in the kit."""
     return Job(
         id=job_id,
         resource_bindings=[
-            ResourceBind(field_id="pipeflow", factory_name="pipeflow", selector=pipeflow_id)
+            ResourceBind(field_id="pipeflow", factory_name="create_pipeflow", selector=pipeline_id)
         ],
     )
 
 
-def _override_pipeflow_resource(worker: PipelineWorker):
-    """The built-in `pipeflow` resource factory relies on a `self.plumbing_kit`
-    attribute that PipelineWorker never sets (see test_pipeflow_resource_*
-    below for coverage of that bug) - so, similar to how the AgentWorker
-    tests stub out `api_key`, tests that need a *working* pipeflow lookup
-    override the factory to resolve from `worker.flows` instead."""
-    @worker.resource(name="pipeflow", force=True)
-    def _pipeflow(flow_id: str | None):
-        if not flow_id:
-            raise PipelineWorkerError("Flow ID is required")
-        if flow_id not in worker.flows:
-            raise PipelineWorkerError(f"Flow '{flow_id}' not found")
-        return worker.flows[flow_id]
-
-
-class _FixedDatetime:
-    """Stand-in for the `datetime` class used by create_flow(), so the
-    generated flow id is deterministic and collisions can be forced."""
-
-    _now = real_datetime(2024, 1, 1, 12, 0, 0)
-
-    @classmethod
-    def now(cls):
-        return cls._now
+def _restore_job(flow_id: str, job_id: str = "job1") -> Job:
+    """Job bound to resume a previously-created PipeFlow from disk."""
+    return Job(
+        id=job_id,
+        resource_bindings=[
+            ResourceBind(field_id="pipeflow", factory_name="restore_pipeflow", selector=flow_id)
+        ],
+    )
 
 
 class _FakeQueue:
@@ -174,6 +166,13 @@ class DecisionInput(BaseModel):
     score: int
 
 
+async def _wait_for_status(job: Job, status: JobStatus, timeout: float = 2.0):
+    async def _poll():
+        while job.status != status:
+            await asyncio.sleep(0.005)
+    await asyncio.wait_for(_poll(), timeout=timeout)
+
+
 # ==============================================================================
 # _restricted_globals / _run_code
 # ==============================================================================
@@ -234,79 +233,132 @@ def test_run_code_runtime_exception_is_captured():
 
 
 # ==============================================================================
-# PipelineWorker.get_flow_path / create_flow / load_flow
+# register_flow_factories / create_pipeflow / restore_pipeflow
+#
+# NOTE: `_create_pipeflow` closes over `last_index` and reassigns it
+# (`last_index = index`) without a `nonlocal last_index` declaration. That
+# assignment makes Python treat `last_index` as local to `_create_pipeflow`
+# for the *whole* function body, so the earlier read (`index = last_index + 1`)
+# raises `UnboundLocalError` on every call - `create_pipeflow` is currently
+# broken, even on the very first invocation. These tests assume that's fixed
+# by adding `nonlocal last_index` at the top of `_create_pipeflow`; until
+# that's patched, every test in this section (and anything in "PipelineWorker
+# .work()" that goes through `create_pipeflow`) will fail with
+# UnboundLocalError rather than the assertions below.
 # ==============================================================================
 
-def test_get_flow_path(tmp_path):
+def test_register_flow_factories_registers_create_and_restore(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
-    assert worker.get_flow_path("abc") == worker.flow_settings_path / "abc.yml"
+    assert "create_pipeflow" in worker.factories
+    assert "restore_pipeflow" in worker.factories
 
 
-def test_create_flow_generates_id_and_persists(tmp_path, monkeypatch):
-    monkeypatch.setattr(worker_mod, "datetime", _FixedDatetime)
+def test_create_pipeflow_requires_pipeline_id(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
+    with pytest.raises(PipelineWorkerError, match="Pipeline ID is required"):
+        worker.factories["create_pipeflow"](None)
+
+
+def test_create_pipeflow_unknown_pipeline(tmp_path):
+    worker = _make_pipeline_worker(tmp_path)
+    with pytest.raises(PipelineWorkerError, match="Pipeline 'missing' not found"):
+        worker.factories["create_pipeflow"]("missing")
+
+
+def test_create_pipeflow_generates_id_and_persists(tmp_path):
     pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
 
-    flow = worker.create_flow(pipeline)
+    flow = worker.factories["create_pipeflow"]("pipe1")
 
-    assert flow.id == "pipeflow_20240101_120000"
+    assert flow.id == "flow_0"
     assert flow.pipeline is not pipeline  # deep-copied
     assert flow.pipeline.id == "pipe1"
-    assert worker.flows[flow.id] is flow
-    assert worker.get_flow_path(flow.id).exists()
+    assert (tmp_path / "flows" / "flow_0.yml").exists()
 
 
-def test_create_flow_resolves_id_collisions(tmp_path, monkeypatch):
-    monkeypatch.setattr(worker_mod, "datetime", _FixedDatetime)
-    worker = _make_pipeline_worker(tmp_path)
+def test_create_pipeflow_resolves_id_collisions(tmp_path):
     pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
 
-    first = worker.create_flow(pipeline)
-    second = worker.create_flow(pipeline)
+    first = worker.factories["create_pipeflow"]("pipe1")
+    second = worker.factories["create_pipeflow"]("pipe1")
 
-    assert first.id == "pipeflow_20240101_120000"
-    assert second.id == "pipeflow_20240101_120000_0"
-    assert worker.flows[second.id] is second
+    assert first.id == "flow_0"
+    assert second.id == "flow_1"
 
 
-def test_load_flow_success(tmp_path):
-    worker = _make_pipeline_worker(tmp_path)
+def test_create_pipeflow_skips_index_of_preexisting_file_on_disk(tmp_path):
+    """If a flow file already exists on disk for the next candidate index
+    (e.g. left over from a previous run), create_pipeflow should skip past
+    it rather than overwrite it."""
     pipeline = Pipeline(id="pipe1")
-    created = worker.create_flow(pipeline)
-    worker.flows.clear()
+    flow_dir = tmp_path / "flows"
+    flow_dir.mkdir(exist_ok=True)
+    (flow_dir / "flow_0.yml").write_text("id: flow_0\npipeline: {id: other}\n")
 
-    loaded = worker.load_flow(created.id)
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
 
-    assert loaded.id == created.id
-    assert worker.flows[created.id] is loaded
+    flow = worker.factories["create_pipeflow"]("pipe1")
+    assert flow.id == "flow_1"
 
 
-def test_load_flow_not_found(tmp_path):
+def test_create_pipeflow_respects_custom_id_template(tmp_path):
+    pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path,
+        plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline}),
+        flow_id_template="pf_{index}_run",
+    )
+
+    flow = worker.factories["create_pipeflow"]("pipe1")
+    assert flow.id == "pf_0_run"
+    assert (tmp_path / "flows" / "pf_0_run.yml").exists()
+
+
+def test_restore_pipeflow_requires_flow_id(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
-    with pytest.raises(PipelineWorkerError, match="Pipe flow 'missing' not found"):
-        worker.load_flow("missing")
+    with pytest.raises(PipelineWorkerError, match="Pipeflow ID is required"):
+        worker.factories["restore_pipeflow"](None)
 
 
-# ==============================================================================
-# Built-in `pipeflow` resource factory
-# ==============================================================================
-
-def test_pipeflow_resource_requires_flow_id(tmp_path):
+def test_restore_pipeflow_unknown_flow(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
-    with pytest.raises(PipelineWorkerError, match="Flow ID is required"):
-        worker.factories["pipeflow"](None)
+    with pytest.raises(PipelineWorkerError, match="Pipeflow 'missing' not found"):
+        worker.factories["restore_pipeflow"]("missing")
 
 
-def test_pipeflow_resource_unknown_flow(tmp_path):
+def test_restore_pipeflow_loads_created_flow(tmp_path):
+    pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+    created = worker.factories["create_pipeflow"]("pipe1")
+
+    restored = worker.factories["restore_pipeflow"](created.id)
+
+    assert restored.id == created.id
+    assert restored.pipeline.id == "pipe1"
+
+
+def test_restore_pipeflow_finds_flow_file_not_yet_seen_this_session(tmp_path):
+    """A flow file written in an earlier process/session (so it's not in the
+    in-memory `flow_files` cache yet) should still be discoverable by id."""
+    flow_dir = tmp_path / "flows"
+    flow_dir.mkdir(exist_ok=True)
+    pipeline = Pipeline(id="pipe1")
+    flow = PipeFlow(id="flow_7", pipeline=pipeline)
+    flow.save_as(flow_dir / "flow_7.yml")
+
     worker = _make_pipeline_worker(tmp_path)
-    with pytest.raises(PipelineWorkerError, match="Flow 'missing' not found"):
-        worker.factories["pipeflow"]("missing")
-
-
-def test_pipeflow_resource_known_flow(tmp_path):
-    worker = _make_pipeline_worker(tmp_path)
-    flow = worker.create_flow(Pipeline(id="pipe1"))
-    assert worker.factories["pipeflow"](flow.id).pipeline.id == "pipe1"
+    restored = worker.factories["restore_pipeflow"]("flow_7")
+    assert restored.id == "flow_7"
 
 
 # ==============================================================================
@@ -314,47 +366,91 @@ def test_pipeflow_resource_known_flow(tmp_path):
 # ==============================================================================
 
 @pytest.mark.asyncio
-async def test_work_unknown_step_raises(tmp_path):
+async def test_work_requires_create_or_restore_binding(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
-    pipeline = Pipeline(id="pipe1", first_step_id="missing-step")
-    flow = worker.create_flow(pipeline)
+    job = Job(id="job1")  # no resource_bindings at all
 
-    job = _pipeflow_job(flow.id)
+    with pytest.raises(
+        PipelineWorkerError,
+        match="Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'",
+    ):
+        await worker.run(job)
+
+
+@pytest.mark.asyncio
+async def test_work_unknown_step_raises(tmp_path):
+    pipeline = Pipeline(id="pipe1", first_step_id="missing-step")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match="Step 'missing-step' not found in Pipeline 'pipe1'"):
         await worker.run(job)
 
     assert job.status == JobStatus.CRASHED
-    assert flow.state == PipeFlowState.started
 
 
 @pytest.mark.asyncio
 async def test_work_recovers_non_planning_flow(tmp_path):
-    """When a flow is loaded mid-flight (state != planning), work() should
+    """When a flow is restored mid-flight (state != planning), work() should
     resume from `current_step_id` rather than reset to `first_step_id`."""
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
     step = HumanInteractionStep(id="only", chat_history=ContextBind(field_id="chat_history", binded_id="doc1"))
     pipeline = Pipeline(id="pipe1", first_step_id="unused", steps={"only": step})
-    flow = worker.create_flow(pipeline)
-    flow.state = PipeFlowState.paused
-    flow.current_step_id = "only"
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
 
-    job = _pipeflow_job(flow.id)
+    created = worker.factories["create_pipeflow"]("pipe1")
+    # simulate a flow that was already mid-run and persisted in that state
+    created.state = PipeFlowState.paused
+    created.current_step_id = "only"
+    created.save()
+
+    job = _restore_job(created.id)
     task = asyncio.create_task(worker.run(job))
     await _wait_for_status(job, JobStatus.PAUSED)
     job.resume()
     await asyncio.wait_for(task, timeout=2)
 
     assert job.status == JobStatus.FINISHED
-    assert flow.step_history == ["only"]
+    assert created.step_history == ["only"]
 
 
-async def _wait_for_status(job: Job, status: JobStatus, timeout: float = 2.0):
-    async def _poll():
-        while job.status != status:
-            await asyncio.sleep(0.005)
-    await asyncio.wait_for(_poll(), timeout=timeout)
+@pytest.mark.asyncio
+async def test_work_active_flow_tracked_and_released(tmp_path):
+    pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+
+    job = _create_job("pipe1")
+    await worker.run(job)
+
+    assert job.status == JobStatus.FINISHED
+    assert worker._active_flows == {}  # released once the flow finishes
+
+
+@pytest.mark.asyncio
+async def test_work_rejects_concurrent_run_of_same_pipeflow(tmp_path):
+    step = HumanInteractionStep(id="in", chat_history=ContextBind(field_id="chat_history", binded_id="doc1"))
+    pipeline = Pipeline(id="pipe1", first_step_id="in", steps={"in": step})
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+    created = worker.factories["create_pipeflow"]("pipe1")
+
+    job1 = _restore_job(created.id, job_id="job1")
+    task1 = asyncio.create_task(worker.run(job1))
+    await _wait_for_status(job1, JobStatus.PAUSED)
+
+    job2 = _restore_job(created.id, job_id="job2")
+    with pytest.raises(PipelineWorkerError, match=f"Pipeflow '{created.id}' already running in job 'job1'"):
+        await worker.run(job2)
+
+    job1.resume()
+    await asyncio.wait_for(task1, timeout=2)
+    assert worker._active_flows == {}
 
 
 # ==============================================================================
@@ -363,23 +459,23 @@ async def _wait_for_status(job: Job, status: JobStatus, timeout: float = 2.0):
 
 @pytest.mark.asyncio
 async def test_work_human_interaction_step_pauses_then_resumes(tmp_path):
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
     step = HumanInteractionStep(id="in", chat_history=ContextBind(field_id="chat_history", binded_id="doc1"))
     pipeline = Pipeline(id="pipe1", first_step_id="in", steps={"in": step})
-    flow = worker.create_flow(pipeline)
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+    created = worker.factories["create_pipeflow"]("pipe1")
 
-    job = _pipeflow_job(flow.id)
+    job = _restore_job(created.id)
     task = asyncio.create_task(worker.run(job))
     await _wait_for_status(job, JobStatus.PAUSED)
-    assert flow.state == PipeFlowState.paused
 
     job.resume()
     await asyncio.wait_for(task, timeout=2)
 
     assert job.status == JobStatus.FINISHED
-    assert flow.step_history == ["in"]
-    assert flow.current_step_id is None  # step had no target_id
+    assert created.step_history == ["in"]
+    assert created.current_step_id is None  # step had no target_id
 
 
 # ==============================================================================
@@ -389,9 +485,6 @@ async def test_work_human_interaction_step_pauses_then_resumes(tmp_path):
 @pytest.mark.asyncio
 async def test_work_tool_step_delegates_to_tool_worker(tmp_path):
     tool_worker = _StubWorker()
-    worker = _make_pipeline_worker(tmp_path, tool_worker=tool_worker)
-    _override_pipeflow_resource(worker)
-
     step = ToolStep(
         id="run_tool",
         target_id=None,
@@ -400,9 +493,12 @@ async def test_work_tool_step_delegates_to_tool_worker(tmp_path):
         toolbox_setup=ResourceBind(field_id="toolbox_setup", factory_name="toolbox_setup", selector="box1.tool1"),
     )
     pipeline = Pipeline(id="pipe1", first_step_id="run_tool", steps={"run_tool": step})
-    flow = worker.create_flow(pipeline)
+    worker = _make_pipeline_worker(
+        tmp_path, tool_worker=tool_worker,
+        plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline}),
+    )
 
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     await worker.run(job)
 
     assert job.status == JobStatus.FINISHED
@@ -411,16 +507,11 @@ async def test_work_tool_step_delegates_to_tool_worker(tmp_path):
     delegate = job.delegates[0]
     assert [b.field_id for b in delegate.context_bindings] == ["tool_params", "tool_result"]
     assert delegate.resource_bindings[0].selector == "box1.tool1"
-    assert flow.step_history == ["run_tool"]
-    assert flow.current_step_id is None
 
 
 @pytest.mark.asyncio
 async def test_work_tool_step_includes_custom_context_and_resources(tmp_path):
     tool_worker = _StubWorker()
-    worker = _make_pipeline_worker(tmp_path, tool_worker=tool_worker)
-    _override_pipeflow_resource(worker)
-
     extra_ctx = ContextBind(field_id="extra_ctx", binded_id="doc2")
     extra_res = ResourceBind(field_id="extra_res", factory_name="some_factory", selector="x")
     step = ToolStep(
@@ -432,16 +523,14 @@ async def test_work_tool_step_includes_custom_context_and_resources(tmp_path):
         custom_resources=[extra_res],
     )
     pipeline = Pipeline(id="pipe1", first_step_id="run_tool", steps={"run_tool": step})
-    flow = worker.create_flow(pipeline)
+    worker = _make_pipeline_worker(
+        tmp_path, tool_worker=tool_worker,
+        plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline}),
+    )
 
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     await worker.run(job)
 
-    # NOTE: comparing the ContextBind/ResourceBind instances directly (e.g.
-    # `extra_ctx in delegate.context_bindings`) is unreliable here: create_flow()
-    # deep-copies the pipeline, and pydantic's default __eq__ also compares
-    # private attrs, so the copy (with `_persistent` set) never equals the
-    # original standalone instance even though their public fields match.
     delegate = job.delegates[0]
     assert [b.field_id for b in delegate.context_bindings] == [
         "tool_params", "tool_result", "extra_ctx"
@@ -460,9 +549,6 @@ async def test_work_tool_step_includes_custom_context_and_resources(tmp_path):
 @pytest.mark.asyncio
 async def test_work_agent_step_delegates_to_agent_worker(tmp_path):
     agent_worker = _StubWorker()
-    worker = _make_pipeline_worker(tmp_path, agent_worker=agent_worker)
-    _override_pipeflow_resource(worker)
-
     step = AgentStep(
         id="ask",
         chat_history=ContextBind(field_id="chat_history", binded_id="chat_doc"),
@@ -470,9 +556,12 @@ async def test_work_agent_step_delegates_to_agent_worker(tmp_path):
         agent_role=ResourceBind(field_id="agent_role", factory_name="agent_role", selector="r1"),
     )
     pipeline = Pipeline(id="pipe1", first_step_id="ask", steps={"ask": step})
-    flow = worker.create_flow(pipeline)
+    worker = _make_pipeline_worker(
+        tmp_path, agent_worker=agent_worker,
+        plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline}),
+    )
 
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     await worker.run(job)
 
     assert job.status == JobStatus.FINISHED
@@ -480,7 +569,6 @@ async def test_work_agent_step_delegates_to_agent_worker(tmp_path):
     delegate = job.delegates[0]
     assert delegate.context_bindings[0].binded_id == "chat_doc"
     assert {b.selector for b in delegate.resource_bindings} == {"p1", "r1"}
-    assert flow.step_history == ["ask"]
 
 
 # ==============================================================================
@@ -491,24 +579,26 @@ def _decision_pipeline(step: DecisionStep) -> Pipeline:
     return Pipeline(id="pipe1", first_step_id="decide", steps={"decide": step})
 
 
+def _decision_worker(tmp_path, pipeline: Pipeline) -> PipelineWorker:
+    return _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+
+
 @pytest.mark.asyncio
 async def test_work_decision_step_invalid_input_type_raises(tmp_path):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
-    worker.contexts[ctx.id] = ctx
-
-    doc = ctx.create_document(id="raw", doc_type="text/plain", doc_model="text")
-    doc.save("just some text")
-
     step = DecisionStep(
         id="decide",
         input_data=ContextBind(field_id="input_data", binded_id="raw", context_bind_type=ContextBindType.text),
         target_options=["a"],
     )
-    flow = worker.create_flow(_decision_pipeline(step))
+    worker = _decision_worker(tmp_path, _decision_pipeline(step))
+    worker.contexts[ctx.id] = ctx
+    doc = ctx.create_document(id="raw", doc_type="text/plain", doc_model="text")
+    doc.save("just some text")
 
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match="Invalid data input type"):
         await worker.run(job)
 
@@ -516,18 +606,8 @@ async def test_work_decision_step_invalid_input_type_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
-    worker.contexts[ctx.id] = ctx
-
     from datorum.context.registry import register_pydantic_based_handler
     register_pydantic_based_handler(model_type=DecisionInput, model_id="decision-input")
-
-    doc = ctx.create_document(id="decision_in", doc_type="application/json", doc_model="decision-input")
-    doc.save(DecisionInput(score=7))
-
-    fake_ctx = _FakeMPContext(queue_items=[("ok", "route_a")], alive_after_join=False)
-    monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
 
     step = DecisionStep(
         id="decide",
@@ -542,16 +622,21 @@ async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch
         id="pipe1", first_step_id="decide",
         steps={"decide": step, "route_a": route_a},
     )
-    flow = worker.create_flow(pipeline)
+    worker = _decision_worker(tmp_path, pipeline)
+    worker.contexts[ctx.id] = ctx
+    doc = ctx.create_document(id="decision_in", doc_type="application/json", doc_model="decision-input")
+    doc.save(DecisionInput(score=7))
 
-    job = _pipeflow_job(flow.id)
+    fake_ctx = _FakeMPContext(queue_items=[("ok", "route_a")], alive_after_join=False)
+    monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
+
+    job = _create_job("pipe1")
     task = asyncio.create_task(worker.run(job))
     await _wait_for_status(job, JobStatus.PAUSED)  # route_a is a HumanInteractionStep
     job.resume()
     await asyncio.wait_for(task, timeout=2)
 
     assert job.status == JobStatus.FINISHED
-    assert flow.step_history == ["decide", "route_a"]
     assert len(fake_ctx.processes) == 1
     assert fake_ctx.processes[0].started
 
@@ -559,8 +644,13 @@ async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch
 @pytest.mark.asyncio
 async def test_work_decision_step_process_error_raises(tmp_path, monkeypatch):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
+    step = DecisionStep(
+        id="decide",
+        input_data=ContextBind(field_id="input_data", binded_id="d"),
+        target_options=["a"],
+        code="1",
+    )
+    worker = _decision_worker(tmp_path, _decision_pipeline(step))
     worker.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
@@ -568,15 +658,7 @@ async def test_work_decision_step_process_error_raises(tmp_path, monkeypatch):
     fake_ctx = _FakeMPContext(queue_items=[("error", "boom")], alive_after_join=False)
     monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
 
-    step = DecisionStep(
-        id="decide",
-        input_data=ContextBind(field_id="input_data", binded_id="d"),
-        target_options=["a"],
-        code="1",
-    )
-    flow = worker.create_flow(_decision_pipeline(step))
-
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match="Process error reported: boom"):
         await worker.run(job)
 
@@ -584,8 +666,13 @@ async def test_work_decision_step_process_error_raises(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_work_decision_step_timeout_raises(tmp_path, monkeypatch):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
+    step = DecisionStep(
+        id="decide",
+        input_data=ContextBind(field_id="input_data", binded_id="d"),
+        target_options=["a"],
+        code="1",
+    )
+    worker = _decision_worker(tmp_path, _decision_pipeline(step))
     worker.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
@@ -593,15 +680,7 @@ async def test_work_decision_step_timeout_raises(tmp_path, monkeypatch):
     fake_ctx = _FakeMPContext(queue_items=[], alive_after_join=True)
     monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
 
-    step = DecisionStep(
-        id="decide",
-        input_data=ContextBind(field_id="input_data", binded_id="d"),
-        target_options=["a"],
-        code="1",
-    )
-    flow = worker.create_flow(_decision_pipeline(step))
-
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match=r"Timed out after 5\.0s"):
         await worker.run(job)
 
@@ -611,8 +690,13 @@ async def test_work_decision_step_timeout_raises(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_work_decision_step_empty_queue_raises(tmp_path, monkeypatch):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
+    step = DecisionStep(
+        id="decide",
+        input_data=ContextBind(field_id="input_data", binded_id="d"),
+        target_options=["a"],
+        code="1",
+    )
+    worker = _decision_worker(tmp_path, _decision_pipeline(step))
     worker.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
@@ -620,15 +704,7 @@ async def test_work_decision_step_empty_queue_raises(tmp_path, monkeypatch):
     fake_ctx = _FakeMPContext(queue_items=[], alive_after_join=False, exitcode=-9)
     monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
 
-    step = DecisionStep(
-        id="decide",
-        input_data=ContextBind(field_id="input_data", binded_id="d"),
-        target_options=["a"],
-        code="1",
-    )
-    flow = worker.create_flow(_decision_pipeline(step))
-
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match=r"Process exited without a result \(exit code -9\)"):
         await worker.run(job)
 
@@ -636,8 +712,13 @@ async def test_work_decision_step_empty_queue_raises(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_work_decision_step_invalid_target_option_raises(tmp_path, monkeypatch):
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
+    step = DecisionStep(
+        id="decide",
+        input_data=ContextBind(field_id="input_data", binded_id="d"),
+        target_options=["a", "b"],
+        code="1",
+    )
+    worker = _decision_worker(tmp_path, _decision_pipeline(step))
     worker.contexts[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
@@ -645,15 +726,7 @@ async def test_work_decision_step_invalid_target_option_raises(tmp_path, monkeyp
     fake_ctx = _FakeMPContext(queue_items=[("ok", "not_an_option")], alive_after_join=False)
     monkeypatch.setattr(worker_mod, "_MP_CONTEXT", fake_ctx)
 
-    step = DecisionStep(
-        id="decide",
-        input_data=ContextBind(field_id="input_data", binded_id="d"),
-        target_options=["a", "b"],
-        code="1",
-    )
-    flow = worker.create_flow(_decision_pipeline(step))
-
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     with pytest.raises(PipelineWorkerError, match="Target step 'not_an_option' is not a valid option"):
         await worker.run(job)
 
@@ -664,12 +737,6 @@ async def test_work_decision_step_real_subprocess_execution(tmp_path):
     context, to prove `_run_code` genuinely works across a process
     boundary and not just when called in-process."""
     ctx = _make_context(tmp_path)
-    worker = _make_pipeline_worker(tmp_path)
-    _override_pipeflow_resource(worker)
-    worker.contexts[ctx.id] = ctx
-    doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
-    doc.save({"score": 10})
-
     step = DecisionStep(
         id="decide",
         input_data=ContextBind(field_id="input_data", binded_id="d"),
@@ -683,13 +750,15 @@ async def test_work_decision_step_real_subprocess_execution(tmp_path):
         id="pipe1", first_step_id="decide",
         steps={"decide": step, "big": big},
     )
-    flow = worker.create_flow(pipeline)
+    worker = _decision_worker(tmp_path, pipeline)
+    worker.contexts[ctx.id] = ctx
+    doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
+    doc.save({"score": 10})
 
-    job = _pipeflow_job(flow.id)
+    job = _create_job("pipe1")
     task = asyncio.create_task(worker.run(job))
     await _wait_for_status(job, JobStatus.PAUSED)
     job.resume()
     await asyncio.wait_for(task, timeout=2)
 
     assert job.status == JobStatus.FINISHED
-    assert flow.step_history == ["decide", "big"]

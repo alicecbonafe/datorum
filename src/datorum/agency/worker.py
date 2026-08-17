@@ -38,10 +38,10 @@ class AgentWorker(Worker):
     _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
 
     def __init__(self,
-        agency_kit: AgencyKit,
+        agencykit: AgencyKit,
         tool_worker: ToolWorker,
     ):
-        self.agency_kit: AgencyKit = agency_kit
+        self.agencykit: AgencyKit = agencykit
         self.tool_worker: ToolWorker = tool_worker
 
         @self.resource(name="inference_provider")
@@ -57,18 +57,18 @@ class AgentWorker(Worker):
             return self.get_role(role_id)
 
     def get_role(self, role_id: str) -> AgentRole:
-        if role_id not in self.agency_kit.roles:
+        if role_id not in self.agencykit.roles:
             raise AgentWorkerError(f"Role not found: '{role_id}'")
-        return self.agency_kit.roles[role_id]
+        return self.agencykit.roles[role_id]
 
     def get_provider(self, provider_id: str) -> InferenceServiceProvider:
-        if provider_id not in self.agency_kit.providers:
+        if provider_id not in self.agencykit.providers:
             raise AgentWorkerError(f"Provider not found: '{provider_id}'")
-        return self.agency_kit.providers[provider_id]
+        return self.agencykit.providers[provider_id]
 
     def get_preferred_provider(self, preferred_models: list[str]) -> InferenceServiceProvider:
         for model in preferred_models:
-            for provider in self.agency_kit.providers.values():
+            for provider in self.agencykit.providers.values():
                 if model in provider.models:
                     return provider
         raise AgentWorkerError(f"No provider found for models: {preferred_models}")

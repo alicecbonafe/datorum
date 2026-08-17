@@ -54,7 +54,7 @@ def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
 
 def _make_agent_worker(
     ctx: DocumentContext,
-    agency_kit: AgencyKit,
+    agencykit: AgencyKit,
     toolkit: Optional[ToolKit] = None,
     api_key: str = "test-api-key",
 ) -> tuple[AgentWorker, ToolWorker]:
@@ -62,7 +62,7 @@ def _make_agent_worker(
     stubbed `api_key` resource factory (a real deployment would resolve this
     from a secrets store, which is out of scope here)."""
     tool_worker = ToolWorker(toolkit=toolkit or ToolKit())
-    worker = AgentWorker(agency_kit=agency_kit, tool_worker=tool_worker)
+    worker = AgentWorker(agencykit=agencykit, tool_worker=tool_worker)
     worker.contexts[ctx.id] = ctx
     tool_worker.contexts[ctx.id] = ctx
 
@@ -189,16 +189,16 @@ class NestedOutputModel(BaseModel):
 def test_get_role_success(tmp_path):
     ctx = _make_context(tmp_path)
     role = _role(id="role1")
-    agency_kit = AgencyKit(providers={}, roles={"role1": role})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={"role1": role})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     assert worker.get_role("role1") is role
 
 
 def test_get_role_not_found(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     with pytest.raises(AgentWorkerError, match="Role not found: 'missing'"):
         worker.get_role("missing")
@@ -207,16 +207,16 @@ def test_get_role_not_found(tmp_path):
 def test_get_provider_success(tmp_path):
     ctx = _make_context(tmp_path)
     provider = _provider(id="provider1")
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     assert worker.get_provider("provider1") is provider
 
 
 def test_get_provider_not_found(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     with pytest.raises(AgentWorkerError, match="Provider not found: 'missing'"):
         worker.get_provider("missing")
@@ -226,8 +226,8 @@ def test_get_preferred_provider_success(tmp_path):
     ctx = _make_context(tmp_path)
     provider_a = _provider(id="provider_a", models=["model-x"])
     provider_b = _provider(id="provider_b", models=["model-y", "model-z"])
-    agency_kit = AgencyKit(providers={"provider_a": provider_a, "provider_b": provider_b}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider_a": provider_a, "provider_b": provider_b}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     # "model-y" only exists on provider_b
     assert worker.get_preferred_provider(["model-y"]) is provider_b
@@ -238,8 +238,8 @@ def test_get_preferred_provider_success(tmp_path):
 def test_get_preferred_provider_not_found(tmp_path):
     ctx = _make_context(tmp_path)
     provider_a = _provider(id="provider_a", models=["model-x"])
-    agency_kit = AgencyKit(providers={"provider_a": provider_a}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider_a": provider_a}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     with pytest.raises(AgentWorkerError, match=r"No provider found for models: \['nope'\]"):
         worker.get_preferred_provider(["nope"])
@@ -247,8 +247,8 @@ def test_get_preferred_provider_not_found(tmp_path):
 
 def test_select_model_success(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     provider = _provider(id="provider1", models=["model-a", "model-b"])
     role = _role(id="role1", preferred_models=["model-nope", "model-b"])
@@ -258,8 +258,8 @@ def test_select_model_success(tmp_path):
 
 def test_select_model_not_found(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     provider = _provider(id="provider1", models=["model-a"])
     role = _role(id="role1", preferred_models=["model-z"])
@@ -277,8 +277,8 @@ def test_select_model_not_found(tmp_path):
 
 def test_strict_json_schema_recursive(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     schema = {
         "title": "Root",
@@ -331,8 +331,8 @@ def test_toolkit_schema_builds_and_namespaces_function_names(tmp_path, agent_too
     toolkit = ToolKit(toolboxes={
         "box1": ToolBoxSetUp(id="box1", toolbox_name="AgentGreeterBox", tools_enabled=["greet"]),
     })
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     role = _role(tools_enabled=["box1.greet"])
     result = worker._toolkit_schema(role)
@@ -347,8 +347,8 @@ def test_toolkit_schema_builds_and_namespaces_function_names(tmp_path, agent_too
 
 def test_toolkit_schema_empty_when_no_tools_enabled(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     assert worker._toolkit_schema(_role(tools_enabled=[])) == []
 
@@ -359,8 +359,8 @@ def test_toolkit_schema_empty_when_no_tools_enabled(tmp_path):
 
 def test_response_format_without_defs(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     result = worker._response_format(SimpleOutputModel, name="simple-output")
 
@@ -375,8 +375,8 @@ def test_response_format_without_defs(tmp_path):
 
 def test_response_format_with_defs_and_default_name(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     result = worker._response_format(NestedOutputModel)
 
@@ -398,8 +398,8 @@ def test_response_format_with_defs_and_default_name(tmp_path):
 async def test_call_streamer_success_content_and_response_meta(tmp_path, httpserver):
     ctx = _make_context(tmp_path)
     provider = _provider(base_url=httpserver.url_for("/v1/"))
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
     job = Job(id="job1")
 
     body = (
@@ -437,8 +437,8 @@ async def test_call_streamer_success_content_and_response_meta(tmp_path, httpser
 async def test_call_streamer_tool_calls_sorted_and_extra_parts(tmp_path, httpserver):
     ctx = _make_context(tmp_path)
     provider = _provider(base_url=httpserver.url_for("/v1/"))
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
     job = Job(id="job1")
 
     events = [
@@ -505,8 +505,8 @@ async def test_call_streamer_tool_calls_sorted_and_extra_parts(tmp_path, httpser
 async def test_call_streamer_http_error_wraps_and_resets_streaming_flag(tmp_path, httpserver):
     ctx = _make_context(tmp_path)
     provider = _provider(id="flaky", base_url=httpserver.url_for("/v1/"))
-    agency_kit = AgencyKit(providers={"flaky": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"flaky": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
     job = Job(id="job1")
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_data("boom", status=500)
@@ -530,8 +530,8 @@ async def test_call_streamer_http_error_wraps_and_resets_streaming_flag(tmp_path
 async def test_call_fetcher_success(tmp_path, httpserver):
     ctx = _make_context(tmp_path)
     provider = _provider(base_url=httpserver.url_for("/v1/"), supports_streaming=False)
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
     job = Job(id="job1")
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_json({
@@ -565,8 +565,8 @@ async def test_call_fetcher_success(tmp_path, httpserver):
 async def test_call_fetcher_http_error_wraps(tmp_path, httpserver):
     ctx = _make_context(tmp_path)
     provider = _provider(id="flaky", base_url=httpserver.url_for("/v1/"), supports_streaming=False)
-    agency_kit = AgencyKit(providers={"flaky": provider}, roles={})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"flaky": provider}, roles={})
+    worker, _ = _make_agent_worker(ctx, agencykit)
     job = Job(id="job1")
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_data("nope", status=503)
@@ -587,8 +587,8 @@ async def test_call_fetcher_http_error_wraps(tmp_path, httpserver):
 @pytest.mark.asyncio
 async def test_work_wrong_chat_bind_type_raises(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(provider_selector="provider1", chat_bind_type=ContextBindType.text)
 
@@ -602,8 +602,8 @@ async def test_work_empty_chat_history_raises(tmp_path):
     chat_doc = ctx.create_document(id="chat_doc", doc_type="application/json", doc_model="chat-history")
     chat_doc.save(ChatHistory(messages=[]))
 
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(provider_selector="provider1")
 
@@ -614,8 +614,8 @@ async def test_work_empty_chat_history_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_work_missing_chat_history_binding_raises(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(provider_selector="provider1", include_chat_binding=False)
 
@@ -631,8 +631,8 @@ async def test_work_missing_agent_role_binding_raises(tmp_path):
     chat_doc = ctx.create_document(id="chat_doc", doc_type="application/json", doc_model="chat-history")
     chat_doc.save(ChatHistory(messages=[UserMessage(content="hi")]))
 
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(provider_selector="provider1", include_role_binding=False)
 
@@ -643,8 +643,8 @@ async def test_work_missing_agent_role_binding_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_work_blank_agent_role_selector_raises(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(role_selector="", provider_selector="provider1")
 
@@ -655,8 +655,8 @@ async def test_work_blank_agent_role_selector_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_work_blank_inference_provider_selector_raises(tmp_path):
     ctx = _make_context(tmp_path)
-    agency_kit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": _provider()}, roles={"role1": _role()})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     job = _agent_job(role_selector="role1", provider_selector="")
 
@@ -679,8 +679,8 @@ async def test_work_success_streaming_with_explicit_provider(tmp_path, httpserve
 
     provider = _provider(id="provider1", base_url=httpserver.url_for("/v1/"), models=["gpt-test"])
     role = _role(id="role1", preferred_models=["gpt-test"])
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit)
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_response(
         _sse_response(_sse([{"choices": [{"delta": {"content": "Hello there"}, "finish_reason": "stop"}]}]))
@@ -722,11 +722,11 @@ async def test_work_uses_preferred_provider_when_not_bound(tmp_path, httpserver)
     other_provider = _provider(id="other", base_url="http://unused.invalid/v1/", models=["other-model"])
     preferred_provider = _provider(id="preferred", base_url=httpserver.url_for("/v1/"), models=["gpt-test"])
     role = _role(id="role1", preferred_models=["gpt-test"])
-    agency_kit = AgencyKit(
+    agencykit = AgencyKit(
         providers={"other": other_provider, "preferred": preferred_provider},
         roles={"role1": role},
     )
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_response(
         _sse_response(_sse([{"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}]))
@@ -749,8 +749,8 @@ async def test_work_uses_fetcher_when_provider_does_not_support_streaming(tmp_pa
         id="provider1", base_url=httpserver.url_for("/v1/"), models=["gpt-test"], supports_streaming=False
     )
     role = _role(id="role1", preferred_models=["gpt-test"])
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_json({
         "choices": [{"message": {"role": "assistant", "content": "fetched"}, "finish_reason": "stop"}],
@@ -774,8 +774,8 @@ async def test_work_with_output_doc_model_includes_response_format_in_request(tm
 
     provider = _provider(id="provider1", base_url=httpserver.url_for("/v1/"), models=["gpt-test"])
     role = _role(id="role1", preferred_models=["gpt-test"], output_doc_model="agent-output")
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _ = _make_agent_worker(ctx, agency_kit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _ = _make_agent_worker(ctx, agencykit)
 
     httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_response(
         _sse_response(_sse([{"choices": [{"delta": {"content": '{"answer": "42"}'}, "finish_reason": "stop"}]}]))
@@ -808,8 +808,8 @@ async def test_work_tool_call_round_trip_success(tmp_path, httpserver, agent_too
     role = _role(
         id="role1", preferred_models=["gpt-test"], tools_enabled=["box1.greet"], tool_max_iter=3
     )
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     round1 = _sse([
         {
@@ -862,8 +862,8 @@ async def test_work_tool_call_missing_toolbox_appends_message_and_continues(tmp_
     role = _role(
         id="role1", preferred_models=["gpt-test"], tools_enabled=["box1.greet"], tool_max_iter=1
     )
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     body = _sse([
         {
@@ -904,8 +904,8 @@ async def test_work_tool_call_empty_tool_calls_raises(tmp_path, httpserver, agen
     })
     provider = _provider(id="provider1", base_url=httpserver.url_for("/v1/"), models=["gpt-test"])
     role = _role(id="role1", preferred_models=["gpt-test"], tools_enabled=["box1.greet"])
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     # finish_reason says "tool_calls" but no tool_call deltas were ever sent
     body = _sse([{"choices": [{"delta": {"content": "oops"}, "finish_reason": "tool_calls"}]}])
@@ -936,8 +936,8 @@ async def test_work_multiple_tool_calls_in_one_round(
         id="role1", preferred_models=["gpt-test"],
         tools_enabled=["box1.greet", "box2.shout"], tool_max_iter=2,
     )
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     round1 = _sse([
         {
@@ -984,8 +984,8 @@ async def test_work_reaches_tool_max_iter_without_explicit_break(tmp_path, https
     role = _role(
         id="role1", preferred_models=["gpt-test"], tools_enabled=["box1.greet"], tool_max_iter=1
     )
-    agency_kit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
-    worker, _tool_worker = _make_agent_worker(ctx, agency_kit, toolkit=toolkit)
+    agencykit = AgencyKit(providers={"provider1": provider}, roles={"role1": role})
+    worker, _tool_worker = _make_agent_worker(ctx, agencykit, toolkit=toolkit)
 
     body = _sse([
         {

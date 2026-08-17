@@ -78,11 +78,11 @@ def _run_code(
 class PipelineWorker(Worker):
 
     def __init__(self,
-        plumbing_kit: PlumbingKit,
+        plumbingkit: PlumbingKit,
         agent_worker: AgentWorker,
         tool_worker: ToolWorker,
     ):
-        self.plumbing_kit: PlumbingKit = plumbing_kit
+        self.plumbingkit: PlumbingKit = plumbingkit
         self.agent_worker: AgentWorker = agent_worker
         self.tool_worker: ToolWorker = tool_worker
 
@@ -110,11 +110,13 @@ class PipelineWorker(Worker):
 
         @self.resource(name="create_pipeflow", force=True)
         def _create_pipeflow(pipeline_id) -> PipeFlow:
+            nonlocal last_index
+
             if not pipeline_id:
                 raise PipelineWorkerError("Pipeline ID is required")
-            if pipeline_id not in self.plumbing_kit.pipelines:
+            if pipeline_id not in self.plumbingkit.pipelines:
                 raise PipelineWorkerError(f"Pipeline '{pipeline_id}' not found")
-            pipeline: Pipeline = self.plumbing_kit.pipelines[pipeline_id]
+            pipeline: Pipeline = self.plumbingkit.pipelines[pipeline_id]
 
             index = last_index + 1
             flow_id = flow_id_template.format(index=index)
@@ -128,7 +130,9 @@ class PipelineWorker(Worker):
             last_index = index
             flow_files[flow_id] = flow_file
 
-            pipeline_copy: Pipeline = pipeline.model_copy(deep=True)
+            pipeline_copy: Pipeline = Pipeline.model_validate(
+                pipeline.model_dump(mode="python")
+            )
             pipeflow: PipeFlow = PipeFlow(
                 id=flow_id,
                 pipeline=pipeline_copy,
@@ -149,6 +153,12 @@ class PipelineWorker(Worker):
 
             return PipeFlow.load(flow_files[flow_id])
 
+    def create_flow(self, pipeline_id: str):
+        return self.load_resource(ResourceBind(
+            field_id="pipeflow",
+            factory_name="create_pipeflow",
+            selector=pipeline_id,
+        ))
 
     async def work(self, job: Job):
         await job.update_status(JobStatus.WORKING, "Creating/restoring pipeflow")
