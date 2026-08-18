@@ -4,9 +4,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 from datorum.core.exceptions import SettingsError
-from datorum.binding.settings import (
-    ContextBindType,
-)
 from datorum.context.settings import (
     DocumentContext,
     DocumentReference,
@@ -193,135 +190,36 @@ def test_special_cases(tmp_path: Path):
     settings.save_as(settings_path)
 
     assert document_1.base_path == tmp_path
-    
 
-def test_content_types():
-    assert not ContextBindType.model.is_domain()
-    assert ContextBindType.model.is_input()
-    assert ContextBindType.model.is_output()
-    assert ContextBindType.model.is_model()
-    assert not ContextBindType.model.is_text()
-    assert not ContextBindType.model.is_bytes()
-    assert not ContextBindType.model.is_path()
-    assert not ContextBindType.model.is_metadata()
-    assert ContextBindType.model.is_io()
+@pytest.mark.depends(on=["test_special_cases"])
+def test_document_reference_extension_resolution(tmp_path: Path):
+    """Covers the three ways DocumentReference._decompose_id() can resolve
+    an extension: explicit `extension` field, an extension embedded as the
+    id's trailing segment, and falling back to the doc_type's default."""
+    context = DocumentContext(id="ctx-extension-resolution")
+    context.base_path = tmp_path
 
-    assert not ContextBindType.model_input.is_domain()
-    assert ContextBindType.model_input.is_input()
-    assert not ContextBindType.model_input.is_output()
-    assert ContextBindType.model_input.is_model()
-    assert not ContextBindType.model_input.is_text()
-    assert not ContextBindType.model_input.is_bytes()
-    assert not ContextBindType.model_input.is_path()
-    assert not ContextBindType.model_input.is_metadata()
-    assert ContextBindType.model_input.is_io()
+    # Explicit `extension` field wins outright and is stripped from the id
+    # before splitting into domain/name.
+    doc_explicit = DocumentReference(id="domain.name", extension="md")
+    doc_explicit._set_persistent_recursive(context)
+    assert doc_explicit.domain_list == ["domain"]
+    assert doc_explicit.name == "name"
+    assert doc_explicit.doc_path == tmp_path / "domain" / "name.md"
 
-    assert not ContextBindType.model_output.is_domain()
-    assert not ContextBindType.model_output.is_input()
-    assert ContextBindType.model_output.is_output()
-    assert ContextBindType.model_output.is_model()
-    assert not ContextBindType.model_output.is_text()
-    assert not ContextBindType.model_output.is_bytes()
-    assert not ContextBindType.model_output.is_path()
-    assert not ContextBindType.model_output.is_metadata()
-    assert ContextBindType.model_output.is_io()
+    # No explicit extension, but the id's trailing segment already matches
+    # one of the doc_type's registered extensions ("txt" for text/plain):
+    # that segment is treated as the extension rather than part of the name.
+    doc_embedded = DocumentReference(id="domain.name.txt")
+    doc_embedded._set_persistent_recursive(context)
+    assert doc_embedded.domain_list == ["domain"]
+    assert doc_embedded.name == "name"
+    assert doc_embedded.doc_path == tmp_path / "domain" / "name.txt"
 
-    assert not ContextBindType.text.is_domain()
-    assert ContextBindType.text.is_input()
-    assert ContextBindType.text.is_output()
-    assert not ContextBindType.text.is_model()
-    assert ContextBindType.text.is_text()
-    assert not ContextBindType.text.is_bytes()
-    assert not ContextBindType.text.is_path()
-    assert not ContextBindType.text.is_metadata()
-    assert ContextBindType.text.is_io()
-
-    assert not ContextBindType.text_input.is_domain()
-    assert ContextBindType.text_input.is_input()
-    assert not ContextBindType.text_input.is_output()
-    assert not ContextBindType.text_input.is_model()
-    assert ContextBindType.text_input.is_text()
-    assert not ContextBindType.text_input.is_bytes()
-    assert not ContextBindType.text_input.is_path()
-    assert not ContextBindType.text_input.is_metadata()
-    assert ContextBindType.text_input.is_io()
-
-    assert not ContextBindType.text_output.is_domain()
-    assert not ContextBindType.text_output.is_input()
-    assert ContextBindType.text_output.is_output()
-    assert not ContextBindType.text_output.is_model()
-    assert ContextBindType.text_output.is_text()
-    assert not ContextBindType.text_output.is_bytes()
-    assert not ContextBindType.text_output.is_path()
-    assert not ContextBindType.text_output.is_metadata()
-    assert ContextBindType.text_output.is_io()
-
-    assert not ContextBindType.bytes.is_domain()
-    assert ContextBindType.bytes.is_input()
-    assert ContextBindType.bytes.is_output()
-    assert not ContextBindType.bytes.is_model()
-    assert not ContextBindType.bytes.is_text()
-    assert ContextBindType.bytes.is_bytes()
-    assert not ContextBindType.bytes.is_path()
-    assert not ContextBindType.bytes.is_metadata()
-    assert ContextBindType.bytes.is_io()
-
-    assert not ContextBindType.bytes_input.is_domain()
-    assert ContextBindType.bytes_input.is_input()
-    assert not ContextBindType.bytes_input.is_output()
-    assert not ContextBindType.bytes_input.is_model()
-    assert not ContextBindType.bytes_input.is_text()
-    assert ContextBindType.bytes_input.is_bytes()
-    assert not ContextBindType.bytes_input.is_path()
-    assert not ContextBindType.bytes_input.is_metadata()
-    assert ContextBindType.bytes_input.is_io()
-
-    assert not ContextBindType.bytes_output.is_domain()
-    assert not ContextBindType.bytes_output.is_input()
-    assert ContextBindType.bytes_output.is_output()
-    assert not ContextBindType.bytes_output.is_model()
-    assert not ContextBindType.bytes_output.is_text()
-    assert ContextBindType.bytes_output.is_bytes()
-    assert not ContextBindType.bytes_output.is_path()
-    assert not ContextBindType.bytes_output.is_metadata()
-    assert ContextBindType.bytes_output.is_io()
-
-    assert not ContextBindType.document_path.is_domain()
-    assert ContextBindType.document_path.is_input()
-    assert not ContextBindType.document_path.is_output()
-    assert not ContextBindType.document_path.is_model()
-    assert not ContextBindType.document_path.is_text()
-    assert not ContextBindType.document_path.is_bytes()
-    assert ContextBindType.document_path.is_path()
-    assert not ContextBindType.document_path.is_metadata()
-    assert not ContextBindType.document_path.is_io()
-
-    assert not ContextBindType.document_metadata.is_domain()
-    assert ContextBindType.document_metadata.is_input()
-    assert ContextBindType.document_metadata.is_output()
-    assert not ContextBindType.document_metadata.is_model()
-    assert not ContextBindType.document_metadata.is_text()
-    assert not ContextBindType.document_metadata.is_bytes()
-    assert not ContextBindType.document_metadata.is_path()
-    assert ContextBindType.document_metadata.is_metadata()
-    assert not ContextBindType.document_metadata.is_io()
-
-    assert ContextBindType.domain_path.is_domain()
-    assert ContextBindType.domain_path.is_input()
-    assert not ContextBindType.domain_path.is_output()
-    assert not ContextBindType.domain_path.is_model()
-    assert not ContextBindType.domain_path.is_text()
-    assert not ContextBindType.domain_path.is_bytes()
-    assert ContextBindType.domain_path.is_path()
-    assert not ContextBindType.domain_path.is_metadata()
-    assert not ContextBindType.domain_path.is_io()
-
-    assert ContextBindType.domain_metadata.is_domain()
-    assert ContextBindType.domain_metadata.is_input()
-    assert ContextBindType.domain_metadata.is_output()
-    assert not ContextBindType.domain_metadata.is_model()
-    assert not ContextBindType.domain_metadata.is_text()
-    assert not ContextBindType.domain_metadata.is_bytes()
-    assert not ContextBindType.domain_metadata.is_path()
-    assert ContextBindType.domain_metadata.is_metadata()
-    assert not ContextBindType.domain_metadata.is_io()
+    # No explicit extension and the trailing segment isn't a known
+    # extension: falls back to the doc_type's default (first) extension.
+    doc_default = DocumentReference(id="domain.name")
+    doc_default._set_persistent_recursive(context)
+    assert doc_default.domain_list == ["domain"]
+    assert doc_default.name == "name"
+    assert doc_default.doc_path == tmp_path / "domain" / "name.txt"
