@@ -67,10 +67,10 @@ class DocumentReference(BaseDatorumSettings):
             doc_path = doc_path / domain
         doc_path = doc_path / name
 
-        extentions = self.registry_doc_type.extentions
-        has_ext = any(name.endswith(f".{ext}") for ext in extentions)
-        if not has_ext and extentions:
-            doc_path = doc_path.with_suffix(f".{extentions[0]}")
+        extensions = self.registry_doc_type.extensions
+        has_ext = any(name.endswith(f".{ext}") for ext in extensions)
+        if not has_ext and extensions:
+            doc_path = doc_path.with_suffix(f".{extensions[0]}")
 
         return doc_path
 

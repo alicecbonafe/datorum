@@ -36,7 +36,7 @@ class DocumentType(BaseModel):
     """Represents the document content type, as writen in file, such as json or markdown."""
 
     id: str = Field(description="Document type identifier.")
-    extentions: list[str] = Field(default_factory=list, description="List of extentions associated with this document type.")
+    extensions: list[str] = Field(default_factory=list, description="List of extensions associated with this document type.")
 
 
 class DocumentModel(BaseModel):
@@ -86,11 +86,11 @@ DocumentModelRegistry: dict[str, DocumentModel] = {}
 DocumentHandlerRegistry: dict[tuple[str, str], DocumentHandler] = {}
 
 
-def register_doc_type(id: str, extentions: list[str], force: bool = False) -> DocumentType:
+def register_doc_type(id: str, extensions: list[str], force: bool = False) -> DocumentType:
     """Creates a document type and registers it."""
     if id in DocumentTypeRegistry and not force:
         raise DocumentTypeError(f"Doc type '{id}' is already registered")
-    doc_type = DocumentType(id=id, extentions=extentions)
+    doc_type = DocumentType(id=id, extensions=extensions)
     DocumentTypeRegistry[id] = doc_type
     return doc_type
 

@@ -49,7 +49,7 @@ def test_binder(tmp_path: Path,):
     domain_1_metadata = {"title": "Mocked Domain I"}
     domain_1_metadata_changed = {"title": "Mocked Domain I (changed)"}
 
-    register_doc_type("bin", extentions=["bin"])
+    register_doc_type("bin", extensions=["bin"])
     register_doc_model("bin", clazz=bytes, default_doc_type="bin")
     @serializer(doc_type="bin", doc_model="bin")
     def bytes_serializer(data: bytes, file_path: Path):

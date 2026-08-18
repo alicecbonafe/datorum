@@ -41,7 +41,7 @@ from datorum.binding.exceptions import ResourceFactoryError
 
 def test_registry_documents(tmp_path: Path):
     doc_type = "text/test"
-    doc_extentions = ["tst", "test"]
+    doc_extensions = ["tst", "test"]
 
     doc_model_id = "test"
     doc_model_clazz = str
@@ -52,13 +52,13 @@ def test_registry_documents(tmp_path: Path):
     class PydanticBasedModel(BaseModel):
         var_test: str = ""
 
-    register_doc_type(id=doc_type, extentions=doc_extentions)
+    register_doc_type(id=doc_type, extensions=doc_extensions)
 
-    assert DocumentTypeRegistry[doc_type].extentions == doc_extentions
-    assert get_doc_type(doc_type).extentions == doc_extentions
+    assert DocumentTypeRegistry[doc_type].extensions == doc_extensions
+    assert get_doc_type(doc_type).extensions == doc_extensions
 
     with pytest.raises(DocumentTypeError, match=r"^Doc type '.*?' is already registered$"):
-        register_doc_type(id=doc_type, extentions=doc_extentions)
+        register_doc_type(id=doc_type, extensions=doc_extensions)
     with pytest.raises(DocumentTypeError, match=r"^Doc type '.*?' not found in registry$"):
         get_doc_type(id="invalid")
 
