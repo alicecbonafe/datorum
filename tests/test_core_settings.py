@@ -131,3 +131,44 @@ def test_special_cases():
         a_text_content="text_content",
         a_persistent_model=data2,
     )
+
+
+def test_nested_persistent_model_save_and_reload_delegate_to_root(tmp_path: Path):
+    """save() and reload() called on a nested (non-root) persistent instance
+    must delegate to the root's save()/reload() rather than acting on
+    themselves, and save_as() called on a nested instance must re-root it to
+    itself."""
+    root_path = tmp_path / "nested_root.yml"
+
+    child = MockedPersistentModel(
+        a_file_path=Path("child.txt"),
+        a_text_content="child original",
+    )
+    root = MockedPersistentModel(
+        a_file_path=Path("root.txt"),
+        a_text_content="root original",
+        a_persistent_model=child,
+    )
+    root.save_as(root_path)
+
+    assert child.persistent is root
+
+    # save() on a non-root nested instance delegates to the root's save()
+    child.a_text_content = "child changed"
+    child.save()
+
+    reloaded = MockedPersistentModel.load(root_path)
+    assert reloaded.a_persistent_model.a_text_content == "child changed"
+
+    # reload() on a non-root nested instance delegates to the root's reload()
+    root.a_text_content = "root changed in memory only"
+    child.reload()
+    assert root.a_text_content == "root original"
+
+    # save_as() on a non-root nested instance re-roots it to itself
+    new_path = tmp_path / "child_as_new_root.yml"
+    child.save_as(new_path)
+
+    assert child.persistent is child
+    assert child.settings_path == new_path
+    assert new_path.exists()

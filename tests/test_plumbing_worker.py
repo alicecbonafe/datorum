@@ -325,6 +325,27 @@ def test_create_pipeflow_respects_custom_id_template(tmp_path):
     assert (tmp_path / "flows" / "pf_0_run.yml").exists()
 
 
+def test_create_pipeflow_resolves_runtime_collision_with_uncached_file(tmp_path):
+    """If a flow file appears on disk for the freshly-computed candidate index
+    *after* register_flow_factories() has already scanned the directory (so
+    it's on disk but not in the in-memory flow_files cache), create_pipeflow's
+    collision loop should still skip past it rather than overwrite it."""
+    pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+    # Simulate a flow file that shows up after registration's initial disk
+    # scan (e.g. written by another process), so it's unknown to flow_files.
+    (tmp_path / "flows" / "flow_0.yml").write_text(
+        "id: flow_0\npipeline: {id: other}\n"
+    )
+
+    flow = worker.binder.factories["create_pipeflow"]("pipe1")
+
+    assert flow.id == "flow_1"
+    assert (tmp_path / "flows" / "flow_1.yml").exists()
+
+
 def test_restore_pipeflow_requires_flow_id(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     with pytest.raises(PipelineWorkerError, match="Pipeflow ID is required"):
@@ -362,6 +383,37 @@ def test_restore_pipeflow_finds_flow_file_not_yet_seen_this_session(tmp_path):
     worker = _make_pipeline_worker(tmp_path)
     restored = worker.binder.factories["restore_pipeflow"]("flow_7")
     assert restored.id == "flow_7"
+
+
+def test_restore_pipeflow_caches_file_discovered_after_registration(tmp_path):
+    """A flow file written *after* register_flow_factories() already scanned
+    the directory (so it's missing from the initial flow_files population)
+    should still be found by id on first lookup, get added to the in-memory
+    flow_files cache, and be served straight from the flow cache afterwards."""
+    worker = _make_pipeline_worker(tmp_path)
+    flow_dir = tmp_path / "flows"
+    pipeline = Pipeline(id="pipe1")
+    flow = PipeFlow(id="flow_9", pipeline=pipeline)
+    flow.save_as(flow_dir / "flow_9.yml")
+
+    restored = worker.binder.factories["restore_pipeflow"]("flow_9")
+    assert restored.id == "flow_9"
+
+    restored_again = worker.binder.factories["restore_pipeflow"]("flow_9")
+    assert restored_again is restored
+
+
+def test_create_flow_delegates_to_create_pipeflow_resource(tmp_path):
+    pipeline = Pipeline(id="pipe1")
+    worker = _make_pipeline_worker(
+        tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
+    )
+
+    flow = worker.create_flow("pipe1")
+
+    assert flow.id == "flow_0"
+    assert flow.pipeline.id == "pipe1"
+    assert (tmp_path / "flows" / "flow_0.yml").exists()
 
 
 # ==============================================================================

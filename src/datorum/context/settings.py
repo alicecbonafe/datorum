@@ -10,6 +10,9 @@ from .exceptions import (
     DocumentWritingError,
 )
 from .registry import (
+    DocumentType,
+    DocumentModel,
+    DocumentHandler,
     get_doc_type,
     get_doc_model,
     get_doc_handler,

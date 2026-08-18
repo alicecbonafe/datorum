@@ -3,6 +3,7 @@ import re
 from collections.abc import Mapping, Callable
 
 from .registry import resource, ResourceFactoryRegistry
+from .binder import Binder
 from .exceptions import KeyNotFoundError, InvalidKeyNameError
 
 
@@ -14,13 +15,16 @@ def register_mapped_api_key_factory(
     key_name_match: str | None = None,
     key_name_formatter: Callable[[str], str] | None = None,
     force: bool = False,
+    binder: Binder | None = None
 ):
     if not force and "api_key" in ResourceFactoryRegistry:
         return
 
     key_name_re: re.Pattern[str] = re.compile(key_name_match or DEFAULT_KEY_NAME_MATCH)
 
-    @resource(name="api_key", force=True)
+    decorator = binder.resource if binder else resource
+
+    @decorator(name="api_key", force=True)
     def _api_key(key_name):
         formatted_name = key_name_formatter(key_name) \
             if key_name_formatter else key_name

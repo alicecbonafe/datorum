@@ -11,6 +11,10 @@ from typing import (
     get_args,
 )
 
+from ..binding.settings import (
+    ContextBind,
+    ResourceBind,
+)
 from ..context.settings import (
     DocumentReference,
     DocumentContext,
