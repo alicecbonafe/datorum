@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 
-from datorum.context.settings import ContextBind, ResourceBind
+from datorum.binding.settings import ContextBind, ResourceBind
 from datorum.work.exceptions import JobStatusError
 from datorum.work.job import Broadcaster, Job, JobStatus
 

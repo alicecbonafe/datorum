@@ -18,7 +18,8 @@ from RestrictedPython.Guards import (
 from ..agency.settings import InferenceServiceProvider, AgentRole
 from ..agency.worker import AgentWorker
 from ..binding.binder import Binder
-from ..context.settings import DocumentReference, ContextBind, ResourceBind
+from ..binding.settings import ContextBind, ResourceBind
+from ..context.settings import DocumentReference
 from ..tooling.settings import ToolBoxSetUp
 from ..tooling.worker import ToolWorker
 from ..work.job import Job, JobStatus

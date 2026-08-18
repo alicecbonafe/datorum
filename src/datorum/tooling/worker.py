@@ -6,11 +6,13 @@ from typing import Any, Optional, Literal
 from pydantic import BaseModel
 
 from ..binding.binder import Binder
+from ..binding.settings import (
+    ContextBind,
+    ResourceBind,
+)
 from ..context.settings import (
     DocumentContext,
     DocumentReference,
-    ContextBind,
-    ResourceBind,
 )
 from ..context.commons.chat import (
     ChatHistory,

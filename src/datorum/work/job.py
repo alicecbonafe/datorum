@@ -5,7 +5,7 @@ from typing import (
     Optional,
 )
 
-from ..context.settings import (
+from ..binding.settings import (
     ContextBind, ResourceBind,
 )
 from .exceptions import JobStatusError

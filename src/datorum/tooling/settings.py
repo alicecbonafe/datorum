@@ -2,7 +2,7 @@ from typing import Optional
 
 from pydantic import Field
 
-from ..context.settings import ContextBindType, ResourceBind
+from ..binding.settings import ContextBindType, ResourceBind
 from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 

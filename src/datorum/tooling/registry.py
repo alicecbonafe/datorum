@@ -17,7 +17,7 @@ import uuid
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model
 
-from ..context.settings import ContextBindType
+from ..binding.settings import ContextBindType
 from .exceptions import ToolBoxRegistryError
 
 

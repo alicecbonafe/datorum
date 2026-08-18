@@ -22,6 +22,10 @@ from .context.registry import (
     serializer,
     deserializer,
 )
+from .context.settings import (
+    DocumentReference,
+    DocumentContext,
+)
 
 
 __all__ = [

@@ -7,11 +7,13 @@ from pydantic import BaseModel
 
 import datorum.plumbing.worker as worker_mod
 from datorum.binding.binder import Binder
-from datorum.context.settings import (
+from datorum.binding.settings import (
     ContextBind,
     ContextBindType,
-    DocumentContext,
     ResourceBind,
+)
+from datorum.context.settings import (
+    DocumentContext,
 )
 from datorum.plumbing.exceptions import PipelineWorkerError
 from datorum.plumbing.settings import (

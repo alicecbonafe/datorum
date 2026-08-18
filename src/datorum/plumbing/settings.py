@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Optional, Union
 from pydantic import Field, PrivateAttr, model_validator
 
 from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
-from ..context.settings import ResourceBind, ContextBind
+from ..binding.settings import ResourceBind, ContextBind
 
 
 class BasePipelineStep(BaseDatorumSettings):

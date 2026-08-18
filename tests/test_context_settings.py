@@ -4,10 +4,12 @@ import pytest
 from pydantic import BaseModel, Field
 
 from datorum.core.exceptions import SettingsError
+from datorum.binding.settings import (
+    ContextBindType,
+)
 from datorum.context.settings import (
     DocumentContext,
     DocumentReference,
-    ContextBindType,
 )
 from datorum.context.registry import (
     DocumentModel,

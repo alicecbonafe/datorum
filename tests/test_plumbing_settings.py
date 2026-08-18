@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from datorum.context.settings import ContextBind, ContextBindType, ResourceBind
+from datorum.binding.settings import ContextBind, ContextBindType, ResourceBind
 from datorum.plumbing.settings import (
     AgentStep,
     BasePipelineStep,

@@ -6,11 +6,13 @@ import pytest
 from pydantic import BaseModel
 
 from datorum.binding.binder import Binder
-from datorum.context.settings import (
+from datorum.binding.settings import (
     ContextBind,
     ContextBindType,
-    DocumentContext,
     ResourceBind,
+)
+from datorum.context.settings import (
+    DocumentContext,
 )
 from datorum.context.commons.chat import (
     AssistantMessage,

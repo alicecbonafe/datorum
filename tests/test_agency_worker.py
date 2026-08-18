@@ -10,14 +10,14 @@ from datorum.agency.exceptions import AgentWorkerError
 from datorum.agency.settings import AgencyKit, AgentRole, InferenceServiceProvider
 from datorum.agency.worker import AgentWorker
 from datorum.binding.binder import Binder
-from datorum.context.commons.chat import ChatHistory, SystemMessage, UserMessage
-from datorum.context.registry import DocumentModelRegistry, register_doc_model
-from datorum.context.settings import (
+from datorum.binding.settings import (
     ContextBind,
     ContextBindType,
-    DocumentContext,
     ResourceBind,
 )
+from datorum.context.commons.chat import ChatHistory, SystemMessage, UserMessage
+from datorum.context.registry import DocumentModelRegistry, register_doc_model
+from datorum.context.settings import DocumentContext
 from datorum.tooling.registry import ToolBoxRegistry, tool, toolbox
 from datorum.tooling.settings import ToolBoxSetUp, ToolKit
 from datorum.tooling.worker import ToolWorker
