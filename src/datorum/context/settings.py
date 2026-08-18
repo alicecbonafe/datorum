@@ -24,6 +24,7 @@ class DocumentReference(BaseDatorumSettings):
     id: str
     doc_type: str = "text/plain"
     doc_model: str = "text"
+    extension: str | None = None
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -47,11 +48,13 @@ class DocumentReference(BaseDatorumSettings):
 
     @property
     def name(self) -> str:
-        return self.id.split(".")[-1]
+        _, name, _ = self._decompose_id()
+        return name
 
     @property
     def domain_list(self) -> list[str]:
-        return self.id.split(".")[:-1]
+        domain_list, _, _ = self._decompose_id()
+        return domain_list
 
     @property
     def domain(self) -> str:
@@ -59,20 +62,39 @@ class DocumentReference(BaseDatorumSettings):
 
     @property
     def doc_path(self) -> Path:
-        name = self.name
-        domain_list = self.domain_list
+        domain_list, base_name, extension = self._decompose_id()
 
         doc_path = self.base_path
         for domain in domain_list:
             doc_path = doc_path / domain
-        doc_path = doc_path / name
-
-        extensions = self.registry_doc_type.extensions
-        has_ext = any(name.endswith(f".{ext}") for ext in extensions)
-        if not has_ext and extensions:
-            doc_path = doc_path.with_suffix(f".{extensions[0]}")
+        doc_path = (doc_path / base_name).with_suffix(f".{extension}")
 
         return doc_path
+
+    def _decompose_id(self) -> tuple[list[str], str, str]:
+        splitted = self.id.split(".")
+        if self.extension:
+            domain_list = splitted[:-1]
+            base_name = splitted[-1]
+            extension = self.extension
+        else:
+            ext_candidate = splitted[-1]
+            extensions = self.registry_doc_type.extensions
+            _found = next((
+                ext for ext in extensions if ext == ext_candidate
+            ), None)
+            if _found:
+                domain_list = splitted[:-2]
+                base_name = splitted[-2]
+                extension = splitted[-1]
+            else:
+                domain_list = splitted[:-1]
+                base_name = splitted[-1]
+                extension = extensions[0]
+
+        return domain_list, base_name, extension
+
+
 
     def load(self) -> Any:
         doc_path = self.doc_path
@@ -175,7 +197,10 @@ class DocumentContext(BaseDatorumPersistentSettings):
         return self.documents.get(id)
 
     def create_document(
-        self, id: str, doc_type: str = "text/plain", doc_model: str = "text"
+        self, id: str,
+        doc_type: str = "text/plain",
+        doc_model: str = "text",
+        extension: str | None = None,
     ) -> DocumentReference:
         document = DocumentReference(
             id=id,
