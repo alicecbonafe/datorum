@@ -422,7 +422,14 @@ async def test_work_recovers_non_planning_flow(tmp_path):
 
 @pytest.mark.asyncio
 async def test_work_active_flow_tracked_and_released(tmp_path):
-    pipeline = Pipeline(id="pipe1")
+    step = ToolStep(
+        id="in",
+        target_id=None,
+        tool_params=ContextBind(field_id="tool_params", binded_id="doc1"),
+        tool_result=ContextBind(field_id="tool_result", binded_id="doc1"),
+        toolbox_setup=ResourceBind(field_id="toolbox_setup", factory_name="toolbox_setup", selector="box1.tool1"),
+    )
+    pipeline = Pipeline(id="pipe1", steps={"in": step})
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
     )

@@ -90,6 +90,7 @@ class PipelineWorker(Worker):
         self.tool_worker: ToolWorker = tool_worker
 
         self._active_flows: dict[str, str] = {}  # flow_id -> job_id
+        self._flow_cache: dict[str, PipeFlow] = {}
 
     def register_flow_factories(self,
         flow_path: Path,
@@ -141,6 +142,7 @@ class PipelineWorker(Worker):
                 pipeline=pipeline_copy,
             )
             pipeflow.save_as(flow_file)
+            self._flow_cache[flow_id] = pipeflow
             return pipeflow
 
         @self.binder.resource(name="restore_pipeflow", force=True)
@@ -148,13 +150,18 @@ class PipelineWorker(Worker):
             if not flow_id:
                 raise PipelineWorkerError("Pipeflow ID is required")
 
+            if flow_id in self._flow_cache:
+                return self._flow_cache[flow_id]
+
             if flow_id not in flow_files:
                 flow_file = (flow_path / flow_id).with_suffix(".yml")
                 if not flow_file.exists():
                     raise PipelineWorkerError(f"Pipeflow '{flow_id}' not found")
                 flow_files[flow_id] = flow_file
 
-            return PipeFlow.load(flow_files[flow_id])
+            flow = PipeFlow.load(flow_files[flow_id])
+            self._flow_cache[flow_id] = flow
+            return flow
 
     def create_flow(self, pipeline_id: str):
         return self.binder.load_resource(ResourceBind(
@@ -183,7 +190,7 @@ class PipelineWorker(Worker):
             pipeflow = self.binder.load_resource(pipeline_bind)
 
         if pipeflow.id in self._active_flows:
-            raise PipelineWorkerError(f"Pipeflow '{pipeflow.id}' already running in job '{job.id}'")
+            raise PipelineWorkerError(f"Pipeflow '{pipeflow.id}' already running in job '{self._active_flows[pipeflow.id]}'")
         self._active_flows[pipeflow.id] = job.id
 
         await job.update_status(JobStatus.WORKING, "Collecting pipeflow resources")
