@@ -1,18 +1,54 @@
 # Datorum
 
-A settings-based framework for creating AI agents, focusing on the high specialization of smaller models using context engineering.
+A settings-based framework for creating AI agents and pipelines, focusing on the high specialization of smaller models using context engineering.
 
 ## Goal
 
 The main goal of this project is to provide a consistent set of context engineering tools, aimed at preparing smaller LLMs for highly specialized tasks, thereby reducing the cost and environmental impact of everyday AI tool usage.
 
+## Quick start
+
+**TODO** About simple install
+
+```
+python -m venv datorum
+source ./datorum/bin/activate
+pip install git+https://codeberg.org/alicebonafe/datorum.git
+datorum init-config
+```
+
+**TODO** About edit settings
+
+**TODO** About run jobs
+
+
+## About the name
+
+> "Contextus est subiectum; Datorum est obiectum."
+> (Context is the subject; Datorum is the object.)
+
+Datorum derives from the Latin genitive plural datōrum, meaning "of the data".
+
+In Latin syntax, the Subject takes the nominative case, while the direct Object takes the accusative. There's a deliberate philosophical stance in naming this framework Datorum (genitive): the Context is the active subject that drives the LLM interaction, but Datorum is the framework that exists in relation to the data. It is not the protagonist; it is the grammatical object that belongs intrinsically to the information it processes. Datorum bends to the data, serving as the oblique tool through which the subject (context) transforms raw information into intelligence.
+
+It's pronounced /da.ˈtoː.rũː/ in Classical Latin — in practice, say da-TOH-rum (rhymes with 'serum' in English, or simply 'Datôrum' as in Brazilian Portuguese).For Mandarin speakers, a natural rendering is 达-托-鲁姆 (Dā-tuō-lǔ-mǔ), with a slight pitch emphasis on the second syllable "tuō" to preserve the Latin stress.
 
 ## Current state
 
-The project currently has a scraping mechanism with some specializations for sources (e.g. `archive.org` and `arxiv`) and formats (e.g. `MDX` and `QMD`), and a small agent for segmenting acquired content into semantic chunks. The available tools can be accessed through a terminal client.
+The entire architecture has been redesigned to provide a solid foundation for work. Contexts and resources can be shared via global or local registries, allowing for complete flexibility. Toolkits can be executed by the user, by AI agents, or as pipeline steps.
 
 
 ## Next steps
+
+### Still for this version
+
+- Basic CLI application for start and monitor jobs.
+- Integration between `datorum.work.job.Job.log_broadcaster` property with the built-in `logging` package.
+- Full docstrings for all elements exposed by `src/datorum/__init__.py`, in reST format.
+- Quality report build in dev time (published via repo, not PyPi).
+- Quality report build in CI time (artifact).
+
+### For future versions
 
 - Vector database and semantic search.
 - Scraping agent that customizes Scrapers by tooling, according to each specific case.
@@ -32,57 +68,11 @@ pip install -e .
 
 ### Setting up the environment
 
-Configuration can be handled via environment variables or a `.env` file. The main configuration settings are:
-
-- `DATA_DIR`: Working directory where generated data will be stored.
-- `CHUNKER_BASE_URL`: URL for accessing the chunker inference server.
-- `CHUNKER_API_KEY`: Access key for the chunker inference server.
-- `CHUNKER_MODEL`: Name of the model that will perform the chunking.
+**TODO**
 
 ### Configuring sources
 
-Information sources are organized into domains, in the `{DATA_DIR}/domains.json` file, which follows this format:
-
-```json
-{
-    "id": "domain-id",
-    "slug": "domain-slug",
-    "name": "Domain Name",
-    "topics": [
-        {
-            "id": "topic-id",
-            "slug": "topic-slug",
-            "name": "Topic Name",
-            "sources": [
-                {
-                    "id": "source-id",
-                    "slug": "source-slug",
-                    "name": "Source Name",
-                    "url": "https://source.url",
-                    "source_file": "scraped_info.md",
-                    "chunks_file": "semantic_chunked.json",
-                    "scraper": "ScraperClass",
-                    "scraper_args": {
-                        "key": "val"
-                    }
-                }, { ... }
-            ]
-        }, { ... }
-    ]
-}
-```
-
-### Downloading information (`scrape`)
-
-```
-datorum scrape source-id
-```
-
-### Generating semantic chunks (`chunk`)
-
-```
-datorum chunk source-id
-```
+**TODO**
 
 ## License
 
