@@ -57,29 +57,29 @@ class CliAppContext:
     def _create_binder(self) -> datorum.Binder:
         self._binder = datorum.Binder()
 
-        for ctx in self.app_settings.contexts.values():
+        for ctx in self.settings.contexts.values():
             self._binder.add_context(context=ctx)
 
         try:
             datorum.get_resource_factory("api_key")
         except datorum.ResourceFactoryError:
-            if self.app_settings.api_keys is None:
+            if self.settings.api_keys is None:
                 datorum.register_mapped_api_key_factory(
-                    key_name_formatter=lambda k: f"{str.upper(f)}_API_KEY",
+                    key_name_formatter=lambda k: f"{str.upper(k)}_API_KEY",
                     binder=self._binder,
                 )
             else:
                 datorum.register_mapped_api_key_factory(
-                    self.app_settings.api_keys,
+                    self.settings.api_keys,
                     binder=self._binder,
                 )
 
         last_index: int = -1
-        prefix, suffix = flow_id_template.split("{index}")
+        prefix, suffix = self.settings.flow_id_template.split("{index}")
         flow_id_re_str = re.escape(prefix) + r"(\d+)" + re.escape(suffix)
-        flow_id_re = re.compile(flow_file_re_str)
+        flow_id_re = re.compile(self.settings.flow_id_template)
 
-        for flow_id in self.app_settings.flows.keys():
+        for flow_id in self.settings.flows.keys():
             match = flow_id_re.fullmatch(flow_id)
             if match:
                 last_index = max(int(match.group(1)), last_index)
@@ -89,24 +89,24 @@ class CliAppContext:
             nonlocal last_index
 
             if not pipeline_id:
-                raise PipelineWorkerError("Pipeline ID is required")
-            if pipeline_id not in self.app_settings.plumbingkit.pipelines:
-                raise PipelineWorkerError(f"Pipeline '{pipeline_id}' not found")
-            pipeline: Pipeline = self.app_settings.plumbingkit.pipelines[pipeline_id]
+                raise datorum.PipelineWorkerError("Pipeline ID is required")
+            if pipeline_id not in self.settings.plumbingkit.pipelines:
+                raise datorum.PipelineWorkerError(f"Pipeline '{pipeline_id}' not found")
+            pipeline: datorum.Pipeline = self.settings.plumbingkit.pipelines[pipeline_id]
 
             index = last_index + 1
-            flow_id = flow_id_template.format(index=index)
-            flow_file = (self.app_settings.flows_path / flow_id).with_suffix(".yml")
+            flow_id = self.settings.flow_id_template.format(index=index)
+            flow_file = (self.settings.flows_path / flow_id).with_suffix(".yml")
 
             while flow_file.exists():
                 index += 1
-                flow_id = flow_id_template.format(index=index)
+                flow_id = self.settings.flow_id_template.format(index=index)
                 flow_file = (flow_path / flow_id).with_suffix(".yml")
 
             last_index = index
             flow_files[flow_id] = flow_file
 
-            pipeline_copy: Pipeline = Pipeline.model_validate(
+            pipeline_copy: datorum.Pipeline = datorum.Pipeline.model_validate(
                 pipeline.model_dump(mode="python")
             )
             pipeflow: datorum.PipeFlow = datorum.PipeFlow(
@@ -119,13 +119,13 @@ class CliAppContext:
         @self._binder.resource(name="restore_pipeflow", force=True)
         def _restore_pipeflow(flow_id) -> datorum.PipeFlow:
             if not flow_id:
-                raise PipelineWorkerError("Pipeflow ID is required")
+                raise datorum.PipelineWorkerError("Pipeflow ID is required")
 
-            if flow_id not in self.app_settings.flows:
+            if flow_id not in self.settings.flows:
                 flow_file = (flow_path / flow_id).with_suffix(".yml")
                 if not flow_file.exists():
-                    raise PipelineWorkerError(f"Pipeflow '{flow_id}' not found")
-                self.app_settings.flows[flow_id] = flow_file
+                    raise datorum.PipelineWorkerError(f"Pipeflow '{flow_id}' not found")
+                self.settings.flows[flow_id] = flow_file
 
-            return datorum.PipeFlow.load(self.app_settings.flows[flow_id])
+            return datorum.PipeFlow.load(self.settings.flows[flow_id])
 

@@ -40,8 +40,8 @@ dev = [
     "datorum[lint]",
 ]
 
-# [project.scripts]
-# datorum = "datorum.cli:app"
+[project.scripts]
+datorum = "datorum.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -4,7 +4,8 @@ import click
 
 from datorum import DatorumBaseError
 
-from .bindings import BindingSyntaxError
+
+class BindingSyntaxError(ValueError): ...
 
 
 def handle_errors(func):

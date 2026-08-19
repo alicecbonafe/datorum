@@ -1,21 +1,27 @@
-"""
-Suggested by Claude:
+from pathlib import Path
 
-src/datorum/cli/
-├── __init__.py       # exposes `cli`
-├── app.py            # root click group + lazy settings loading
-├── settings.py        # AppSettings (fixed)
-├── bindings.py         # "field=type(selector)" parsing grammar
-├── context.py           # wires Binder + all *Worker instances together
-├── runner.py             # asyncio.run + broadcaster→stdout loop
-├── errors.py              # DatorumBaseError → click.ClickException
-├── validate.py             # cross-reference checks
-└── commands/
-    ├── __init__.py
-    ├── init_config.py
-    ├── kits.py            # export/import groups
-    ├── tool.py
-    ├── agent.py
-    ├── flow.py
-    └── validate.py         # thin click wrapper around ../validate.py
-"""
+import click
+
+from .context import CliAppContext
+from .commands.config import ConfigGroup
+from .commands.run import RunGroup
+
+@click.group()
+@click.option(
+    "-s", "--settings", "settings_path",
+    type=click.Path(path_type=Path),
+    default=Path(".datorum.yml"),
+    show_default=True,
+    help="Path to the datorum settings file."
+)
+@click.pass_context
+def app(ctx: click.Context, settings_path: Path) -> None:
+    ctx.obj = CliAppContext(settings_path=settings_path)
+
+
+app.add_command(
+    ConfigGroup(name="config", help="Manage Datorum settings.")
+)
+app.add_command(
+    RunGroup(name="run", help="Run tools, agents and pipelines.")
+)
