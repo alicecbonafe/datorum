@@ -4,6 +4,7 @@ import click
 
 from .context import CliAppContext
 from .commands.config import ConfigGroup
+from .commands.document_context import ContextGroup
 from .commands.run import RunGroup
 
 @click.group()
@@ -20,7 +21,7 @@ def app(ctx: click.Context, settings_path: Path) -> None:
 
 
 app.add_command(
-    ConfigGroup(name="config", help="Manage Datorum settings.")
+    ConfigGroup(name="config", help="Manage CLI settings file.")
 )
 app.add_command(
     RunGroup(name="run", help="Run tools, agents and pipelines.")

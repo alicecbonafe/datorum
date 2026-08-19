@@ -1,9 +1,18 @@
+import asyncio
 from pathlib import Path
 import re
 
+import click
 import datorum
 
 from .settings import CliAppSettings
+
+
+_BIND_RE = re.compile(r"^(?P<field_id>[^=]+)=(?P<name>[\w\-]+)(?:\((?P<value>[^)]*)\))?$")
+
+
+class BindingSyntaxError(datorum.DatorumBaseError):
+    """Raised when a --bind-context / --bind-resource value can't be parsed."""
 
 
 class CliAppContext:
@@ -53,6 +62,58 @@ class CliAppContext:
                 tool_worker=self.tool_worker,
             )
         return self._pipeline_worker
+
+    def parse_context_bind(self, raw: str) -> datorum.ContextBind:
+        match = _BIND_RE.match(raw)
+        if not match:
+            raise BindingSyntaxError(
+                f"Invalid --bind-context value '{raw}' (expected 'field=bind-type(context:binded-id)')"
+            )
+        field_id, type_name, value = match.group("field_id", "name", "value")
+        if value is None:
+            raise BindingSyntaxError(
+                f"Invalid --bind-context value '{raw}': missing '(context:binded-id)"
+            )
+
+        try:
+            bind_type = datorum.ContextBindType(type_name)
+        except ValueError as exc:
+            raise BindingSyntaxError(
+                f"Unknown context bind type '{type_name}' in '{raw}'"
+            ) from exc
+
+        context, binded_id = self._split_context_value(value)
+        return datorum.ContextBind(
+            field_id=field_id,
+            binded_id=binded_id,
+            context=context,
+            context_bind_type=bind_type,
+        )
+
+    def parse_resource_bind(self, raw: str) -> datorum.ResourceBind:
+        match = _BIND_RE.match(raw)
+        if not match:
+            raise BindingSyntaxError(
+                f"Invalid --bind-context value '{raw}' (expected 'field=bind-type(context:binded-id)')"
+            )
+        field_id, factory_name, selector = match.group("field_id", "name", "value")
+        return datorum.ResourceBind(
+            field_id=field_id,
+            factory_name=factory_name,
+            selector=selector
+        )
+
+    def parse_positional_context(self, raw: str, field_id: str) -> datorum.ContextBind:
+        context, binded_id = self._split_context_value(raw)
+        return datorum.ContextBind(
+            field_id=field_id,
+            binded_id=binded_id,
+            context=context,
+            context_bind_type=datorum.ContextBindType.model,
+        )
+
+    def run_job(self, worker: datorum.Worker, job: datorum.Job) -> datorum.Job:
+        return asyncio.run(self._run_job_async(worker, job))
 
     def _create_binder(self) -> datorum.Binder:
         self._binder = datorum.Binder()
@@ -128,4 +189,38 @@ class CliAppContext:
                 self.settings.flows[flow_id] = flow_file
 
             return datorum.PipeFlow.load(self.settings.flows[flow_id])
+
+    def _split_context_value(self, value: str) -> tuple[str | list[str] | None, str]:
+        if ":" not in value:
+            return None, value
+        context_part, binded_id = value.rsplit(":", 1)
+        contexts = context_part.split(",")
+        return (contexts[0] if len(contexts) == 1 else contexts), binded_id
+
+    async def _run_job_async(self, worker: datorum.Worker, job: datorum.Job) -> datorum.Job:
+        printer = asyncio.create_task(self._echo_broadcasts(job))
+        try:
+            await worker.run(job)
+        finally:
+            await printer
+        return job
+
+    async def _gather_catchers(self, job: datorum.Job) -> None:
+        await asyncio.gather(
+            self._catch_chunks(job.chunk_broadcaster),
+            self._catch_updates(job.update_broadcaster),
+            self._catch_logs(job.log_broadcaster),
+        )
+
+    async def _catch_chunks(self, broadcaster: datorum.Broadcaster) -> None:
+        async for item in broadcaster.subscribe():
+            click.echo(item, nl=False)
+
+    async def _catch_updates(self, broadcaster: datorum.Broadcaster) -> None:
+        async for item in broadcaster.subscribe():
+            click.echo(f"[UPDATE: {item}]", nl=False)
+
+    async def _catch_logs(self, broadcaster: datorum.Broadcaster) -> None:
+        async for item in broadcaster.subscribe():
+            click.echo(f"[LOG: {item}]", nl=False)
 

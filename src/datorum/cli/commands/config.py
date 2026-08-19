@@ -1,5 +1,7 @@
 from pathlib import Path
+import re
 from typing import Callable
+import unicodedata
 
 import click
 
@@ -7,7 +9,7 @@ import datorum
 
 from ..context import CliAppContext
 from .base import BaseCommandGroup, cli_command
-
+from .document_context import ContextGroup
 
 
 _KIT_ALIASES: dict[str, str] = {
@@ -19,14 +21,137 @@ _KIT_ALIASES: dict[str, str] = {
     "pipes": "plumbingkit",
     "p": "plumbingkit",
 }
+
 _KIT_LOADERS: dict[str, Callable] = {
     "toolkit": datorum.ToolKit.load,
     "agencykit": datorum.AgencyKit.load,
     "plumbingkit": datorum.PlumbingKit.load,
 }
 
+
+def _sanitize_id(id) -> str | None:
+    id = unicodedata.normalize('NFKD', id).encode('ascii', 'ignore').decode('ascii')
+    id = re.sub(r"[^\w\-.]", "_", id)
+    id = re.sub(r"_+", "_", id)
+    if not id:
+        return None
+
+    windows_compatibility_reserved = {
+        'CON', 'PRN', 'AUX', 'NUL',
+        'COM1', 'COM2', 'COM3', 'COM4', 'COM5',
+        'COM6', 'COM7', 'COM8', 'COM9',
+        'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5',
+        'LPT6', 'LPT7', 'LPT8', 'LPT9'
+    }
+    if name.upper() in windows_compatibility_reserved:
+        name = '_' + name
+    name = name.rstrip(' .')
+    return name
+
+
+class ContextGroup(BaseCommandGroup):
+    """Group for document context commands."""
+
+    @staticmethod
+    @cli_command("create")
+    @click.argument("context_id")
+    @click.option("-c", "--create-dir", "create_dir", is_flag=True)
+    @click.pass_obj
+    def create_context(
+        app_ctx: CliAppContext,
+        context_id: str,
+        create_dir: bool,
+    ):
+        sanitized_id = _sanitize_id(context_id)
+        if not sanitized_id:
+            raise click.ClickException(f"Invalid context id: '{context_id}'")
+        context.base_path = app_ctx.settings.contexts_path / context_id
+
+        context = datorum.DocumentContext(id=context_id)
+        context.base_path = app_ctx.settings.contexts_path / sanitized_id
+        if create_dir:
+            context.base_path.mkdir(parents=True, exist_ok=True)
+
+        app_ctx.settings.contexts[sanitized_id] = context
+        app_ctx.settings.save()
+
+    @staticmethod
+    @cli_command("link")
+    @click.argument("context_id")
+    @click.argument("doc_file", type=click.Path(exists=True, path_type=Path))
+    @click.option("-t", "--doc-type", "doc_type", default="text/plain", show_default=True)
+    @click.option("-m", "--doc-model", "doc_model", default="text", show_default=True)
+    def link_document(
+        app_ctx: CliAppContext,
+        context_id: str,
+        document_file: Path,
+        doc_type: str,
+        doc_model: str,
+    ):
+        click.echo(f"Linking document '{document_file}' to context '{context_id}'...")
+
+        sanitized_id = _sanitize_id(context_id)
+        if sanitized_id not in app_ctx.settings.contexts:
+            msg = f"Document context not found: '{context_id}'"
+            if context_id != sanitized_id:
+                msg = f"{msg} (sanitized: '{sanitized_id}')"
+            raise click.ClickException(msg)
+
+        context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
+
+        if context.base_path not in document_file.parents:
+            raise click.ClickException(f"Document is not in the context path (document in '{document_file}', context in '{context.base_path}')")
+
+        document_id = document_file.name
+        parent_dir = document_file.parent
+        while parent_dir != app_ctx.settings.contexts_path:
+            document_id = f"{parent_dir.name}.{document_id}"
+            parent_dir = parent_dir.parent
+
+        context.create_document(
+            id=document_id,
+            doc_type=doc_type,
+            doc_model=doc_model,
+        )
+        app_ctx.settings.save()
+
+        click.echo("Done!")
+
+
+    @staticmethod
+    @cli_command("export")
+    @click.argument("context_id")
+    @click.argument("output_file", type=click.Path(path_type=Path))
+    @click.pass_obj
+    def export_context(
+        app_ctx: CliAppContext,
+        context_id: str,
+        output_file: Path,
+    ):
+        click.echo(f"Exporting document context '{context_id}' to '{output_file}'...")
+
+        sanitized_id = _sanitize_id(context_id)
+        if sanitized_id not in app_ctx.settings.contexts:
+            msg = f"Document context not found: '{context_id}'"
+            if context_id != sanitized_id:
+                msg = f"{msg} (sanitized: '{sanitized_id}')"
+            raise click.ClickException(msg)
+
+        context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
+        context.save_as(output_file)
+
+        click.echo("Done!")
+
+
 class ConfigGroup(BaseCommandGroup):
     """Group for configuration commands."""
+
+    def __init__(self, name=None, **attrs):
+        super().__init__(name=name, **attrs)
+        self.add_command(ContextGroup(
+            name="context",
+            help="Manages document context settings."
+        ))
 
     @staticmethod
     @cli_command("init", load_settings=False)
