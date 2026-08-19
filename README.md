@@ -29,9 +29,9 @@ datorum init-config
 
 Datorum derives from the Latin genitive plural datōrum, meaning "of the data".
 
-In Latin syntax, the Subject takes the nominative case, while the direct Object takes the accusative. There's a deliberate philosophical stance in naming this framework Datorum (genitive): the Context is the active subject that drives the LLM interaction, but Datorum is the framework that exists in relation to the data. It is not the protagonist; it is the grammatical object that belongs intrinsically to the information it processes. Datorum bends to the data, serving as the oblique tool through which the subject (context) transforms raw information into intelligence.
+In Latin syntax, the Subject takes the nominative case, while the direct Object takes the accusative. There's a deliberate philosophical stance in naming this framework Datorum (genitive): the Context is the active subject that drives the LLM interaction, and Datorum is the framework that exists in relation to the data. It is not the protagonist; it is the grammatical object that belongs intrinsically to the information it processes. Datorum bends to the data, serving as the oblique tool through which the subject (context) transforms raw information into intelligence.
 
-It's pronounced /da.ˈtoː.rũː/ in Classical Latin — in practice, say da-TOH-rum (rhymes with 'serum' in English, or simply 'Datôrum' as in Brazilian Portuguese).For Mandarin speakers, a natural rendering is 达-托-鲁姆 (Dā-tuō-lǔ-mǔ), with a slight pitch emphasis on the second syllable "tuō" to preserve the Latin stress.
+It's pronounced /da.ˈtoː.rũː/ in Classical Latin — in practice, say da-TOH-rum (rhymes with 'serum' in English, or simply 'Datôrum' as in Brazilian Portuguese). For Mandarin speakers, a natural rendering is 达-托-鲁-姆 (Dā-tuō-lǔ-mǔ), with a slight pitch emphasis on the second syllable "tuō" to preserve the Latin stress.
 
 ## Current state
 

@@ -174,6 +174,7 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
             data = yaml.safe_load(f)
         updated_instance = self.__class__.model_validate(data)
         self.__dict__.update(updated_instance.__dict__)
+        self._set_persistent_recursive(self)
 
     @model_validator(mode="after")
     def _root_model(self) -> "BaseDatorumPersistentSettings":

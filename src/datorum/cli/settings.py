@@ -1,0 +1,29 @@
+from pathlib import Path
+
+from pydantic import Field, PrivateAttr
+
+import datorum
+
+
+class CliAppSettings(datorum.BaseDatorumPersistentSettings):
+
+    contexts_path: Path = Field(default_factory=lambda: Path("contexts"))
+    flows_path: Path = Field(default_factory=lambda: Path("flows"))
+    flow_id_template: str = "flow_{index}"
+
+    toolkit: datorum.ToolKit = Field(default_factory=datorum.ToolKit)
+    agencykit: datorum.AgencyKit = Field(default_factory=datorum.AgencyKit)
+    plumbingkit: datorum.PlumbingKit = Field(default_factory=datorum.PlumbingKit)
+
+    contexts: dict[str, datorum.DocumentContext] = Field(default_factory=dict)
+    flows: dict[str, Path] = Field(default_factory=dict)
+
+    api_keys: dict[str, str] | None = None
+
+    _loaded: bool = PrivateAttr(False)
+
+    def load(self):
+        if not self._loaded:
+            self.reload()
+            self._loaded = True
+
