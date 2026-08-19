@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 
 import click
 
@@ -7,6 +8,22 @@ import datorum
 from ..context import CliAppContext
 from .base import BaseCommandGroup, cli_command
 
+
+
+_KIT_ALIASES: dict[str, str] = {
+    "tools": "toolkit",
+    "t": "toolkit",
+    "agents": "agencykit",
+    "a": "agencykit",
+    "pipelines": "plumbingkit",
+    "pipes": "plumbingkit",
+    "p": "plumbingkit",
+}
+_KIT_LOADERS: dict[str, Callable] = {
+    "toolkit": datorum.ToolKit.load,
+    "agencykit": datorum.AgencyKit.load,
+    "plumbingkit": datorum.PlumbingKit.load,
+}
 
 class ConfigGroup(BaseCommandGroup):
     """Group for configuration commands."""
@@ -56,5 +73,38 @@ class ConfigGroup(BaseCommandGroup):
 
         app_ctx.settings.save()
 
+        click.echo("Done!")
+
+    @staticmethod
+    @cli_command("export")
+    @click.argument("kit_type")
+    @click.argument("output_file", type=click.Path(path_type=Path))
+    @click.pass_obj
+    def export_kit(
+        app_ctx: CliAppContext,
+        kit_type: str,
+        output_file: Path,
+    ):
+        click.echo(f"Exporting {kit_type} to {output_file}...")
+        kit_name = _KIT_ALIASES.get(kit_type, kit_type)
+        kit = getattr(app_ctx.settings, kit_name)
+        kit.save_as(output_file)
+        click.echo("Done!")
+
+    @staticmethod
+    @cli_command("import")
+    @click.argument("kit_type")
+    @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+    @click.pass_obj
+    def import_kit(
+        app_ctx: CliAppContext,
+        kit_type: str,
+        input_file: Path,
+    ):
+        click.echo(f"Importing {kit_type} from {input_file}...")
+        kit_name = _KIT_ALIASES.get(kit_type, kit_type)
+        kit = _KIT_LOADERS[kit_name](input_file)
+        setattr(app_ctx.settings, kit_name, kit)
+        app_ctx.settings.save()
         click.echo("Done!")
 
