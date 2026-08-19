@@ -19,7 +19,8 @@ class BasePipelineStep(BaseDatorumSettings):
 class HumanInteractionStep(BasePipelineStep):
     type: Literal["human"] = "human"
 
-    chat_history: ContextBind
+    interactive_document_id: str
+    interactive_document_context: str | list[str] | None = Field(default=None)
 
 
 class ToolStep(BasePipelineStep):

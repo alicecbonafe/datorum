@@ -18,7 +18,7 @@ from RestrictedPython.Guards import (
 from ..agency.settings import InferenceServiceProvider, AgentRole
 from ..agency.worker import AgentWorker
 from ..binding.binder import Binder
-from ..binding.settings import ContextBind, ResourceBind
+from ..binding.settings import ContextBindType, ContextBind, ResourceBind
 from ..context.settings import DocumentReference
 from ..tooling.settings import ToolBoxSetUp
 from ..tooling.worker import ToolWorker
@@ -213,6 +213,22 @@ class PipelineWorker(Worker):
 
                 current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
                 if isinstance(current_step, HumanInteractionStep):
+                    current_step.interactive
+                    existing_interactive = next((
+                        b for b in job.context_bindings \
+                            if b.field_id == 'interactive'
+                    ), None)
+                    if existing_interactive:
+                        existing_interactive.binded_id = current_step.interactive_document_id
+                        existing_interactive.context = current_step.interactive_document_context
+                        existing_interactive.context_bind_type = ContextBindType.model
+                    else:
+                        job.context_bindings.append(ContextBind(
+                            field_id='interactive',
+                            binded_id=current_step.interactive_document_id,
+                            context=current_step.interactive_document_context,
+                            context_bind_type=ContextBindType.model,
+                        ))
                     pipeflow.state = PipeFlowState.paused
                     pipeflow.save()
                     await job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")

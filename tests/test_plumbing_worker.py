@@ -452,7 +452,7 @@ async def test_work_unknown_step_raises(tmp_path):
 async def test_work_recovers_non_planning_flow(tmp_path):
     """When a flow is restored mid-flight (state != planning), work() should
     resume from `current_step_id` rather than reset to `first_step_id`."""
-    step = HumanInteractionStep(id="only", chat_history=ContextBind(field_id="chat_history", binded_id="doc1"))
+    step = HumanInteractionStep(id="only", interactive_document_id="doc1")
     pipeline = Pipeline(id="pipe1", first_step_id="unused", steps={"only": step})
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
