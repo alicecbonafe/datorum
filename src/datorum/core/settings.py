@@ -134,6 +134,9 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
     @classmethod
     def load(cls, settings_path: Path) -> Self:
         """Loads settings from a file."""
+        if not settings_path.exists():
+            raise SettingsError(f"Settings file not found: {settings_path}")
+
         with settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         instance = cls.model_validate(data)
@@ -163,6 +166,9 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         if self.persistent is not self:
             self.persistent.reload()
             return
+
+        if not self.settings_path.exists():
+            raise SettingsError(f"Settings file not found: {self.settings_path}")
 
         with self.settings_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)

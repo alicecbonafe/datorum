@@ -81,6 +81,12 @@ def test_exceptions():
     with pytest.raises(SettingsError):
         assert data.settings_path
 
+    data.settings_path = Path("not-found.yml")
+    with pytest.raises(SettingsError):
+        data.reload()
+    with pytest.raises(SettingsError):
+        MockedPersistentModel.load(data.settings_path)
+
 
 @pytest.mark.depends(on=["test_persistence", "test_exceptions"])
 def test_special_cases():
