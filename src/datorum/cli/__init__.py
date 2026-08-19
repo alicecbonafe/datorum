@@ -4,7 +4,6 @@ import click
 
 from .context import CliAppContext
 from .commands.config import ConfigGroup
-from .commands.document_context import ContextGroup
 from .commands.run import RunGroup
 
 @click.group()

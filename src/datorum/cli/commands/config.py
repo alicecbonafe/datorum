@@ -9,7 +9,6 @@ import datorum
 
 from ..context import CliAppContext
 from .base import BaseCommandGroup, cli_command
-from .document_context import ContextGroup
 
 
 _KIT_ALIASES: dict[str, str] = {
@@ -43,10 +42,10 @@ def _sanitize_id(id) -> str | None:
         'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5',
         'LPT6', 'LPT7', 'LPT8', 'LPT9'
     }
-    if name.upper() in windows_compatibility_reserved:
-        name = '_' + name
-    name = name.rstrip(' .')
-    return name
+    if id.upper() in windows_compatibility_reserved:
+        id = '_' + id
+    id = id.rstrip(' .')
+    return id
 
 
 class ContextGroup(BaseCommandGroup):
@@ -65,7 +64,6 @@ class ContextGroup(BaseCommandGroup):
         sanitized_id = _sanitize_id(context_id)
         if not sanitized_id:
             raise click.ClickException(f"Invalid context id: '{context_id}'")
-        context.base_path = app_ctx.settings.contexts_path / context_id
 
         context = datorum.DocumentContext(id=context_id)
         context.base_path = app_ctx.settings.contexts_path / sanitized_id
@@ -81,14 +79,15 @@ class ContextGroup(BaseCommandGroup):
     @click.argument("doc_file", type=click.Path(exists=True, path_type=Path))
     @click.option("-t", "--doc-type", "doc_type", default="text/plain", show_default=True)
     @click.option("-m", "--doc-model", "doc_model", default="text", show_default=True)
+    @click.pass_obj
     def link_document(
         app_ctx: CliAppContext,
         context_id: str,
-        document_file: Path,
+        doc_file: Path,
         doc_type: str,
         doc_model: str,
     ):
-        click.echo(f"Linking document '{document_file}' to context '{context_id}'...")
+        click.echo(f"Linking document '{doc_file}' to context '{context_id}'...")
 
         sanitized_id = _sanitize_id(context_id)
         if sanitized_id not in app_ctx.settings.contexts:
@@ -99,12 +98,12 @@ class ContextGroup(BaseCommandGroup):
 
         context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
 
-        if context.base_path not in document_file.parents:
-            raise click.ClickException(f"Document is not in the context path (document in '{document_file}', context in '{context.base_path}')")
+        if context.base_path not in doc_file.parents:
+            raise click.ClickException(f"Document is not in the context path (document in '{doc_file}', context in '{context.base_path}')")
 
-        document_id = document_file.name
-        parent_dir = document_file.parent
-        while parent_dir != app_ctx.settings.contexts_path:
+        document_id = doc_file.name
+        parent_dir = doc_file.parent
+        while parent_dir != context.base_path:
             document_id = f"{parent_dir.name}.{document_id}"
             parent_dir = parent_dir.parent
 

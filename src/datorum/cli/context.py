@@ -61,6 +61,10 @@ class CliAppContext:
                 agent_worker=self.agent_worker,
                 tool_worker=self.tool_worker,
             )
+            self._pipeline_worker.register_flow_factories(
+                flow_path=self.settings.flows_path,
+                flow_id_template=self.settings.flow_id_template,
+            )
         return self._pipeline_worker
 
     def parse_context_bind(self, raw: str) -> datorum.ContextBind:
@@ -135,61 +139,6 @@ class CliAppContext:
                     binder=self._binder,
                 )
 
-        last_index: int = -1
-        prefix, suffix = self.settings.flow_id_template.split("{index}")
-        flow_id_re_str = re.escape(prefix) + r"(\d+)" + re.escape(suffix)
-        flow_id_re = re.compile(self.settings.flow_id_template)
-
-        for flow_id in self.settings.flows.keys():
-            match = flow_id_re.fullmatch(flow_id)
-            if match:
-                last_index = max(int(match.group(1)), last_index)
-
-        @self._binder.resource(name="create_pipeflow", force=True)
-        def _create_pipeflow(pipeline_id) -> datorum.PipeFlow:
-            nonlocal last_index
-
-            if not pipeline_id:
-                raise datorum.PipelineWorkerError("Pipeline ID is required")
-            if pipeline_id not in self.settings.plumbingkit.pipelines:
-                raise datorum.PipelineWorkerError(f"Pipeline '{pipeline_id}' not found")
-            pipeline: datorum.Pipeline = self.settings.plumbingkit.pipelines[pipeline_id]
-
-            index = last_index + 1
-            flow_id = self.settings.flow_id_template.format(index=index)
-            flow_file = (self.settings.flows_path / flow_id).with_suffix(".yml")
-
-            while flow_file.exists():
-                index += 1
-                flow_id = self.settings.flow_id_template.format(index=index)
-                flow_file = (flow_path / flow_id).with_suffix(".yml")
-
-            last_index = index
-            flow_files[flow_id] = flow_file
-
-            pipeline_copy: datorum.Pipeline = datorum.Pipeline.model_validate(
-                pipeline.model_dump(mode="python")
-            )
-            pipeflow: datorum.PipeFlow = datorum.PipeFlow(
-                id=flow_id,
-                pipeline=pipeline_copy,
-            )
-            pipeflow.save_as(flow_file)
-            return pipeflow
-
-        @self._binder.resource(name="restore_pipeflow", force=True)
-        def _restore_pipeflow(flow_id) -> datorum.PipeFlow:
-            if not flow_id:
-                raise datorum.PipelineWorkerError("Pipeflow ID is required")
-
-            if flow_id not in self.settings.flows:
-                flow_file = (flow_path / flow_id).with_suffix(".yml")
-                if not flow_file.exists():
-                    raise datorum.PipelineWorkerError(f"Pipeflow '{flow_id}' not found")
-                self.settings.flows[flow_id] = flow_file
-
-            return datorum.PipeFlow.load(self.settings.flows[flow_id])
-
     def _split_context_value(self, value: str) -> tuple[str | list[str] | None, str]:
         if ":" not in value:
             return None, value
@@ -198,7 +147,7 @@ class CliAppContext:
         return (contexts[0] if len(contexts) == 1 else contexts), binded_id
 
     async def _run_job_async(self, worker: datorum.Worker, job: datorum.Job) -> datorum.Job:
-        printer = asyncio.create_task(self._echo_broadcasts(job))
+        printer = asyncio.create_task(self._gather_catchers(job))
         try:
             await worker.run(job)
         finally:
@@ -207,20 +156,26 @@ class CliAppContext:
 
     async def _gather_catchers(self, job: datorum.Job) -> None:
         await asyncio.gather(
-            self._catch_chunks(job.chunk_broadcaster),
-            self._catch_updates(job.update_broadcaster),
-            self._catch_logs(job.log_broadcaster),
+            self._catch_chunks(job),
+            self._catch_updates(job),
+            self._catch_logs(job),
         )
 
-    async def _catch_chunks(self, broadcaster: datorum.Broadcaster) -> None:
-        async for item in broadcaster.subscribe():
+    async def _catch_chunks(self, job: datorum.Job) -> None:
+        async for item in job.chunk_broadcaster.subscribe():
             click.echo(item, nl=False)
 
-    async def _catch_updates(self, broadcaster: datorum.Broadcaster) -> None:
-        async for item in broadcaster.subscribe():
-            click.echo(f"[UPDATE: {item}]", nl=False)
+    async def _catch_updates(self, job: datorum.Job) -> None:
+        async for item in job.update_broadcaster.subscribe():
+            if job.is_streaming:
+                click.echo(f"[UPDATE: {item}]", nl=False)
+            else:
+                click.echo(f"[UPDATE] {item}")
 
-    async def _catch_logs(self, broadcaster: datorum.Broadcaster) -> None:
-        async for item in broadcaster.subscribe():
-            click.echo(f"[LOG: {item}]", nl=False)
+    async def _catch_logs(self, job: datorum.Job) -> None:
+        async for item in job.log_broadcaster.subscribe():
+            if job.is_streaming:
+                click.echo(f"[LOG: {item}]", nl=False)
+            else:
+                click.echo(item)
 

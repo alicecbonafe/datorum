@@ -16,7 +16,6 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
     plumbingkit: datorum.PlumbingKit = Field(default_factory=datorum.PlumbingKit)
 
     contexts: dict[str, datorum.DocumentContext] = Field(default_factory=dict)
-    flows: dict[str, Path] = Field(default_factory=dict)
 
     api_keys: dict[str, str] | None = None
 
@@ -29,7 +28,7 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
 
     @model_validator(mode="after")
     def _inject_path(self) -> "CliAppSettings":
-        for context_id, context in self.contexts:
+        for context_id, context in self.contexts.items():
             context.base_path = self.contexts_path / context_id
 
         return self
