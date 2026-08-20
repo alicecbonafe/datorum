@@ -12,6 +12,7 @@ def cli_command(name=None, load_settings: bool = True, **click_kwargs):
         func._cmd_kwargs = click_kwargs
         func._load_settings = load_settings
         return func
+
     return decorator
 
 
@@ -54,4 +55,5 @@ class BaseCommandGroup(click.Group):
             if ctx and ctx.obj and hasattr(ctx.obj, "settings"):
                 ctx.obj.settings.load()
             return bound_method(*args, **kwargs)
+
         return wrapper

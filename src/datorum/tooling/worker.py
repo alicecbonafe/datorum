@@ -37,13 +37,19 @@ class ToolWorker(Worker):
             _selector_parts = selector.rsplit(".", 1)
             if len(_selector_parts) != 2:
                 raise ToolWorkerError(
-                    f"Wrong selector format in '{selector}' (expected: 'toolbox_name.tool_name')")
+                    f"Wrong selector format in '{selector}' (expected: 'toolbox_name.tool_name')"
+                )
 
             toolbox_name = _selector_parts[0]
             tool_name = _selector_parts[1]
             setup = next(
-                (tb for tb_id, tb in self.toolkit.toolboxes.items() if tb_id == toolbox_name),
-                None)
+                (
+                    tb
+                    for tb_id, tb in self.toolkit.toolboxes.items()
+                    if tb_id == toolbox_name
+                ),
+                None,
+            )
             if not setup:
                 raise ToolWorkerError(f"Unknown toolbox '{toolbox_name}'")
 
@@ -55,29 +61,27 @@ class ToolWorker(Worker):
         await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
         setup_bind: ResourceBind = next(
-            bind for bind in job.resource_bindings \
-                if bind.field_id == "toolbox_setup"
+            bind for bind in job.resource_bindings if bind.field_id == "toolbox_setup"
         )
         params_bind: ContextBind = next(
-            bind for bind in job.context_bindings \
-                if bind.field_id == "tool_params"
+            bind for bind in job.context_bindings if bind.field_id == "tool_params"
         )
         result_bind: ContextBind = next(
-            bind for bind in job.context_bindings \
-                if bind.field_id == "tool_result"
+            bind for bind in job.context_bindings if bind.field_id == "tool_result"
         )
 
         setup: ToolBoxSetUp = self.binder.load_resource(setup_bind)
-        toolbox_def: ToolBoxDefinition = get_toolbox_definition(
-            setup.toolbox_name)
+        toolbox_def: ToolBoxDefinition = get_toolbox_definition(setup.toolbox_name)
 
         if setup.active_tool not in toolbox_def.tools:
             raise ToolWorkerError(
-                f"Tool '{setup.active_tool}' not found in ToolBox '{setup.id}'")
+                f"Tool '{setup.active_tool}' not found in ToolBox '{setup.id}'"
+            )
 
         if setup.active_tool not in setup.tools_enabled:
             raise ToolWorkerError(
-                f"Tool '{setup.active_tool}' not enabled for ToolBox '{setup.id}'")
+                f"Tool '{setup.active_tool}' not enabled for ToolBox '{setup.id}'"
+            )
 
         toolbox: ToolBox = toolbox_def.create_toolbox()
 
@@ -86,18 +90,27 @@ class ToolWorker(Worker):
                 continue
 
             field_bind: ContextBind | None = next(
-                (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
-                None
+                (
+                    bind
+                    for bind in job.context_bindings
+                    if bind.field_id == field.attr_name
+                ),
+                None,
             )
             if not field_bind:
                 field_bind = next(
-                    (bind for bind in setup.context_bindings if bind.field_id == field.attr_name),
-                    None
+                    (
+                        bind
+                        for bind in setup.context_bindings
+                        if bind.field_id == field.attr_name
+                    ),
+                    None,
                 )
                 if not field_bind:
                     if field.required:
                         raise ToolWorkerError(
-                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
+                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'"
+                        )
                     continue
 
             field_value: Any = self.binder.pull_context(field_bind)
@@ -105,30 +118,37 @@ class ToolWorker(Worker):
 
         for field_name, field in toolbox_def.resource_fields.items():
             field_bind: ResourceBind | None = next(
-                (bind for bind in job.resource_bindings if bind.field_id == field.attr_name),
-                None
+                (
+                    bind
+                    for bind in job.resource_bindings
+                    if bind.field_id == field.attr_name
+                ),
+                None,
             )
             if not field_bind:
                 field_bind = next(
-                    (bind for bind in setup.resource_bindings if bind.field_id == field.attr_name),
-                    None
+                    (
+                        bind
+                        for bind in setup.resource_bindings
+                        if bind.field_id == field.attr_name
+                    ),
+                    None,
                 )
                 if not field_bind:
                     if field.required:
                         raise ToolWorkerError(
-                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'")
+                            f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'"
+                        )
                     continue
 
             field_value: Any = self.binder.load_resource(field_bind)
             setattr(toolbox, field.attr_name, field_value)
 
         params_doc = self.binder.find_document(
-            document_id=params_bind.binded_id,
-            context=params_bind.context
+            document_id=params_bind.binded_id, context=params_bind.context
         )
         result_doc = self.binder.find_document(
-            document_id=result_bind.binded_id,
-            context=result_bind.context
+            document_id=result_bind.binded_id, context=result_bind.context
         )
 
         params = None
@@ -146,7 +166,7 @@ class ToolWorker(Worker):
                     break
                 elif isinstance(msg, UserMessage):
                     break
-            
+
             if not assistant_message:
                 raise ToolWorkerError("Assistant's message not found")
 
@@ -158,13 +178,8 @@ class ToolWorker(Worker):
         else:
             params = params_doc.load()
 
-
         await job.update_status(JobStatus.WORKING, "Starting tool")
-        result = await toolbox.run_tool(
-            tool_name=setup.active_tool,
-            params=params
-        )
-
+        result = await toolbox.run_tool(tool_name=setup.active_tool, params=params)
 
         await job.update_status(JobStatus.WORKING, "Saving results")
         if result_doc.doc_model == "chat-history":
@@ -178,22 +193,21 @@ class ToolWorker(Worker):
             if isinstance(result, str):
                 result_text = result
             elif isinstance(result, dict):
-                result_text = json.dumps(
-                    result, indent=2, ensure_ascii=False)
+                result_text = json.dumps(result, indent=2, ensure_ascii=False)
             elif isinstance(result, BaseModel):
-                result_text = result.model_dump_json(
-                    indent=2, ensure_ascii=False)
+                result_text = result.model_dump_json(indent=2, ensure_ascii=False)
             else:
                 result_text = str(result)
-            chat_history.messages.append(ToolMessage(
-                content=result_text,
-                tool_call_id=call_id,
-            ))
+            chat_history.messages.append(
+                ToolMessage(
+                    content=result_text,
+                    tool_call_id=call_id,
+                )
+            )
 
             result_doc.save(chat_history)
         else:
             result_doc.save(result)
-
 
         await job.update_status(JobStatus.WORKING, "Saving bindings")
         for field_name, field in toolbox_def.context_fields.items():
@@ -201,12 +215,15 @@ class ToolWorker(Worker):
                 continue
 
             field_bind: ContextBind | None = next(
-                (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
-                None
+                (
+                    bind
+                    for bind in job.context_bindings
+                    if bind.field_id == field.attr_name
+                ),
+                None,
             )
             if not field_bind:
                 continue
 
             field_value: Any = getattr(toolbox, field.attr_name)
             self.binder.push_context(field_bind, field_value)
-

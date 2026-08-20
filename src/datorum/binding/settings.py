@@ -27,8 +27,7 @@ class ContextBindType(str, Enum):
         return not self.value.endswith("output")
 
     def is_output(self) -> bool:
-        return not self.value.endswith("input") \
-            and not self.value.endswith("path")
+        return not self.value.endswith("input") and not self.value.endswith("path")
 
     def is_model(self) -> bool:
         return self.value.startswith("model")

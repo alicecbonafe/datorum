@@ -22,7 +22,10 @@ class DocumentType(BaseModel):
     """Represents the document content type, as writen in file, such as json or markdown."""
 
     id: str = Field(description="Document type identifier.")
-    extensions: list[str] = Field(default_factory=list, description="List of extensions associated with this document type.")
+    extensions: list[str] = Field(
+        default_factory=list,
+        description="List of extensions associated with this document type.",
+    )
 
 
 class DocumentModel(BaseModel):
@@ -30,7 +33,10 @@ class DocumentModel(BaseModel):
 
     id: str = Field(description="Document model identifier.")
     clazz: type = Field(description="Python class that represents the model.")
-    default_doc_type: str = Field(default="application/json", description="Default document type associated with this model.")
+    default_doc_type: str = Field(
+        default="application/json",
+        description="Default document type associated with this model.",
+    )
 
 
 class DocumentHandler(BaseModel):
@@ -72,13 +78,16 @@ DocumentModelRegistry: dict[str, DocumentModel] = {}
 DocumentHandlerRegistry: dict[tuple[str, str], DocumentHandler] = {}
 
 
-def register_doc_type(id: str, extensions: list[str], force: bool = False) -> DocumentType:
+def register_doc_type(
+    id: str, extensions: list[str], force: bool = False
+) -> DocumentType:
     """Creates a document type and registers it."""
     if id in DocumentTypeRegistry and not force:
         raise DocumentTypeError(f"Doc type '{id}' is already registered")
     doc_type = DocumentType(id=id, extensions=extensions)
     DocumentTypeRegistry[id] = doc_type
     return doc_type
+
 
 def get_doc_type(id: str) -> DocumentType:
     """Return the registered document type instance with the specified 'id'."""
@@ -87,7 +96,9 @@ def get_doc_type(id: str) -> DocumentType:
     return DocumentTypeRegistry[id]
 
 
-def register_doc_model(id: str, clazz: type, default_doc_type: str | None = None, force: bool = False) -> DocumentModel:
+def register_doc_model(
+    id: str, clazz: type, default_doc_type: str | None = None, force: bool = False
+) -> DocumentModel:
     """Creates a document model and registers it."""
     if id in DocumentModelRegistry and not force:
         raise DocumentModelError(f"Doc model '{id}' is already registered")
@@ -96,6 +107,7 @@ def register_doc_model(id: str, clazz: type, default_doc_type: str | None = None
         doc_model.default_doc_type = default_doc_type
     DocumentModelRegistry[id] = doc_model
     return doc_model
+
 
 def get_doc_model(id: str) -> DocumentModel:
     """Return the registered document model instance with the specified 'id'."""
@@ -157,7 +169,10 @@ def register_pydantic_based_handler(
         handler.serializer = _make_serializer(dict_handler.serializer)
         handler.deserializer = _make_deserializer(dict_handler.deserializer, model_type)
 
-def get_doc_handler(doc_type: str, doc_model: str, create: bool = False) -> DocumentHandler:
+
+def get_doc_handler(
+    doc_type: str, doc_model: str, create: bool = False
+) -> DocumentHandler:
     """Return the registered document handler for the type+model combination."""
     id = (doc_type, doc_model)
     if id not in DocumentHandlerRegistry:
@@ -170,6 +185,7 @@ def get_doc_handler(doc_type: str, doc_model: str, create: bool = False) -> Docu
             raise DocumentHandlerError(f"Doc model '{id}' not found in registry")
     return DocumentHandlerRegistry[id]
 
+
 def find_handlers(
     doc_type: str | None = None, doc_model: str | None = None
 ) -> list[DocumentHandler]:
@@ -177,11 +193,19 @@ def find_handlers(
     if doc_type is None and doc_model is None:
         return list(DocumentHandlerRegistry.values())
     if doc_type is None:
-        return [val for key, val in DocumentHandlerRegistry.items() if key[1] == doc_model]
+        return [
+            val for key, val in DocumentHandlerRegistry.items() if key[1] == doc_model
+        ]
     if doc_model is None:
-        return [val for key, val in DocumentHandlerRegistry.items() if key[0] == doc_type]
+        return [
+            val for key, val in DocumentHandlerRegistry.items() if key[0] == doc_type
+        ]
     handler_id = (doc_type, doc_model)
-    return [DocumentHandlerRegistry[handler_id]] if handler_id in DocumentHandlerRegistry else []
+    return (
+        [DocumentHandlerRegistry[handler_id]]
+        if handler_id in DocumentHandlerRegistry
+        else []
+    )
 
 
 # ======================================================
@@ -191,6 +215,7 @@ def find_handlers(
 
 def doc_model(id: str, doc_type: str | None = None, force: bool = False):
     """Decorator for registering classes as document models."""
+
     def decorator(cls):
         if issubclass(cls, BaseModel):
             register_pydantic_based_handler(
@@ -213,8 +238,11 @@ def doc_model(id: str, doc_type: str | None = None, force: bool = False):
 
 def serializer(doc_type: str, doc_model: str):
     """Decorator for registering the model->type serializer"""
+
     def decorator(func):
-        get_doc_handler(doc_type=doc_type, doc_model=doc_model, create=True).serializer = func
+        get_doc_handler(
+            doc_type=doc_type, doc_model=doc_model, create=True
+        ).serializer = func
         return func
 
     return decorator
@@ -222,10 +250,10 @@ def serializer(doc_type: str, doc_model: str):
 
 def deserializer(doc_type: str, doc_model: str):
     """Decorator for registering the type->model deserializer"""
+
     def decorator(func):
         get_doc_handler(
-            doc_type=doc_type, doc_model=doc_model,
-            create=True
+            doc_type=doc_type, doc_model=doc_model, create=True
         ).deserializer = func
         return func
 

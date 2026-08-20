@@ -10,10 +10,14 @@ from .exceptions import SettingsError
 
 class DatorumDumper(yaml.SafeDumper): ...
 
+
 def represent_path(dumper, path):
     return dumper.represent_str(str(path))
+
+
 def represent_enum(dumper, enum_value):
     return dumper.represent_data(enum_value.value)
+
 
 yaml.add_multi_representer(Path, represent_path, Dumper=DatorumDumper)
 yaml.add_multi_representer(Enum, represent_enum, Dumper=DatorumDumper)

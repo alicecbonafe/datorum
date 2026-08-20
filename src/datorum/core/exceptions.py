@@ -8,4 +8,3 @@ class SettingsError(DatorumBaseError):
 
 class RegistryError(DatorumBaseError):
     """Registry related errors."""
-

@@ -28,22 +28,39 @@ _KIT_LOADERS: dict[str, Callable] = {
 
 
 def _sanitize_id(id) -> str | None:
-    id = unicodedata.normalize('NFKD', id).encode('ascii', 'ignore').decode('ascii')
+    id = unicodedata.normalize("NFKD", id).encode("ascii", "ignore").decode("ascii")
     id = re.sub(r"[^\w\-.]", "_", id)
     id = re.sub(r"_+", "_", id)
     if not id:
         return None
 
     windows_compatibility_reserved = {
-        'CON', 'PRN', 'AUX', 'NUL',
-        'COM1', 'COM2', 'COM3', 'COM4', 'COM5',
-        'COM6', 'COM7', 'COM8', 'COM9',
-        'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5',
-        'LPT6', 'LPT7', 'LPT8', 'LPT9'
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "COM1",
+        "COM2",
+        "COM3",
+        "COM4",
+        "COM5",
+        "COM6",
+        "COM7",
+        "COM8",
+        "COM9",
+        "LPT1",
+        "LPT2",
+        "LPT3",
+        "LPT4",
+        "LPT5",
+        "LPT6",
+        "LPT7",
+        "LPT8",
+        "LPT9",
     }
     if id.upper() in windows_compatibility_reserved:
-        id = '_' + id
-    id = id.rstrip(' .')
+        id = "_" + id
+    id = id.rstrip(" .")
     return id
 
 
@@ -76,7 +93,9 @@ class ContextGroup(BaseCommandGroup):
     @cli_command("link")
     @click.argument("context_id")
     @click.argument("doc_file", type=click.Path(exists=True, path_type=Path))
-    @click.option("-t", "--doc-type", "doc_type", default="text/plain", show_default=True)
+    @click.option(
+        "-t", "--doc-type", "doc_type", default="text/plain", show_default=True
+    )
     @click.option("-m", "--doc-model", "doc_model", default="text", show_default=True)
     @click.pass_obj
     def link_document(
@@ -105,7 +124,8 @@ class ContextGroup(BaseCommandGroup):
         except ValueError:
             raise click.ClickException(
                 f"Document is not in the context path "
-                f"(document in '{doc_file}', context in '{context.base_path}')")
+                f"(document in '{doc_file}', context in '{context.base_path}')"
+            )
 
         parts = relative_path.parts
         document_id = ".".join(parts)
@@ -118,7 +138,6 @@ class ContextGroup(BaseCommandGroup):
         app_ctx.settings.save()
 
         click.echo("Done!")
-
 
     @staticmethod
     @cli_command("export")
@@ -150,16 +169,35 @@ class ConfigGroup(BaseCommandGroup):
 
     def __init__(self, name=None, **attrs):
         super().__init__(name=name, **attrs)
-        self.add_command(ContextGroup(
-            name="context",
-            help="Manages document context settings."
-        ))
+        self.add_command(
+            ContextGroup(name="context", help="Manages document context settings.")
+        )
 
     @staticmethod
     @cli_command("init", load_settings=False)
-    @click.option("-c", "--contexts", "contexts_path", type=click.Path(path_type=Path), default=Path("contexts"), show_default=True)
-    @click.option("-f", "--flows", "flows_path", type=click.Path(path_type=Path), default=Path("flows"), show_default=True)
-    @click.option("-t", "--flow-id-template", "flow_id_template", default="flow_{index}", show_default=True)
+    @click.option(
+        "-c",
+        "--contexts",
+        "contexts_path",
+        type=click.Path(path_type=Path),
+        default=Path("contexts"),
+        show_default=True,
+    )
+    @click.option(
+        "-f",
+        "--flows",
+        "flows_path",
+        type=click.Path(path_type=Path),
+        default=Path("flows"),
+        show_default=True,
+    )
+    @click.option(
+        "-t",
+        "--flow-id-template",
+        "flow_id_template",
+        default="flow_{index}",
+        show_default=True,
+    )
     @click.option("-d", "--sample-data", "sample_data", is_flag=True)
     @click.pass_obj
     def init_config(
@@ -167,10 +205,13 @@ class ConfigGroup(BaseCommandGroup):
         contexts_path: Path,
         flows_path: Path,
         flow_id_template: str,
-        sample_data: bool):
+        sample_data: bool,
+    ):
         """Initialize the app configuration."""
         if app_ctx.settings.settings_path.exists():
-            raise click.ClickException(f"Settings file already exists: '{app_ctx.settings.settings_path}'")
+            raise click.ClickException(
+                f"Settings file already exists: '{app_ctx.settings.settings_path}'"
+            )
 
         click.echo(f"Initializing config at {app_ctx.settings.settings_path}...")
         app_ctx.settings.contexts_path = contexts_path
@@ -182,20 +223,23 @@ class ConfigGroup(BaseCommandGroup):
                 id="sample-toolbox",
                 toolbox_name="",
             )
-            app_ctx.settings.agencykit.providers["sample-provider"] = datorum.InferenceServiceProvider(
-                id="sample-provider",
-                description="Change me",
-                base_url="http://localhost/api/v1/",
-                api_key_selector="local",
+            app_ctx.settings.agencykit.providers["sample-provider"] = (
+                datorum.InferenceServiceProvider(
+                    id="sample-provider",
+                    description="Change me",
+                    base_url="http://localhost/api/v1/",
+                    api_key_selector="local",
+                )
             )
             app_ctx.settings.agencykit.roles["sample-role"] = datorum.AgentRole(
                 id="sample-role",
                 description="Change me",
             )
-            app_ctx.settings.plumbingkit.pipelines["sample-pipeline"] = datorum.Pipeline(
-                id="sample-pipeline",
-                description="Change me",
-
+            app_ctx.settings.plumbingkit.pipelines["sample-pipeline"] = (
+                datorum.Pipeline(
+                    id="sample-pipeline",
+                    description="Change me",
+                )
             )
 
         app_ctx.settings.save()
@@ -234,4 +278,3 @@ class ConfigGroup(BaseCommandGroup):
         setattr(app_ctx.settings, kit_name, kit)
         app_ctx.settings.save()
         click.echo("Done!")
-

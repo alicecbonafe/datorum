@@ -37,18 +37,21 @@ UserContent = str | list[ContentPart]
 # ============================
 class FunctionCall(BaseModel):
     """Old (deprecated) function call format."""
+
     name: str
     arguments: str  # String JSON
 
 
 class ToolFunction(BaseModel):
     """Function definition within a tool_call."""
+
     name: str
     arguments: str  # String JSON
 
 
 class ToolCall(BaseModel):
     """Tool call in the new format (tools)."""
+
     id: str
     type: Literal["function"] = "function"
     function: ToolFunction
@@ -82,11 +85,14 @@ class AssistantMessage(_MessageBase):
     role: Literal["assistant"] = "assistant"
     content: str | None = None
     tool_calls: list[ToolCall] | None = None
-    function_call: FunctionCall | None = None  # Deprecated, but retained for compatibility
+    function_call: FunctionCall | None = (
+        None  # Deprecated, but retained for compatibility
+    )
 
 
 class ToolMessage(_MessageBase):
     """Response from a called tool."""
+
     role: Literal["tool"] = "tool"
     content: str
     tool_call_id: str  # Required for 'tool' messages
@@ -94,6 +100,7 @@ class ToolMessage(_MessageBase):
 
 class FunctionMessage(_MessageBase):
     """Response from a called function (old format)."""
+
     role: Literal["function"] = "function"
     content: str | None = None
     name: str  # Mandatory and overrides the optional base field.
@@ -112,9 +119,9 @@ ChatMessage = Annotated[
 @doc_model(id="chat-history")
 class ChatHistory(BaseModel):
     """Represents the complete message history for the OpenAI API."""
+
     messages: list[ChatMessage] = Field(
-        default_factory=list,
-        description="Ordered list of chat history messages"
+        default_factory=list, description="Ordered list of chat history messages"
     )
 
     model_config = {"extra": "forbid"}

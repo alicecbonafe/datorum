@@ -9,16 +9,18 @@ import datorum
 
 from .settings import CliAppSettings
 
-_BIND_RE = re.compile(r"^(?P<field_id>[^=]+)=(?P<name>[\w\-]+)(?:\((?P<value>[^)]*)\))?$")
-_ESC_CHAR = '\x1b'
-_ENTER_CHAR = '\r'
+_BIND_RE = re.compile(
+    r"^(?P<field_id>[^=]+)=(?P<name>[\w\-]+)(?:\((?P<value>[^)]*)\))?$"
+)
+_ESC_CHAR = "\x1b"
+_ENTER_CHAR = "\r"
+
 
 class BindingSyntaxError(datorum.DatorumBaseError):
     """Raised when a --bind-context / --bind-resource value can't be parsed."""
 
 
 class CliAppContext:
-
     def __init__(self, settings_path: Path):
         self.settings = CliAppSettings()
         self.settings.settings_path = settings_path
@@ -104,9 +106,7 @@ class CliAppContext:
             )
         field_id, factory_name, selector = match.group("field_id", "name", "value")
         return datorum.ResourceBind(
-            field_id=field_id,
-            factory_name=factory_name,
-            selector=selector
+            field_id=field_id, factory_name=factory_name, selector=selector
         )
 
     def parse_positional_context(self, raw: str, field_id: str) -> datorum.ContextBind:
@@ -118,7 +118,9 @@ class CliAppContext:
             context_bind_type=datorum.ContextBindType.model,
         )
 
-    def run_job(self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool = False) -> datorum.Job:
+    def run_job(
+        self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool = False
+    ) -> datorum.Job:
         return asyncio.run(self._run_job_async(worker, job, exit_on_paused))
 
     def _create_binder(self) -> datorum.Binder:
@@ -148,7 +150,9 @@ class CliAppContext:
         contexts = context_part.split(",")
         return (contexts[0] if len(contexts) == 1 else contexts), binded_id
 
-    async def _run_job_async(self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool) -> datorum.Job:
+    async def _run_job_async(
+        self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool
+    ) -> datorum.Job:
         printer = asyncio.create_task(self._gather_catchers(job, exit_on_paused))
         try:
             await worker.run(job)
@@ -177,10 +181,14 @@ class CliAppContext:
             if item == f"[{datorum.JobStatus.PAUSED.value.lower()}]":
                 for bind in job.context_bindings:
                     if bind.field_id == "interactive":
-                        interactive = self.binder.find_document(bind.binded_id, bind.context)
-                        click.echo(f"Please edit the file before resuming: '{interactive.doc_path}'")
+                        interactive = self.binder.find_document(
+                            bind.binded_id, bind.context
+                        )
+                        click.echo(
+                            f"Please edit the file before resuming: '{interactive.doc_path}'"
+                        )
                         break
-                
+
                 if exit_on_paused:
                     click.echo("Job has pause, exiting.")
                     sys.exit(0)
@@ -196,11 +204,9 @@ class CliAppContext:
                             job.resume()
                             break
 
-
     async def _catch_logs(self, job: datorum.Job) -> None:
         async for item in job.log_broadcaster.subscribe():
             if job.is_streaming:
                 click.echo(f"[LOG: {item}]", nl=False)
             else:
                 click.echo(item)
-

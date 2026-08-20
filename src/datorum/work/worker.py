@@ -11,7 +11,7 @@ from ..context.settings import DocumentContext
 from .exceptions import WorkerStartUpError
 from .job import Job, JobStatus
 
-tmp_dir = f"/tmp/datorum_{datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")}"
+tmp_dir = f"/tmp/datorum_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}"
 TMP_CONTEXT = DocumentContext(id="tmp-context")
 TMP_CONTEXT.base_path = Path(tmp_dir)
 TMP_CONTEXT.base_path.mkdir(parents=True, exist_ok=True)
@@ -66,7 +66,9 @@ class Worker(ABC):
             if req not in binds:
                 missing_bindings.append(f"res:{req}")
         if missing_bindings:
-            raise WorkerStartUpError(f"Missing bindings for job '{job.id}': {missing_bindings}")
+            raise WorkerStartUpError(
+                f"Missing bindings for job '{job.id}': {missing_bindings}"
+            )
 
         asyncio.create_task(job.update_status(JobStatus.STARTING, "Starting worker..."))
         asyncio.create_task(self._launch(job=job))
@@ -79,4 +81,3 @@ class Worker(ABC):
             await self.run(job=job)
         except Exception as exc:  # noqa: BLE001
             self.logger.error(exc)
-

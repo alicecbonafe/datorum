@@ -25,7 +25,10 @@ from .exceptions import ToolBoxRegistryError
 
 _SKIP_PARAMS = {"self", "cls"}
 
-def _params_model_from_signature(func: Callable, name: str | None = None) -> type[BaseModel] | None:
+
+def _params_model_from_signature(
+    func: Callable, name: str | None = None
+) -> type[BaseModel] | None:
     if not name:
         if hasattr(func, "__name__"):
             name = func.__name__
@@ -34,9 +37,7 @@ def _params_model_from_signature(func: Callable, name: str | None = None) -> typ
     try:
         signature = inspect.signature(func)
         if callable(func) and not (
-            inspect.isfunction(func)
-            or inspect.ismethod(func)
-            or inspect.isclass(func)
+            inspect.isfunction(func) or inspect.ismethod(func) or inspect.isclass(func)
         ):
             hints = get_type_hints(func.__call__, include_extras=True)
         else:
@@ -71,7 +72,7 @@ def _params_model_from_signature(func: Callable, name: str | None = None) -> typ
 
     if not fields:
         return None  # zero-arg tool
-    
+
     if len(fields) == 1:
         single_type = next(iter(fields.values()))[0]
         unwrapped = _unwrap_optional(single_type)
@@ -119,7 +120,7 @@ def _first_typed_param(
     """First non-skip, non-*args/**kwargs param of `callable_obj` whose annotation matches `expected`."""
     try:
         type_hints = get_type_hints(callable_obj)
-    except (TypeError, NameError):
+    except TypeError, NameError:
         type_hints = {}
 
     try:
@@ -143,7 +144,9 @@ def _coerce_to_dict(data: Any) -> dict:
         return data.model_dump(mode="python")
     if isinstance(data, dict):
         return data
-    raise ToolBoxRegistryError(f"Expected a dict or BaseModel, got {type(data).__name__}")
+    raise ToolBoxRegistryError(
+        f"Expected a dict or BaseModel, got {type(data).__name__}"
+    )
 
 
 def _resolve_call_args(
@@ -182,10 +185,12 @@ def _resolve_call_args(
 # | Classes
 # ======================================================
 
+
 @runtime_checkable
 class ToolBox(Protocol):
-    def get_toolbox_definition() -> ToolBoxDefinition:...
-    async def run_tool(self, tool_name: str, params: Any = None):...
+    def get_toolbox_definition() -> ToolBoxDefinition: ...
+    async def run_tool(self, tool_name: str, params: Any = None): ...
+
 
 class FunctionDefinition(BaseModel):
     name: str
@@ -248,9 +253,11 @@ class BaseToolBoxField(BaseModel):
     description: str | None = None
     required: bool | None = None
 
+
 class ContextField(BaseToolBoxField):
     field_type: Literal["context"] = "context"
     context_bind_type: ContextBindType = Field(default=ContextBindType.model)
+
 
 class ResourceField(BaseToolBoxField):
     field_type: Literal["resource"] = "resource"
@@ -273,14 +280,20 @@ class ToolBoxDefinition(BaseModel):
             missing_fields: list[str] = []
             for field in self.context_fields.values():
                 val = getattr(result, field.attr_name, None)
-                if field.required and (val is None or isinstance(val, BaseToolBoxField)):
+                if field.required and (
+                    val is None or isinstance(val, BaseToolBoxField)
+                ):
                     missing_fields.append(f"ctx:{field.name}")
             for field in self.resource_fields.values():
                 val = getattr(result, field.attr_name, None)
-                if field.required and (val is None or isinstance(val, BaseToolBoxField)):
+                if field.required and (
+                    val is None or isinstance(val, BaseToolBoxField)
+                ):
                     missing_fields.append(f"res:{field.name}")
             if len(missing_fields) > 0:
-                raise ToolBoxRegistryError(f"Missing required field(s): {missing_fields}")
+                raise ToolBoxRegistryError(
+                    f"Missing required field(s): {missing_fields}"
+                )
 
             tool_method = getattr(result, tool_name)
             tool_def: ToolDefinition = tool_method._tool_def
@@ -309,10 +322,12 @@ class ToolBoxDefinition(BaseModel):
 
 ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
 
+
 def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
     if toolbox_name not in ToolBoxRegistry:
         raise ToolBoxRegistryError(f"ToolBox '{toolbox_name}' not found")
     return ToolBoxRegistry[toolbox_name]
+
 
 def tool(name: str | None = None, params: type[BaseModel] | None = None):
     def decorator(func):
@@ -329,29 +344,36 @@ def tool(name: str | None = None, params: type[BaseModel] | None = None):
 
     return decorator
 
+
 def toolbox(name: str | None = None, force: bool = False):
     def decorator(cls):
         toolbox_name = name or cls.__name__
         if toolbox_name in ToolBoxRegistry and not force:
-            raise ToolBoxRegistryError(f"ToolBox '{toolbox_name}' is already registered, use 'force=True' to overwrite")
+            raise ToolBoxRegistryError(
+                f"ToolBox '{toolbox_name}' is already registered, use 'force=True' to overwrite"
+            )
         toolbox_def = ToolBoxDefinition(name=name or cls.__name__)
         toolbox_def.clazz = cls
         ToolBoxRegistry[toolbox_def.name] = toolbox_def
 
         try:
             type_hints = get_type_hints(cls)
-        except (TypeError, NameError):
+        except TypeError, NameError:
             type_hints = {}
 
         for attr_name, attr_value in vars(cls).items():
             if hasattr(attr_value, "_tool_def"):
                 tool_def: ToolDefinition = attr_value._tool_def
                 if tool_def.name in toolbox_def.tools:
-                    raise ToolBoxRegistryError(f"Tool '{tool_def.name}' is already registered in ToolBox '{toolbox_name}'")
+                    raise ToolBoxRegistryError(
+                        f"Tool '{tool_def.name}' is already registered in ToolBox '{toolbox_name}'"
+                    )
                 toolbox_def.tools[tool_def.name] = tool_def
             elif isinstance(attr_value, ContextField):
                 if attr_value.name in toolbox_def.context_fields:
-                    raise ToolBoxRegistryError(f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'")
+                    raise ToolBoxRegistryError(
+                        f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'"
+                    )
                 attr_value.attr_name = attr_name
                 attr_value.name = attr_value.name or attr_name
                 if attr_value.required is None:
@@ -362,7 +384,9 @@ def toolbox(name: str | None = None, force: bool = False):
                 toolbox_def.context_fields[attr_value.name] = attr_value
             elif isinstance(attr_value, ResourceField):
                 if attr_value.name in toolbox_def.resource_fields:
-                    raise ToolBoxRegistryError(f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'")
+                    raise ToolBoxRegistryError(
+                        f"Field '{attr_value.name}' is already registered in ToolBox '{toolbox_name}'"
+                    )
                 attr_value.attr_name = attr_name
                 attr_value.name = attr_value.name or attr_name
                 if attr_value.required is None:
@@ -380,4 +404,3 @@ def toolbox(name: str | None = None, force: bool = False):
         return cls
 
     return decorator
-

@@ -39,14 +39,16 @@ _MP_CONTEXT = multiprocessing.get_context("spawn")
 _CODE_TIMEOUT: float = 5.0
 _RESULT_VAR: str = "target"
 
+
 def _restricted_globals() -> dict[str, Any]:
     g = dict(safe_globals)
-    g["_getattr_"] = safer_getattr               # blocks `_private`/dunder access
-    g["_getitem_"] = default_guarded_getitem      # input_data['field']
-    g["_getiter_"] = default_guarded_getiter      # for/comprehension support
+    g["_getattr_"] = safer_getattr  # blocks `_private`/dunder access
+    g["_getitem_"] = default_guarded_getitem  # input_data['field']
+    g["_getiter_"] = default_guarded_getiter  # for/comprehension support
     g["_iter_unpack_sequence_"] = guarded_iter_unpack_sequence
     g["_unpack_sequence_"] = guarded_unpack_sequence
     return g
+
 
 def _run_code(
     code: str,
@@ -76,8 +78,8 @@ def _run_code(
 
 
 class PipelineWorker(Worker):
-
-    def __init__(self,
+    def __init__(
+        self,
         binder: Binder,
         plumbingkit: PlumbingKit,
         agent_worker: AgentWorker,
@@ -91,9 +93,8 @@ class PipelineWorker(Worker):
         self._active_flows: dict[str, str] = {}  # flow_id -> job_id
         self._flow_cache: dict[str, PipeFlow] = {}
 
-    def register_flow_factories(self,
-        flow_path: Path,
-        flow_id_template: str = "flow_{index}"
+    def register_flow_factories(
+        self, flow_path: Path, flow_id_template: str = "flow_{index}"
     ):
         flow_files: dict[str, Path] = {}
         last_index: int = -1
@@ -165,33 +166,47 @@ class PipelineWorker(Worker):
             return flow
 
     def create_flow(self, pipeline_id: str):
-        return self.binder.load_resource(ResourceBind(
-            field_id="pipeflow",
-            factory_name="create_pipeflow",
-            selector=pipeline_id,
-        ))
+        return self.binder.load_resource(
+            ResourceBind(
+                field_id="pipeflow",
+                factory_name="create_pipeflow",
+                selector=pipeline_id,
+            )
+        )
 
     async def work(self, job: Job):
         await job.update_status(JobStatus.WORKING, "Creating/restoring pipeflow")
 
         pipeflow: PipeFlow
         pipeflow_bind: ResourceBind = next(
-            (bind for bind in job.resource_bindings \
-                if bind.factory_name == "restore_pipeflow"), None
+            (
+                bind
+                for bind in job.resource_bindings
+                if bind.factory_name == "restore_pipeflow"
+            ),
+            None,
         )
         if pipeflow_bind:
             pipeflow = self.binder.load_resource(pipeflow_bind)
         else:
             pipeline_bind: ResourceBind = next(
-                (bind for bind in job.resource_bindings \
-                    if bind.factory_name == "create_pipeflow"), None
+                (
+                    bind
+                    for bind in job.resource_bindings
+                    if bind.factory_name == "create_pipeflow"
+                ),
+                None,
             )
             if not pipeline_bind:
-                raise PipelineWorkerError("Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'")
+                raise PipelineWorkerError(
+                    "Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'"
+                )
             pipeflow = self.binder.load_resource(pipeline_bind)
 
         if pipeflow.id in self._active_flows:
-            raise PipelineWorkerError(f"Pipeflow '{pipeflow.id}' already running in job '{self._active_flows[pipeflow.id]}'")
+            raise PipelineWorkerError(
+                f"Pipeflow '{pipeflow.id}' already running in job '{self._active_flows[pipeflow.id]}'"
+            )
         self._active_flows[pipeflow.id] = job.id
 
         await job.update_status(JobStatus.WORKING, "Collecting pipeflow resources")
@@ -209,53 +224,78 @@ class PipelineWorker(Worker):
         try:
             while pipeflow.current_step_id is not None:
                 if pipeflow.current_step_id not in pipeflow.pipeline.steps:
-                    raise PipelineWorkerError(f"Step '{pipeflow.current_step_id}' not found in Pipeline '{pipeflow.pipeline.id}'")
+                    raise PipelineWorkerError(
+                        f"Step '{pipeflow.current_step_id}' not found in Pipeline '{pipeflow.pipeline.id}'"
+                    )
 
                 current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
                 if isinstance(current_step, HumanInteractionStep):
-                    existing_interactive = next((
-                        b for b in job.context_bindings \
-                            if b.field_id == 'interactive'
-                    ), None)
+                    existing_interactive = next(
+                        (
+                            b
+                            for b in job.context_bindings
+                            if b.field_id == "interactive"
+                        ),
+                        None,
+                    )
                     if existing_interactive:
-                        existing_interactive.binded_id = current_step.interactive_document_id
-                        existing_interactive.context = current_step.interactive_document_context
+                        existing_interactive.binded_id = (
+                            current_step.interactive_document_id
+                        )
+                        existing_interactive.context = (
+                            current_step.interactive_document_context
+                        )
                         existing_interactive.context_bind_type = ContextBindType.model
                     else:
-                        job.context_bindings.append(ContextBind(
-                            field_id='interactive',
-                            binded_id=current_step.interactive_document_id,
-                            context=current_step.interactive_document_context,
-                            context_bind_type=ContextBindType.model,
-                        ))
+                        job.context_bindings.append(
+                            ContextBind(
+                                field_id="interactive",
+                                binded_id=current_step.interactive_document_id,
+                                context=current_step.interactive_document_context,
+                                context_bind_type=ContextBindType.model,
+                            )
+                        )
                     pipeflow.state = PipeFlowState.paused
                     pipeflow.save()
-                    await job.update_status(JobStatus.PAUSING, "Waiting for human interaction.")
+                    await job.update_status(
+                        JobStatus.PAUSING, "Waiting for human interaction."
+                    )
                     await job.update_status(JobStatus.WORKING, "Resuming pipeflow...")
 
                 elif isinstance(current_step, ToolStep):
-                    await job.update_status(JobStatus.WORKING, f"Running tool step '{pipeflow.current_step_id}'...")
+                    await job.update_status(
+                        JobStatus.WORKING,
+                        f"Running tool step '{pipeflow.current_step_id}'...",
+                    )
 
                     tool_job: Job = Job(
                         id=f"{job.id}_tool_{uuid.uuid4().hex[:6]}",
                         context_bindings=[
                             current_step.tool_params,
                             current_step.tool_result,
-                            *current_step.custom_context
+                            *current_step.custom_context,
                         ],
                         resource_bindings=[
                             current_step.toolbox_setup,
-                            *current_step.custom_resources
-                        ]
+                            *current_step.custom_resources,
+                        ],
                     )
                     job.delegates.append(tool_job)
 
-                    await job.update_status(JobStatus.WORKING, f"Calling tool '{current_step.toolbox_setup.selector}'")
+                    await job.update_status(
+                        JobStatus.WORKING,
+                        f"Calling tool '{current_step.toolbox_setup.selector}'",
+                    )
                     await self.tool_worker.run(tool_job)
-                    await job.update_status(JobStatus.WORKING, "Tool worker has completed the job.")
+                    await job.update_status(
+                        JobStatus.WORKING, "Tool worker has completed the job."
+                    )
 
                 elif isinstance(current_step, AgentStep):
-                    await job.update_status(JobStatus.WORKING, f"Running agent step '{pipeflow.current_step_id}'...")
+                    await job.update_status(
+                        JobStatus.WORKING,
+                        f"Running agent step '{pipeflow.current_step_id}'...",
+                    )
 
                     agent_job: Job = Job(
                         id=f"{job.id}_tool_{uuid.uuid4().hex[:6]}",
@@ -265,29 +305,43 @@ class PipelineWorker(Worker):
                         resource_bindings=[
                             current_step.inference_provider,
                             current_step.agent_role,
-                        ]
+                        ],
                     )
                     job.delegates.append(agent_job)
 
-                    await job.update_status(JobStatus.WORKING, "Starting agent worker...")
+                    await job.update_status(
+                        JobStatus.WORKING, "Starting agent worker..."
+                    )
                     await self.agent_worker.run(job=agent_job)
-                    await job.update_status(JobStatus.WORKING, "Agent worker has completed the job.")
+                    await job.update_status(
+                        JobStatus.WORKING, "Agent worker has completed the job."
+                    )
 
                 elif isinstance(current_step, DecisionStep):
-                    await job.update_status(JobStatus.WORKING, f"Running decision step '{pipeflow.current_step_id}'...")
+                    await job.update_status(
+                        JobStatus.WORKING,
+                        f"Running decision step '{pipeflow.current_step_id}'...",
+                    )
 
                     input_data = self.binder.pull_context(current_step.input_data)
                     if isinstance(input_data, BaseModel):
                         input_data = input_data.model_dump(mode="json")
-            
+
                     if not isinstance(input_data, dict):
-                        raise PipelineWorkerError(f"Invalid data input type: '{type(input_data)}'")
+                        raise PipelineWorkerError(
+                            f"Invalid data input type: '{type(input_data)}'"
+                        )
 
                     await job.update_status(JobStatus.WORKING, "Running decision code")
                     out_queue: multiprocessing.Queue = _MP_CONTEXT.Queue()
                     process = _MP_CONTEXT.Process(
                         target=_run_code,
-                        args=(current_step.code, current_step.code_type, input_data, out_queue),
+                        args=(
+                            current_step.code,
+                            current_step.code_type,
+                            input_data,
+                            out_queue,
+                        ),
                         daemon=True,
                     )
                     process.start()
@@ -300,18 +354,24 @@ class PipelineWorker(Worker):
                         raise PipelineWorkerError(f"Timed out after {_CODE_TIMEOUT}s")
 
                     if out_queue.empty():
-                        raise PipelineWorkerError(f"Process exited without a result (exit code {process.exitcode})",)
+                        raise PipelineWorkerError(
+                            f"Process exited without a result (exit code {process.exitcode})",
+                        )
 
                     status, result = out_queue.get()
                     if status != "ok":
                         raise PipelineWorkerError(f"Process error reported: {result}")
 
                     if result not in current_step.target_options:
-                        raise PipelineWorkerError(f"Target step '{result}' is not a valid option")
+                        raise PipelineWorkerError(
+                            f"Target step '{result}' is not a valid option"
+                        )
 
                     current_step.target_id = result
 
-                    await job.update_status(JobStatus.WORKING, f"Chosen target: {result}")
+                    await job.update_status(
+                        JobStatus.WORKING, f"Chosen target: {result}"
+                    )
 
                 pipeflow.step_history.append(pipeflow.current_step_id)
                 pipeflow.current_step_id = current_step.target_id

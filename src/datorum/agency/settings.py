@@ -7,11 +7,17 @@ from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 class InferenceServiceProvider(BaseDatorumSettings):
     """OpenAI-compatible API service provider settings."""
+
     id: str
     description: str | None = Field(default=None)
 
-    base_url: str = Field(description="API endpoint base URL (usually ending in 'v1/').")
-    api_key_selector: str | None = Field(default=None, description="Used if API key resource selector is not the provider ID.")
+    base_url: str = Field(
+        description="API endpoint base URL (usually ending in 'v1/')."
+    )
+    api_key_selector: str | None = Field(
+        default=None,
+        description="Used if API key resource selector is not the provider ID.",
+    )
     supports_streaming: bool = True
 
     models: list[str] = Field(default_factory=list)
@@ -19,6 +25,7 @@ class InferenceServiceProvider(BaseDatorumSettings):
 
 class AgentRole(BaseDatorumSettings):
     """Role based API call parameters."""
+
     id: str
     description: str | None = Field(default=None)
 
@@ -37,5 +44,6 @@ class AgentRole(BaseDatorumSettings):
 
 class AgencyKit(BaseDatorumPersistentSettings):
     """Daturum configuration data structure."""
+
     providers: dict[str, InferenceServiceProvider] = Field(default_factory=dict)
     roles: dict[str, AgentRole] = Field(default_factory=dict)

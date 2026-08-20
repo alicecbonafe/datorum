@@ -55,10 +55,12 @@ class Pipeline(BaseDatorumSettings):
     id: str
     description: str | None = None
 
-    steps: dict[str,
+    steps: dict[
+        str,
         Annotated[
-            HumanInteractionStep | ToolStep | AgentStep | DecisionStep, Field(discriminator="type")
-        ]
+            HumanInteractionStep | ToolStep | AgentStep | DecisionStep,
+            Field(discriminator="type"),
+        ],
     ] = Field(default_factory=dict)
     first_step_id: str = "in"
 
@@ -88,7 +90,10 @@ class PipeFlow(BaseDatorumPersistentSettings):
         if self.state != PipeFlowState.planning and self.started_at is None:
             self.started_at = now
         self.last_updated_at = now
-        if self.state in [PipeFlowState.finished, PipeFlowState.crashed] and self.finished_at is None:
+        if (
+            self.state in [PipeFlowState.finished, PipeFlowState.crashed]
+            and self.finished_at is None
+        ):
             self.finished_at = now
         super().save()
 

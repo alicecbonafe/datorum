@@ -79,9 +79,7 @@ class DocumentReference(BaseDatorumSettings):
         else:
             ext_candidate = splitted[-1]
             extensions = self.registry_doc_type.extensions
-            _found = next((
-                ext for ext in extensions if ext == ext_candidate
-            ), None)
+            _found = next((ext for ext in extensions if ext == ext_candidate), None)
             if _found:
                 domain_list = splitted[:-2]
                 base_name = splitted[-2]
@@ -92,8 +90,6 @@ class DocumentReference(BaseDatorumSettings):
                 extension = extensions[0]
 
         return domain_list, base_name, extension
-
-
 
     def load(self) -> Any:
         doc_path = self.doc_path
@@ -173,10 +169,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
         if domain in self.domain_metadata:
             return True
 
-        return any(
-            doc.startswith(f"{domain}.")
-            for doc in self.documents
-        )
+        return any(doc.startswith(f"{domain}.") for doc in self.documents)
 
     def get_domain_path(self, domain: str) -> Path:
         domain_path = self.base_path
@@ -196,7 +189,8 @@ class DocumentContext(BaseDatorumPersistentSettings):
         return self.documents.get(id)
 
     def create_document(
-        self, id: str,
+        self,
+        id: str,
         doc_type: str = "text/plain",
         doc_model: str = "text",
         extension: str | None = None,

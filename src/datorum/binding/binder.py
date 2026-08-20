@@ -19,7 +19,6 @@ from .settings import ContextBind, ResourceBind
 
 
 class Binder:
-
     _contexts: dict[str, DocumentContext] | None = None
     _factories: dict[str, Callable] | None = None
 
@@ -44,12 +43,15 @@ class Binder:
             factory_name = name or func.__name__
             if factory_name in self.factories and not force:
                 raise ResourceBindingError(
-                    f"Resource factory '{factory_name}' is already registered, use 'force=True' to overwrite")
+                    f"Resource factory '{factory_name}' is already registered, use 'force=True' to overwrite"
+                )
             if not validate_factory_signature(func):
                 raise ResourceBindingError(
-                    f"Resource factory '{factory_name}' has not a compatible signature")
+                    f"Resource factory '{factory_name}' has not a compatible signature"
+                )
             self.factories[factory_name] = func
             return func
+
         return decorator
 
     def find_domain_context(
@@ -59,11 +61,11 @@ class Binder:
     ) -> DocumentContext:
         if isinstance(context, str):
             if context not in self.contexts:
-                raise ContextBindingError(
-                    f"Unknown context '{context}'")
+                raise ContextBindingError(f"Unknown context '{context}'")
             if not self.contexts[context].knows_domain(domain):
                 raise ContextBindingError(
-                    f"Unknown domain '{domain}' in context '{context}'")
+                    f"Unknown domain '{domain}' in context '{context}'"
+                )
             return self.contexts[context]
 
         context_list: list[str] = context or self.contexts.keys()
@@ -74,7 +76,8 @@ class Binder:
                 return self.contexts[ctx_id]
 
         raise ContextBindingError(
-            f"Unknown domain '{domain}' in context '{context or 'all'}'")
+            f"Unknown domain '{domain}' in context '{context or 'all'}'"
+        )
 
     def find_document(
         self,
@@ -85,46 +88,46 @@ class Binder:
 
         if isinstance(context, str):
             if context not in self.contexts:
-                raise ContextBindingError(
-                    f"Unknown context '{context}'")
-            document = self.contexts[context].get_document(
-                id=document_id)
+                raise ContextBindingError(f"Unknown context '{context}'")
+            document = self.contexts[context].get_document(id=document_id)
 
         else:
             context_list: list[str] = context or self.contexts.keys()
             for ctx_id in context_list:
                 if ctx_id not in self.contexts:
                     continue
-                document = self.contexts[ctx_id].get_document(
-                    id=document_id)
+                document = self.contexts[ctx_id].get_document(id=document_id)
                 if document:
                     break
 
         if not document:
             raise ContextBindingError(
-                f"Unknown document '{document_id}' in context '{context or 'all'}'")
+                f"Unknown document '{document_id}' in context '{context or 'all'}'"
+            )
 
         return document
 
     def pull_context(self, bind: ContextBind) -> Any:
         if not bind.context_bind_type.is_input():
             raise ContextBindingError(
-                f"Cannot pull from an output-only bind ('{bind.binded_id!s}')")
+                f"Cannot pull from an output-only bind ('{bind.binded_id!s}')"
+            )
 
         if bind.context_bind_type.is_domain():
             context = self.find_domain_context(
-                domain=bind.binded_id, context=bind.context)
+                domain=bind.binded_id, context=bind.context
+            )
 
             if bind.context_bind_type.is_metadata():
                 return context.get_domain_metadata(domain=bind.binded_id)
             return context.get_domain_path(domain=bind.binded_id)
 
-        document = self.find_document(
-            document_id=bind.binded_id, context=bind.context)
+        document = self.find_document(document_id=bind.binded_id, context=bind.context)
 
         if bind.context_bind_type.is_io() and not document.doc_path.exists():
             raise ContextBindingError(
-                f"File not found for document '{bind.binded_id}' (path: '{document.doc_path}')")
+                f"File not found for document '{bind.binded_id}' (path: '{document.doc_path}')"
+            )
 
         if bind.context_bind_type.is_model():
             return document.load()
@@ -139,30 +142,31 @@ class Binder:
     def push_context(self, bind: ContextBind, value: Any):
         if not bind.context_bind_type.is_output():
             raise ContextBindingError(
-                f"Cannot push to an input-only bind ('{bind.binded_id!s}')")
+                f"Cannot push to an input-only bind ('{bind.binded_id!s}')"
+            )
 
         if bind.context_bind_type.is_domain():
             if not isinstance(value, dict):
-                raise ContextBindingError(
-                    f"Wrong metadata type: '{type(value)}'")
+                raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
             context = self.find_domain_context(
-                domain=bind.binded_id, context=bind.context)
-            context.set_domain_metadata(
-                domain=bind.binded_id, metadata=value)
+                domain=bind.binded_id, context=bind.context
+            )
+            context.set_domain_metadata(domain=bind.binded_id, metadata=value)
             context.persistent.save()
 
         elif bind.context_bind_type.is_metadata():
             if not isinstance(value, dict):
-                raise ContextBindingError(
-                    f"Wrong metadata type: '{type(value)}'")
+                raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
             document = self.find_document(
-                document_id=bind.binded_id, context=bind.context)
+                document_id=bind.binded_id, context=bind.context
+            )
             document.metadata = value
             document.persistent.save()
 
         else:
             document = self.find_document(
-                document_id=bind.binded_id, context=bind.context)
+                document_id=bind.binded_id, context=bind.context
+            )
 
             if bind.context_bind_type.is_model():
                 document.save(value)
@@ -172,8 +176,9 @@ class Binder:
                 document.doc_path.write_bytes(bytes(value))
 
     def load_resource(self, bind: ResourceBind) -> Any:
-        factory: Callable = self.factories[bind.factory_name] \
-            if bind.factory_name in self.factories \
-                else get_resource_factory(bind.factory_name)
+        factory: Callable = (
+            self.factories[bind.factory_name]
+            if bind.factory_name in self.factories
+            else get_resource_factory(bind.factory_name)
+        )
         return factory(bind.selector)
-

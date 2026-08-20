@@ -6,7 +6,6 @@ import datorum
 
 
 class CliAppSettings(datorum.BaseDatorumPersistentSettings):
-
     contexts_path: Path = Field(default_factory=lambda: Path("contexts"))
     flows_path: Path = Field(default_factory=lambda: Path("flows"))
     flow_id_template: str = "flow_{index}"
@@ -32,4 +31,3 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
             context.base_path = self.contexts_path / context_id
 
         return self
-

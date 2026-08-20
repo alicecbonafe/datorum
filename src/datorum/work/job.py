@@ -54,9 +54,9 @@ class JobStatus(str, Enum):
 
 
 class Job:
-
     def __init__(
-        self, id: str,
+        self,
+        id: str,
         context_bindings: list[ContextBind] | None = None,
         resource_bindings: list[ResourceBind] | None = None,
     ):
@@ -79,13 +79,16 @@ class Job:
 
     async def update_status(self, status: JobStatus, message: str | None = None):
         if self.delegates and self.delegates[-1].status not in (
-            JobStatus.IDLE, JobStatus.FINISHED, JobStatus.CRASHED
+            JobStatus.IDLE,
+            JobStatus.FINISHED,
+            JobStatus.CRASHED,
         ):
             if status == JobStatus.CRASHED:
                 await self.delegates[-1].update_status(status=status, message=message)
             else:
                 raise JobStatusError(
-                    f"Cannot update status - job's  last delegate seams to be active (job:'{self.id}', last_delegate:'{self.delegates[-1].id}')")
+                    f"Cannot update status - job's  last delegate seams to be active (job:'{self.id}', last_delegate:'{self.delegates[-1].id}')"
+                )
 
         if status == JobStatus.WORKING and self.status == JobStatus.PAUSING:
             self.status = JobStatus.PAUSED
@@ -119,13 +122,14 @@ class Job:
         elif self.status in (JobStatus.PAUSING, JobStatus.PAUSED):
             pass
         elif self.status != JobStatus.WORKING:
-            raise JobStatusError(
-                f"Cannot pause job '{self.id}' ('{self.status}')")
+            raise JobStatusError(f"Cannot pause job '{self.id}' ('{self.status}')")
         else:
-            asyncio.create_task(self.update_status(
-                status=JobStatus.PAUSING,
-                message="Pausing worker...",
-            ))
+            asyncio.create_task(
+                self.update_status(
+                    status=JobStatus.PAUSING,
+                    message="Pausing worker...",
+                )
+            )
 
     def resume(self):
         if self.delegates and self.delegates[-1].status == JobStatus.PAUSED:
@@ -133,10 +137,11 @@ class Job:
         elif self.status in (JobStatus.RESUMING, JobStatus.WORKING):
             pass
         elif self.status != JobStatus.PAUSED:
-            raise JobStatusError(
-                f"Cannot resume job '{self.id}' ('{self.status}')")
+            raise JobStatusError(f"Cannot resume job '{self.id}' ('{self.status}')")
         else:
-            asyncio.create_task(self.update_status(
-                status=JobStatus.RESUMING,
-                message="Resuming worker...",
-            ))
+            asyncio.create_task(
+                self.update_status(
+                    status=JobStatus.RESUMING,
+                    message="Resuming worker...",
+                )
+            )

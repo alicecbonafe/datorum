@@ -15,9 +15,9 @@ from ..registry import (
 
 register_doc_type("text/markdown", ["md", "markdown", "markdn", "mdown"])
 
+
 @doc_model(id="markdown", doc_type="text/markdown")
 class MarkdownDocument:
-
     FRONTMATTER_YAML = "yaml"
     FRONTMATTER_JSON = "json"
     FRONTMATTER_TOML = "toml"
@@ -26,7 +26,12 @@ class MarkdownDocument:
     DELIMITER_JSON = ";;;\n"
     DELIMITER_TOML = "+++\n"
 
-    def __init__(self, content: str, frontmatter: dict | None = None, frontmatter_format: str | None = None):
+    def __init__(
+        self,
+        content: str,
+        frontmatter: dict | None = None,
+        frontmatter_format: str | None = None,
+    ):
         self.content = content
         self.frontmatter = frontmatter
         self.frontmatter_format = frontmatter_format or self.FRONTMATTER_YAML
@@ -34,14 +39,22 @@ class MarkdownDocument:
     def dumps(self) -> str:
         raw = self.content
         if self.frontmatter_format == self.FRONTMATTER_YAML:
-            frontmatter_raw = yaml.safe_dump(self.frontmatter, sort_keys=False, allow_unicode=True)
-            raw = f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
+            frontmatter_raw = yaml.safe_dump(
+                self.frontmatter, sort_keys=False, allow_unicode=True
+            )
+            raw = (
+                f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
+            )
         elif self.frontmatter_format == self.FRONTMATTER_JSON:
             frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
-            raw = f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
+            raw = (
+                f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
+            )
         elif self.frontmatter_format == self.FRONTMATTER_TOML:
             frontmatter_raw = tomli_w.dumps(self.frontmatter)
-            raw = f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
+            raw = (
+                f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
+            )
         return raw
 
     def dump(self, file_path: Path):
@@ -57,23 +70,23 @@ class MarkdownDocument:
             closure = raw.find(cls.DELIMITER_YAML, len(cls.DELIMITER_YAML))
             if closure > 0:
                 frontmatter_format = cls.FRONTMATTER_YAML
-                frontmatter_raw = raw[len(cls.DELIMITER_YAML):closure]
+                frontmatter_raw = raw[len(cls.DELIMITER_YAML) : closure]
                 frontmatter = yaml.safe_load(frontmatter_raw) or {}
-                content = raw[closure+len(cls.DELIMITER_YAML):]
+                content = raw[closure + len(cls.DELIMITER_YAML) :]
         elif raw.startswith(cls.DELIMITER_JSON):
             closure = raw.find(cls.DELIMITER_JSON, len(cls.DELIMITER_JSON))
             if closure > 0:
                 frontmatter_format = cls.FRONTMATTER_JSON
-                frontmatter_raw = raw[len(cls.DELIMITER_JSON):closure]
+                frontmatter_raw = raw[len(cls.DELIMITER_JSON) : closure]
                 frontmatter = json.loads(frontmatter_raw)
-                content = raw[closure+len(cls.DELIMITER_JSON):]
+                content = raw[closure + len(cls.DELIMITER_JSON) :]
         elif raw.startswith(cls.DELIMITER_TOML):
             closure = raw.find(cls.DELIMITER_TOML, len(cls.DELIMITER_TOML))
             if closure > 0:
                 frontmatter_format = cls.FRONTMATTER_TOML
-                frontmatter_raw = raw[len(cls.DELIMITER_TOML):closure]
+                frontmatter_raw = raw[len(cls.DELIMITER_TOML) : closure]
                 frontmatter = tomllib.loads(frontmatter_raw)
-                content = raw[closure+len(cls.DELIMITER_TOML):]
+                content = raw[closure + len(cls.DELIMITER_TOML) :]
 
         return cls(
             content=content.strip(),
