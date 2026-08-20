@@ -12,7 +12,12 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture
-def settings_path(tmp_path: Path) -> Path:
+def settings_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A settings file path inside an isolated, current working directory --
+    CLI commands resolve relative paths (contexts_path, flows_path, kit
+    export/import targets, ...) against cwd, so tests need to run from here
+    rather than the repo root."""
+    monkeypatch.chdir(tmp_path)
     return tmp_path / "datorum.yml"
 
 

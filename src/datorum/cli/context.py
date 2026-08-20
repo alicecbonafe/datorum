@@ -77,7 +77,7 @@ class CliAppContext:
         field_id, type_name, value = match.group("field_id", "name", "value")
         if value is None:
             raise BindingSyntaxError(
-                f"Invalid --bind-context value '{raw}': missing '(context:binded-id)"
+                f"Invalid --bind-context value '{raw}': missing '(context:binded-id)'"
             )
 
         try:

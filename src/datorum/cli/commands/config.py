@@ -98,14 +98,18 @@ class ContextGroup(BaseCommandGroup):
 
         context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
 
-        if context.base_path not in doc_file.parents:
-            raise click.ClickException(f"Document is not in the context path (document in '{doc_file}', context in '{context.base_path}')")
+        context_base = context.base_path.resolve()
+        doc_path = doc_file.resolve()
 
-        document_id = doc_file.name
-        parent_dir = doc_file.parent
-        while parent_dir != context.base_path:
-            document_id = f"{parent_dir.name}.{document_id}"
-            parent_dir = parent_dir.parent
+        try:
+            relative_path = doc_path.relative_to(context_base)
+        except ValueError:
+            raise click.ClickException(
+                f"Document is not in the context path "
+                f"(document in '{doc_file}', context in '{context.base_path}')")
+
+        parts = relative_path.parts
+        document_id = ".".join(parts)
 
         context.create_document(
             id=document_id,
