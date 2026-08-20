@@ -1,12 +1,13 @@
 import asyncio
-from pathlib import Path
 import re
+import sys
+from pathlib import Path
 
 import click
+
 import datorum
 
 from .settings import CliAppSettings
-
 
 _BIND_RE = re.compile(r"^(?P<field_id>[^=]+)=(?P<name>[\w\-]+)(?:\((?P<value>[^)]*)\))?$")
 _ESC_CHAR = '\x1b'
@@ -182,14 +183,14 @@ class CliAppContext:
                 
                 if exit_on_paused:
                     click.echo("Job has pause, exiting.")
-                    exit(0)
+                    sys.exit(0)
                 else:
                     click.echo("Job has paused, press ENTER to resume or ESC to exit.")
                     while True:
                         key = click.getchar()
                         if key == _ESC_CHAR:
                             click.echo("Exiting.")
-                            exit(0)
+                            sys.exit(0)
                         elif key == _ENTER_CHAR:
                             click.echo("Resuming...")
                             job.resume()

@@ -1,7 +1,8 @@
 from enum import Enum
+
 from pydantic import Field
 
-from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
+from ..core.settings import BaseDatorumSettings
 
 
 class ContextBindType(str, Enum):

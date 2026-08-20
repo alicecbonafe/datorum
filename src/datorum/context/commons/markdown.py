@@ -1,16 +1,16 @@
 import json
+import tomllib
 from pathlib import Path
 from typing import Self
 
 import tomli_w
-import tomllib
 import yaml
 
 from ..registry import (
-    register_doc_type,
-    doc_model,
-    serializer,
     deserializer,
+    doc_model,
+    register_doc_type,
+    serializer,
 )
 
 register_doc_type("text/markdown", ["md", "markdown", "markdn", "mdown"])

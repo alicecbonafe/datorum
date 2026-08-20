@@ -1,4 +1,3 @@
-from typing import Optional
 
 from pydantic import Field
 
@@ -15,7 +14,7 @@ class ToolBoxSetUp(BaseDatorumSettings):
     context_bindings: list[ContextBindType] = Field(default_factory=list)
     resource_bindings: list[ResourceBind] = Field(default_factory=list)
 
-    active_tool: Optional[str] = Field(default=None, exclude=True)
+    active_tool: str | None = Field(default=None, exclude=True)
 
 
 class ToolKit(BaseDatorumPersistentSettings):

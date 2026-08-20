@@ -1,7 +1,5 @@
-from copy import deepcopy
 import json
-from pathlib import Path
-from typing import Any, Optional, Literal
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -10,17 +8,13 @@ from ..binding.settings import (
     ContextBind,
     ResourceBind,
 )
-from ..context.settings import (
-    DocumentContext,
-    DocumentReference,
-)
 from ..context.commons.chat import (
-    ChatHistory,
-    UserMessage,
     AssistantMessage,
+    ChatHistory,
     ToolMessage,
+    UserMessage,
 )
-from ..work.job import JobStatus, Job
+from ..work.job import Job, JobStatus
 from ..work.worker import Worker
 from .exceptions import ToolWorkerError
 from .registry import ToolBox, ToolBoxDefinition, get_toolbox_definition
@@ -28,8 +22,8 @@ from .settings import ToolBoxSetUp, ToolKit
 
 
 class ToolWorker(Worker):
-    required_context_binds: list[str] = ["tool_params", "tool_result"]
-    required_resource_binds: list[str] = ["toolbox_setup"]
+    required_context_binds: ClassVar[list[str]] = ["tool_params", "tool_result"]
+    required_resource_binds: ClassVar[list[str]] = ["toolbox_setup"]
 
     def __init__(self, binder: Binder, toolkit: ToolKit):
         super().__init__(binder)
@@ -91,7 +85,7 @@ class ToolWorker(Worker):
             if not field.context_bind_type.is_input():
                 continue
 
-            field_bind: Optional[ContextBind] = next(
+            field_bind: ContextBind | None = next(
                 (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
                 None
             )
@@ -110,7 +104,7 @@ class ToolWorker(Worker):
             setattr(toolbox, field.attr_name, field_value)
 
         for field_name, field in toolbox_def.resource_fields.items():
-            field_bind: Optional[ResourceBind] = next(
+            field_bind: ResourceBind | None = next(
                 (bind for bind in job.resource_bindings if bind.field_id == field.attr_name),
                 None
             )
@@ -139,11 +133,11 @@ class ToolWorker(Worker):
 
         params = None
         call_id = "no-id"
-        chat_history: Optional[ChatHistory] = None
+        chat_history: ChatHistory | None = None
 
         if params_doc.doc_model == "chat-history":
             chat_history: ChatHistory = params_doc.load()
-            assistant_message: Optional[AssistantMessage] = None
+            assistant_message: AssistantMessage | None = None
             for msg in reversed(chat_history.messages):
                 if isinstance(msg, AssistantMessage):
                     if not msg.tool_calls:
@@ -206,7 +200,7 @@ class ToolWorker(Worker):
             if not field.context_bind_type.is_output():
                 continue
 
-            field_bind: Optional[ContextBind] = next(
+            field_bind: ContextBind | None = next(
                 (bind for bind in job.context_bindings if bind.field_id == field.attr_name),
                 None
             )

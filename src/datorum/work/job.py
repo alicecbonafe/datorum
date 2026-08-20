@@ -1,12 +1,10 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from enum import Enum
-from typing import (
-    AsyncGenerator,
-    Optional,
-)
 
 from ..binding.settings import (
-    ContextBind, ResourceBind,
+    ContextBind,
+    ResourceBind,
 )
 from .exceptions import JobStatusError
 
@@ -27,7 +25,7 @@ class Broadcaster:
         for q in self.subscribers:
             q.put_nowait(None)
 
-    async def subscribe(self) -> AsyncGenerator[str, None]:
+    async def subscribe(self) -> AsyncGenerator[str]:
         q: asyncio.Queue = asyncio.Queue()
         for item in self.history:  # replay backlog
             q.put_nowait(item)
@@ -59,8 +57,8 @@ class Job:
 
     def __init__(
         self, id: str,
-        context_bindings: Optional[list[ContextBind]] = None,
-        resource_bindings: Optional[list[ResourceBind]] = None,
+        context_bindings: list[ContextBind] | None = None,
+        resource_bindings: list[ResourceBind] | None = None,
     ):
         self.id: str = id
         self.context_bindings: list[ContextBind] = context_bindings or []
@@ -79,7 +77,7 @@ class Job:
         self._pause_event = asyncio.Event()
         self._pause_event.set()
 
-    async def update_status(self, status: JobStatus, message: Optional[str] = None):
+    async def update_status(self, status: JobStatus, message: str | None = None):
         if self.delegates and self.delegates[-1].status not in (
             JobStatus.IDLE, JobStatus.FINISHED, JobStatus.CRASHED
         ):

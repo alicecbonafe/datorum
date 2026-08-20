@@ -1,11 +1,11 @@
 import inspect
-from collections.abc import Callable
 import types
+import uuid
+from collections.abc import Callable
 from typing import (
     Any,
     Literal,
     Protocol,
-    Optional,
     Self,
     Union,
     get_args,
@@ -13,13 +13,11 @@ from typing import (
     get_type_hints,
     runtime_checkable,
 )
-import uuid
 
 from pydantic import BaseModel, Field, PrivateAttr, create_model
 
 from ..binding.settings import ContextBindType
 from .exceptions import ToolBoxRegistryError
-
 
 # ======================================================
 # | Helpers
@@ -35,7 +33,7 @@ def _params_model_from_signature(func: Callable, name: str | None = None) -> typ
             name = f"anonymous_{uuid.uuid4().hex[:6]}"
     try:
         signature = inspect.signature(func)
-        if hasattr(func, "__call__") and not (
+        if callable(func) and not (
             inspect.isfunction(func)
             or inspect.ismethod(func)
             or inspect.isclass(func)
@@ -75,7 +73,7 @@ def _params_model_from_signature(func: Callable, name: str | None = None) -> typ
         return None  # zero-arg tool
     
     if len(fields) == 1:
-        single_type = list(fields.values())[0][0]
+        single_type = next(iter(fields.values()))[0]
         unwrapped = _unwrap_optional(single_type)
         if inspect.isclass(unwrapped) and issubclass(unwrapped, BaseModel):
             return unwrapped
@@ -151,7 +149,7 @@ def _coerce_to_dict(data: Any) -> dict:
 def _resolve_call_args(
     callable_obj: Callable,
     data: Any,
-    model_type: type[BaseModel] | type[dict],
+    model_type: type[BaseModel | dict],
 ) -> tuple[tuple, dict]:
     """
     Decide how to call `callable_obj` with `data`, given the model/type it should conform to.
@@ -186,7 +184,7 @@ def _resolve_call_args(
 
 @runtime_checkable
 class ToolBox(Protocol):
-    def get_toolbox_definition() -> "ToolBoxDefinition":...
+    def get_toolbox_definition() -> ToolBoxDefinition:...
     async def run_tool(self, tool_name: str, params: Any = None):...
 
 class FunctionDefinition(BaseModel):
@@ -213,7 +211,7 @@ class FunctionDefinition(BaseModel):
     @classmethod
     def from_params_model(
         cls, name: str, description: str, params_model: type[BaseModel] | None
-    ) -> "FunctionDefinition":
+    ) -> FunctionDefinition:
         if params_model is not None:
             schema = params_model.model_json_schema()
             schema.pop("title", None)

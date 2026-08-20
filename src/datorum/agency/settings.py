@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
+from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class InferenceServiceProvider(BaseDatorumSettings):

@@ -2,9 +2,10 @@ from pathlib import Path
 
 import click
 
-from .context import CliAppContext
 from .commands.config import ConfigGroup
 from .commands.run import RunGroup
+from .context import CliAppContext
+
 
 @click.group()
 @click.option(

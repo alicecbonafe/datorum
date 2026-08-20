@@ -27,7 +27,7 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
             self._loaded = True
 
     @model_validator(mode="after")
-    def _inject_path(self) -> "CliAppSettings":
+    def _inject_path(self) -> CliAppSettings:
         for context_id, context in self.contexts.items():
             context.base_path = self.contexts_path / context_id
 

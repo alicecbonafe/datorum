@@ -1,42 +1,40 @@
 import json
-from typing import Any, Optional
 import uuid
+from typing import Any, ClassVar
 
 import httpx
 from pydantic import BaseModel
 
+from ..binding.binder import Binder
 from ..binding.settings import (
-    ResourceBind,
     ContextBind,
     ContextBindType,
+    ResourceBind,
 )
-from ..binding.binder import Binder
-from ..context.registry import get_doc_model, DocumentModel
 from ..context.commons.chat import (
-    ChatHistory,
-    SystemMessage,
-    UserMessage,
     AssistantMessage,
+    ChatHistory,
     ToolMessage,
 )
+from ..context.registry import DocumentModel, get_doc_model
+from ..tooling.registry import ToolBoxDefinition, get_toolbox_definition
+from ..tooling.settings import ToolBoxSetUp
+from ..tooling.worker import ToolWorker
+from ..work.job import Job, JobStatus
+from ..work.worker import Worker
 from .exceptions import AgentWorkerError
 from .settings import (
-    AgentRole,
     AgencyKit,
+    AgentRole,
     InferenceServiceProvider,
 )
-from ..tooling.settings import ToolBoxSetUp, ToolKit
-from ..tooling.registry import get_toolbox_definition, ToolBoxDefinition
-from ..tooling.worker import ToolWorker
-from ..work.job import JobStatus, Job
-from ..work.worker import Worker
 
 
 class AgentWorker(Worker):
-    required_context_binds: list[str] = ["chat_history"]
-    required_resource_binds: list[str] = ["inference_provider", "agent_role"]
+    required_context_binds: ClassVar[list[str]] = ["chat_history"]
+    required_resource_binds: ClassVar[list[str]] = ["inference_provider", "agent_role"]
 
-    _KNOWN_DELTA_KEYS = {"content", "tool_calls", "role"}
+    _KNOWN_DELTA_KEYS: ClassVar[set[str]] = {"content", "tool_calls", "role"}
 
     def __init__(self,
         binder: Binder,
@@ -160,54 +158,56 @@ class AgentWorker(Worker):
 
         job.is_streaming = True
         try:
-            async with httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client:
-                async with client.stream(
+            async with (
+                httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client,
+                client.stream(
                     "POST", "chat/completions",
                     headers={"Authorization": f"Bearer {api_key}"},
                     json=request_payload,
-                ) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data:"):
+                ) as response
+            ):
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:"):].strip()
+                    if data == "[DONE]":
+                        break
+                    event = json.loads(data)
+
+                    for key, value in event.items():
+                        if key != "choices" and value is not None:
+                            response_meta[key] = value
+
+                    choice = event["choices"][0]
+                    delta = choice.get("delta", {})
+                    finish_reason = choice.get("finish_reason") or finish_reason
+                    response_meta["finish_reason"] = finish_reason
+
+                    if "content" in delta:
+                        content_parts.append(delta["content"])
+                        await job.push_chunk(delta["content"])
+
+                    for tc_delta in delta.get("tool_calls", []) or []:
+                        entry = tool_call_parts.setdefault(tc_delta["index"], {
+                            "id": None, "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        })
+                        if "id" in tc_delta:
+                            entry["id"] = tc_delta["id"]
+                        fn_delta = tc_delta.get("function") or {}
+                        entry["function"]["name"] += fn_delta.get("name") or ""
+                        entry["function"]["arguments"] += fn_delta.get("arguments") or ""
+
+                    for key, value in delta.items():
+                        if key in self._KNOWN_DELTA_KEYS:
                             continue
-                        data = line[len("data:"):].strip()
-                        if data == "[DONE]":
-                            break
-                        event = json.loads(data)
-
-                        for key, value in event.items():
-                            if key != "choices" and value is not None:
-                                response_meta[key] = value
-
-                        choice = event["choices"][0]
-                        delta = choice.get("delta", {})
-                        finish_reason = choice.get("finish_reason") or finish_reason
-                        response_meta["finish_reason"] = finish_reason
-
-                        if "content" in delta:
-                            content_parts.append(delta["content"])
-                            await job.push_chunk(delta["content"])
-
-                        for tc_delta in delta.get("tool_calls", []) or []:
-                            entry = tool_call_parts.setdefault(tc_delta["index"], {
-                                "id": None, "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            })
-                            if "id" in tc_delta:
-                                entry["id"] = tc_delta["id"]
-                            fn_delta = tc_delta.get("function") or {}
-                            entry["function"]["name"] += fn_delta.get("name") or ""
-                            entry["function"]["arguments"] += fn_delta.get("arguments") or ""
-
-                        for key, value in delta.items():
-                            if key in self._KNOWN_DELTA_KEYS:
-                                continue
-                            if isinstance(value, str):
-                                extra_parts[key] = extra_parts.get(key, "") + value
-                            else:
-                                # extra parts that are not strings are not cumulative
-                                # this will be handled when a concrete case appears
-                                extra_parts[key] = value
+                        if isinstance(value, str):
+                            extra_parts[key] = extra_parts.get(key, "") + value
+                        else:
+                            # extra parts that are not strings are not cumulative
+                            # this will be handled when a concrete case appears
+                            extra_parts[key] = value
         except httpx.HTTPError as e:
             raise AgentWorkerError(f"Failed to call inference provider '{provider.id}': {e}") from e
         finally:
@@ -341,12 +341,13 @@ class AgentWorker(Worker):
 
             if response_meta.get("finish_reason") == "tool_calls":
                 if not assistant_message.tool_calls:
-                    raise AgentWorkerError(f"Assistant's tool call is empty")
+                    raise AgentWorkerError("Assistant's tool call is empty")
                 for tool_call in assistant_message.tool_calls:
                     await job.update_status(JobStatus.WORKING, f"Preparing tool call for '{tool_call.function.name}' (round {i})")
 
-                    toolbox_setup_id, tool_name = tool_call.function.name.rsplit(".", 1)
-                    toolbox_setup: Optional[ToolBoxSetUp] = self.tool_worker.toolkit.toolboxes.get(toolbox_setup_id)
+                    # toolbox_setup_id, tool_name = tool_call.function.name.rsplit(".", 1)
+                    toolbox_setup_id, _ = tool_call.function.name.rsplit(".", 1)
+                    toolbox_setup: ToolBoxSetUp | None = self.tool_worker.toolkit.toolboxes.get(toolbox_setup_id)
 
                     if toolbox_setup is None:
                         tool_message = ToolMessage(
@@ -357,7 +358,7 @@ class AgentWorker(Worker):
                         chat_doc.save(chat)
                         continue
 
-                    toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
+                    # toolbox_def = get_toolbox_definition(toolbox_setup.toolbox_name)
                     # tool_def = toolbox_def.tools[tool_name]
 
                     tool_job = Job(

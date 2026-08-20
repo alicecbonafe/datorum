@@ -1,13 +1,10 @@
 from typing import (
     Annotated,
     Any,
-    List,
     Literal,
-    Optional,
-    Union,
 )
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from ..registry import doc_model
 
@@ -17,7 +14,7 @@ from ..registry import doc_model
 # ============================
 class ImageUrl(BaseModel):
     url: str
-    detail: Optional[Literal["low", "high", "auto"]] = "auto"
+    detail: Literal["low", "high", "auto"] | None = "auto"
 
 
 class TextPart(BaseModel):
@@ -31,8 +28,8 @@ class ImagePart(BaseModel):
 
 
 # User content can be plain text or a mixed list of text and images.
-ContentPart = Annotated[Union[TextPart, ImagePart], Field(discriminator="type")]
-UserContent = Union[str, List[ContentPart]]
+ContentPart = Annotated[TextPart | ImagePart, Field(discriminator="type")]
+UserContent = str | list[ContentPart]
 
 
 # ============================
@@ -61,8 +58,8 @@ class ToolCall(BaseModel):
 # 3. Message definitions (Discriminated Union based on the 'role' field)
 # ============================
 class _MessageBase(BaseModel):
-    name: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
+    name: str | None = None
+    metadata: dict[str, Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -83,9 +80,9 @@ class UserMessage(_MessageBase):
 
 class AssistantMessage(_MessageBase):
     role: Literal["assistant"] = "assistant"
-    content: Optional[str] = None
-    tool_calls: Optional[List[ToolCall]] = None
-    function_call: Optional[FunctionCall] = None  # Deprecated, but retained for compatibility
+    content: str | None = None
+    tool_calls: list[ToolCall] | None = None
+    function_call: FunctionCall | None = None  # Deprecated, but retained for compatibility
 
 
 class ToolMessage(_MessageBase):
@@ -98,19 +95,13 @@ class ToolMessage(_MessageBase):
 class FunctionMessage(_MessageBase):
     """Response from a called function (old format)."""
     role: Literal["function"] = "function"
-    content: Optional[str] = None
+    content: str | None = None
     name: str  # Mandatory and overrides the optional base field.
 
 
 # Combination of all message types, distinguished by the 'role' field.
 ChatMessage = Annotated[
-    Union[
-        SystemMessage,
-        UserMessage,
-        AssistantMessage,
-        ToolMessage,
-        FunctionMessage,
-    ],
+    SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage,
     Field(discriminator="role"),
 ]
 
@@ -121,7 +112,7 @@ ChatMessage = Annotated[
 @doc_model(id="chat-history")
 class ChatHistory(BaseModel):
     """Represents the complete message history for the OpenAI API."""
-    messages: List[ChatMessage] = Field(
+    messages: list[ChatMessage] = Field(
         default_factory=list,
         description="Ordered list of chat history messages"
     )

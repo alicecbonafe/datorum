@@ -1,4 +1,4 @@
-from ..core.exceptions import DatorumBaseError, SettingsError, RegistryError
+from ..core.exceptions import RegistryError, SettingsError
 
 
 class DocumentTypeError(RegistryError): ...

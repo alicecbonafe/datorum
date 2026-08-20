@@ -1,39 +1,27 @@
-import inspect
-from pathlib import Path
-import types
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
-    Optional,
-    Union,
-    get_type_hints,
-    get_origin,
-    get_args,
 )
 
-from ..binding.settings import (
-    ContextBind,
-    ResourceBind,
-)
 from ..context.settings import (
-    DocumentReference,
     DocumentContext,
+    DocumentReference,
 )
 from .exceptions import (
-    ResourceBindingError,
     ContextBindingError,
+    ResourceBindingError,
+)
+from .registry import (
+    get_resource_factory,
+    validate_factory_signature,
 )
 from .settings import ContextBind, ResourceBind
-from .registry import (
-    validate_factory_signature,
-    get_resource_factory,
-)
 
 
 class Binder:
 
-    _contexts: Optional[dict[str, DocumentContext]] = None
-    _factories: Optional[dict[str, Callable]] = None
+    _contexts: dict[str, DocumentContext] | None = None
+    _factories: dict[str, Callable] | None = None
 
     @property
     def contexts(self) -> dict[str, DocumentContext]:
@@ -69,8 +57,6 @@ class Binder:
         domain: str,
         context: str | list[str] | None = None,
     ) -> DocumentContext:
-        domain_context: Optional[DocumentContext] = None
-
         if isinstance(context, str):
             if context not in self.contexts:
                 raise ContextBindingError(
@@ -95,7 +81,7 @@ class Binder:
         document_id: str,
         context: str | list[str] | None = None,
     ) -> DocumentReference:
-        document: Optional[DocumentReference] = None
+        document: DocumentReference | None = None
 
         if isinstance(context, str):
             if context not in self.contexts:
@@ -123,7 +109,7 @@ class Binder:
     def pull_context(self, bind: ContextBind) -> Any:
         if not bind.context_bind_type.is_input():
             raise ContextBindingError(
-                f"Cannot pull from an output-only bind ('{str(bind.binded_id)}')")
+                f"Cannot pull from an output-only bind ('{bind.binded_id!s}')")
 
         if bind.context_bind_type.is_domain():
             context = self.find_domain_context(
@@ -153,7 +139,7 @@ class Binder:
     def push_context(self, bind: ContextBind, value: Any):
         if not bind.context_bind_type.is_output():
             raise ContextBindingError(
-                f"Cannot push to an input-only bind ('{str(bind.binded_id)}')")
+                f"Cannot push to an input-only bind ('{bind.binded_id!s}')")
 
         if bind.context_bind_type.is_domain():
             if not isinstance(value, dict):

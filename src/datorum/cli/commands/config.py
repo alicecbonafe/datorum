@@ -1,7 +1,7 @@
-from pathlib import Path
 import re
-from typing import Callable
 import unicodedata
+from collections.abc import Callable
+from pathlib import Path
 
 import click
 
@@ -9,7 +9,6 @@ import datorum
 
 from ..context import CliAppContext
 from .base import BaseCommandGroup, cli_command
-
 
 _KIT_ALIASES: dict[str, str] = {
     "tools": "toolkit",

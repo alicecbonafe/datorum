@@ -1,23 +1,22 @@
-from enum import Enum
-from pathlib import Path
 import shutil
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 from pydantic import Field, PrivateAttr
 
+from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 from .exceptions import (
     DocumentReadingError,
     DocumentWritingError,
 )
 from .registry import (
-    DocumentType,
-    DocumentModel,
     DocumentHandler,
-    get_doc_type,
-    get_doc_model,
+    DocumentModel,
+    DocumentType,
     get_doc_handler,
+    get_doc_model,
+    get_doc_type,
 )
-from ..core.settings import BaseDatorumSettings, BaseDatorumPersistentSettings
 
 
 class DocumentReference(BaseDatorumSettings):
@@ -129,7 +128,7 @@ class DocumentReference(BaseDatorumSettings):
         handler.serializer(data, doc_path)
         return doc_path
 
-    def copy_to(self, target: "DocumentReference") -> "DocumentReference":
+    def copy_to(self, target: DocumentReference) -> DocumentReference:
         if self.doc_model != target.doc_model:
             raise DocumentWritingError(
                 f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'"
@@ -176,7 +175,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
 
         return any(
             doc.startswith(f"{domain}.")
-            for doc in self.documents.keys()
+            for doc in self.documents
         )
 
     def get_domain_path(self, domain: str) -> Path:
@@ -185,7 +184,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
             domain_path /= step
         return domain_path
 
-    def get_domain_metadata(self, domain: str) -> Optional[dict[str, Any]]:
+    def get_domain_metadata(self, domain: str) -> dict[str, Any] | None:
         if domain not in self.domain_metadata:
             return None
         return self.domain_metadata[domain]

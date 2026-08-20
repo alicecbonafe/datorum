@@ -1,41 +1,39 @@
-from datetime import datetime
 import multiprocessing
-from pathlib import Path
 import re
-from typing import Optional, Any, Literal
 import uuid
+from pathlib import Path
+from typing import Any, Literal
 
 from pydantic import BaseModel
-from RestrictedPython import compile_restricted_eval, compile_restricted_exec
-from RestrictedPython import safe_globals
+from RestrictedPython import (
+    compile_restricted_eval,
+    compile_restricted_exec,
+    safe_globals,
+)
 from RestrictedPython.Eval import default_guarded_getitem, default_guarded_getiter
 from RestrictedPython.Guards import (
-    safer_getattr,
     guarded_iter_unpack_sequence,
     guarded_unpack_sequence,
+    safer_getattr,
 )
 
-from ..agency.settings import InferenceServiceProvider, AgentRole
 from ..agency.worker import AgentWorker
 from ..binding.binder import Binder
-from ..binding.settings import ContextBindType, ContextBind, ResourceBind
-from ..context.settings import DocumentReference
-from ..tooling.settings import ToolBoxSetUp
+from ..binding.settings import ContextBind, ContextBindType, ResourceBind
 from ..tooling.worker import ToolWorker
 from ..work.job import Job, JobStatus
 from ..work.worker import Worker
 from .exceptions import PipelineWorkerError
 from .settings import (
-    PlumbingKit,
-    Pipeline,
-    PipeFlow,
-    PipeFlowState,
-    HumanInteractionStep,
-    ToolStep,
     AgentStep,
     DecisionStep,
+    HumanInteractionStep,
+    PipeFlow,
+    PipeFlowState,
+    Pipeline,
+    PlumbingKit,
+    ToolStep,
 )
-
 
 _MP_CONTEXT = multiprocessing.get_context("spawn")
 _CODE_TIMEOUT: float = 5.0
@@ -54,7 +52,7 @@ def _run_code(
     code: str,
     mode: Literal["formula", "snippet"],
     input_data: dict,
-    out_queue: "multiprocessing.Queue",
+    out_queue: multiprocessing.Queue,
 ) -> None:
     try:
         glb = _restricted_globals()
@@ -68,12 +66,12 @@ def _run_code(
             if compiled.errors:
                 raise SyntaxError("; ".join(compiled.errors))
             loc: dict[str, Any] = {"input_data": input_data}
-            exec(compiled.code, glb, loc)
+            exec(compiled.code, glb, loc)  # noqa: S102
             if _RESULT_VAR not in loc:
                 raise NameError(f"Snippet did not assign a value to '{_RESULT_VAR}'")
             result = loc[_RESULT_VAR]
         out_queue.put(("ok", result))
-    except BaseException as exc:
+    except BaseException as exc:  # noqa: BLE001
         out_queue.put(("error", f"{type(exc).__name__}: {exc}"))
 
 
@@ -189,7 +187,7 @@ class PipelineWorker(Worker):
                     if bind.factory_name == "create_pipeflow"), None
             )
             if not pipeline_bind:
-                raise PipelineWorkerError(f"Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'")
+                raise PipelineWorkerError("Required binding not provided for 'create_pipeflow' or 'restore_pipeflow'")
             pipeflow = self.binder.load_resource(pipeline_bind)
 
         if pipeflow.id in self._active_flows:
@@ -286,7 +284,7 @@ class PipelineWorker(Worker):
                         raise PipelineWorkerError(f"Invalid data input type: '{type(input_data)}'")
 
                     await job.update_status(JobStatus.WORKING, "Running decision code")
-                    out_queue: "multiprocessing.Queue" = _MP_CONTEXT.Queue()
+                    out_queue: multiprocessing.Queue = _MP_CONTEXT.Queue()
                     process = _MP_CONTEXT.Process(
                         target=_run_code,
                         args=(current_step.code, current_step.code_type, input_data, out_queue),

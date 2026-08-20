@@ -1,11 +1,10 @@
 import os
 import re
-from collections.abc import Mapping, Callable
+from collections.abc import Callable, Mapping
 
-from .registry import resource, ResourceFactoryRegistry
 from .binder import Binder
-from .exceptions import KeyNotFoundError, InvalidKeyNameError
-
+from .exceptions import InvalidKeyNameError, KeyNotFoundError
+from .registry import ResourceFactoryRegistry, resource
 
 DEFAULT_KEY_NAME_MATCH = r"^[A-Za-z_][A-Za-z0-9_]*$"
 

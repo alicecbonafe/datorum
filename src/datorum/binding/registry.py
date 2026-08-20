@@ -1,15 +1,14 @@
-from collections.abc import Callable
 import inspect
 import types
+from collections.abc import Callable
 from typing import (
-    get_type_hints,
-    get_origin,
+    Any,
     Union,
     get_args,
-    Any,
+    get_origin,
+    get_type_hints,
 )
 
-from .settings import ContextBind
 from .exceptions import ResourceFactoryError
 
 

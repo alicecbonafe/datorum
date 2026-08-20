@@ -1,5 +1,6 @@
 from ..core.exceptions import DatorumBaseError
 
+
 class JobError(DatorumBaseError): ...
 
 class JobStatusError(JobError): ...

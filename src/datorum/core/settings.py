@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Self
+from typing import Any, Self
 
 import yaml
 from pydantic import BaseModel, PrivateAttr, model_validator
@@ -22,10 +22,10 @@ yaml.add_multi_representer(Enum, represent_enum, Dumper=DatorumDumper)
 class BaseDatorumSettings(BaseModel):
     """Base class for Datorum settings."""
 
-    _persistent: Optional["BaseDatorumPersistentSettings"] = PrivateAttr(default=None)
+    _persistent: BaseDatorumPersistentSettings | None = PrivateAttr(default=None)
 
     @property
-    def persistent(self) -> "BaseDatorumPersistentSettings":
+    def persistent(self) -> BaseDatorumPersistentSettings:
         if self._persistent is None:
             raise SettingsError("Persistent model not defined")
         return self._persistent
@@ -36,7 +36,7 @@ class BaseDatorumSettings(BaseModel):
 
     def _set_persistent_recursive(
         self,
-        persistent_instance: "BaseDatorumPersistentSettings",
+        persistent_instance: BaseDatorumPersistentSettings,
         visited: set | None = None,
     ) -> None:
         if visited is None:
@@ -59,7 +59,7 @@ class BaseDatorumSettings(BaseModel):
     def _set_persistent_recursive_in_list(
         self,
         data: list,
-        persistent_instance: "BaseDatorumPersistentSettings",
+        persistent_instance: BaseDatorumPersistentSettings,
         visited: set,
     ) -> None:
         obj_id = id(data)
@@ -77,7 +77,7 @@ class BaseDatorumSettings(BaseModel):
     def _set_persistent_recursive_in_dict(
         self,
         data: dict,
-        persistent_instance: "BaseDatorumPersistentSettings",
+        persistent_instance: BaseDatorumPersistentSettings,
         visited: set,
     ) -> None:
         obj_id = id(data)
@@ -95,7 +95,7 @@ class BaseDatorumSettings(BaseModel):
     def _propagate_persistent(
         self,
         value: Any,
-        persistent_instance: "BaseDatorumPersistentSettings",
+        persistent_instance: BaseDatorumPersistentSettings,
         visited: set,
     ) -> None:
         if value is None:
@@ -177,6 +177,6 @@ class BaseDatorumPersistentSettings(BaseDatorumSettings):
         self._set_persistent_recursive(self)
 
     @model_validator(mode="after")
-    def _root_model(self) -> "BaseDatorumPersistentSettings":
+    def _root_model(self) -> BaseDatorumPersistentSettings:
         self._set_persistent_recursive(self)
         return self
