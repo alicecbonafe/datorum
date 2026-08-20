@@ -53,7 +53,7 @@ class BaseCommandGroup(click.Group):
         def wrapper(*args, **kwargs):
             ctx = click.get_current_context(silent=True)
             if ctx and ctx.obj and hasattr(ctx.obj, "settings"):
-                ctx.obj.settings.load()
+                ctx.obj.settings.load_lazy()
             return bound_method(*args, **kwargs)
 
         return wrapper

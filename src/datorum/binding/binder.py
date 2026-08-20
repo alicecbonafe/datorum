@@ -68,7 +68,7 @@ class Binder:
                 )
             return self.contexts[context]
 
-        context_list: list[str] = context or self.contexts.keys()
+        context_list: list[str] = context or list(self.contexts.keys())
         for ctx_id in context_list:
             if ctx_id not in self.contexts:
                 continue
@@ -92,7 +92,7 @@ class Binder:
             document = self.contexts[context].get_document(id=document_id)
 
         else:
-            context_list: list[str] = context or self.contexts.keys()
+            context_list: list[str] = context or list(self.contexts.keys())
             for ctx_id in context_list:
                 if ctx_id not in self.contexts:
                     continue

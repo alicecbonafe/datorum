@@ -276,7 +276,7 @@ class AgentWorker(Worker):
         role_bind: ResourceBind = next(
             bind for bind in job.resource_bindings if bind.field_id == "agent_role"
         )
-        provider_bind: ResourceBind = next(
+        provider_bind: ResourceBind | None = next(
             (
                 bind
                 for bind in job.resource_bindings

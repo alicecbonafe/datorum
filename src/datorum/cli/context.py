@@ -33,7 +33,7 @@ class CliAppContext:
     @property
     def binder(self):
         if not self._binder:
-            self.settings.load()
+            self.settings.load_lazy()
             self._create_binder()
         return self._binder
 
@@ -142,6 +142,8 @@ class CliAppContext:
                     self.settings.api_keys,
                     binder=self._binder,
                 )
+
+        return self._binder
 
     def _split_context_value(self, value: str) -> tuple[str | list[str] | None, str]:
         if ":" not in value:

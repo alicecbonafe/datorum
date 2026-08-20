@@ -74,9 +74,9 @@ ResourceFactoryRegistry: dict[str, Callable] = {}
 
 def register_resource_factory(
     name: str, factory: Callable, force: bool = False
-) -> Callable:
+) -> Callable | None:
     if name in ResourceFactoryRegistry and not force:
-        return
+        return None
         # raise ResourceFactoryError(
         #     f"Resource factory '{name}' is already registered, use 'force=True' to overwrite")
     if not validate_factory_signature(factory):

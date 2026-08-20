@@ -39,7 +39,7 @@ def _params_model_from_signature(
         if callable(func) and not (
             inspect.isfunction(func) or inspect.ismethod(func) or inspect.isclass(func)
         ):
-            hints = get_type_hints(func.__call__, include_extras=True)
+            hints = get_type_hints(func, include_extras=True)
         else:
             hints = get_type_hints(func, include_extras=True)
 
@@ -188,7 +188,7 @@ def _resolve_call_args(
 
 @runtime_checkable
 class ToolBox(Protocol):
-    def get_toolbox_definition() -> ToolBoxDefinition: ...
+    def get_toolbox_definition(self) -> ToolBoxDefinition: ...
     async def run_tool(self, tool_name: str, params: Any = None): ...
 
 
@@ -268,28 +268,30 @@ class ToolBoxDefinition(BaseModel):
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)
     context_fields: dict[str, ContextField] = Field(default_factory=dict)
     resource_fields: dict[str, ResourceField] = Field(default_factory=dict)
-    clazz: type[Any] = Field(default=None, exclude=True)
+    clazz: type[Any] | None = Field(default=None, exclude=True)
 
     def create_toolbox(self) -> ToolBox:
+        if not self.clazz:
+            raise ToolBoxRegistryError(f"ToolBox type is not defined")
         result: Any = self.clazz()
 
-        def get_toolbox_definition() -> Self:
+        def get_toolbox_definition() -> "ToolBoxDefinition":
             return self
 
         async def run_tool(tool_name: str, params: Any = None):
             missing_fields: list[str] = []
-            for field in self.context_fields.values():
-                val = getattr(result, field.attr_name, None)
-                if field.required and (
+            for ctx_field in self.context_fields.values():
+                val = getattr(result, ctx_field.attr_name, None) if ctx_field.attr_name else None
+                if ctx_field.required and (
                     val is None or isinstance(val, BaseToolBoxField)
                 ):
-                    missing_fields.append(f"ctx:{field.name}")
-            for field in self.resource_fields.values():
-                val = getattr(result, field.attr_name, None)
-                if field.required and (
+                    missing_fields.append(f"ctx:{ctx_field.name}")
+            for res_field in self.resource_fields.values():
+                val = getattr(result, res_field.attr_name, None) if res_field.attr_name else None
+                if res_field.required and (
                     val is None or isinstance(val, BaseToolBoxField)
                 ):
-                    missing_fields.append(f"res:{field.name}")
+                    missing_fields.append(f"res:{res_field.name}")
             if len(missing_fields) > 0:
                 raise ToolBoxRegistryError(
                     f"Missing required field(s): {missing_fields}"
@@ -396,10 +398,12 @@ def toolbox(name: str | None = None, force: bool = False):
                         attr_value.required = False
                 toolbox_def.resource_fields[attr_value.name] = attr_value
 
-        for field in toolbox_def.context_fields.values():
-            setattr(cls, field.attr_name, None)
-        for field in toolbox_def.resource_fields.values():
-            setattr(cls, field.attr_name, None)
+        for ctx_field in toolbox_def.context_fields.values():
+            if ctx_field.attr_name:
+                setattr(cls, ctx_field.attr_name, None)
+        for res_field in toolbox_def.resource_fields.values():
+            if res_field.attr_name:
+                setattr(cls, res_field.attr_name, None)
 
         return cls
 

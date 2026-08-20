@@ -41,7 +41,7 @@ _RESULT_VAR: str = "target"
 
 
 def _restricted_globals() -> dict[str, Any]:
-    g = dict(safe_globals)
+    g: dict[str, Any] = dict(safe_globals)
     g["_getattr_"] = safer_getattr  # blocks `_private`/dunder access
     g["_getitem_"] = default_guarded_getitem  # input_data['field']
     g["_getiter_"] = default_guarded_getiter  # for/comprehension support
@@ -62,11 +62,13 @@ def _run_code(
             compiled = compile_restricted_eval(code, filename=f"<{_RESULT_VAR}>")
             if compiled.errors:
                 raise SyntaxError("; ".join(compiled.errors))
+            assert compiled.code
             result = eval(compiled.code, glb, {"input_data": input_data})
         else:
             compiled = compile_restricted_exec(code, filename=f"<{_RESULT_VAR}>")
             if compiled.errors:
                 raise SyntaxError("; ".join(compiled.errors))
+            assert compiled.code
             loc: dict[str, Any] = {"input_data": input_data}
             exec(compiled.code, glb, loc)  # noqa: S102
             if _RESULT_VAR not in loc:
@@ -178,7 +180,7 @@ class PipelineWorker(Worker):
         await job.update_status(JobStatus.WORKING, "Creating/restoring pipeflow")
 
         pipeflow: PipeFlow
-        pipeflow_bind: ResourceBind = next(
+        pipeflow_bind: ResourceBind | None = next(
             (
                 bind
                 for bind in job.resource_bindings
@@ -189,7 +191,7 @@ class PipelineWorker(Worker):
         if pipeflow_bind:
             pipeflow = self.binder.load_resource(pipeflow_bind)
         else:
-            pipeline_bind: ResourceBind = next(
+            pipeline_bind: ResourceBind | None = next(
                 (
                     bind
                     for bind in job.resource_bindings

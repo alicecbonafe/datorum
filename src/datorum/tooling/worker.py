@@ -89,7 +89,7 @@ class ToolWorker(Worker):
             if not field.context_bind_type.is_input():
                 continue
 
-            field_bind: ContextBind | None = next(
+            ctx_field_bind: ContextBind | None = next(
                 (
                     bind
                     for bind in job.context_bindings
@@ -97,8 +97,8 @@ class ToolWorker(Worker):
                 ),
                 None,
             )
-            if not field_bind:
-                field_bind = next(
+            if not ctx_field_bind:
+                ctx_field_bind = next(
                     (
                         bind
                         for bind in setup.context_bindings
@@ -106,43 +106,45 @@ class ToolWorker(Worker):
                     ),
                     None,
                 )
-                if not field_bind:
+                if not ctx_field_bind:
                     if field.required:
                         raise ToolWorkerError(
                             f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'"
                         )
                     continue
 
-            field_value: Any = self.binder.pull_context(field_bind)
-            setattr(toolbox, field.attr_name, field_value)
+            field_value: Any = self.binder.pull_context(ctx_field_bind)
+            if field.attr_name:
+                setattr(toolbox, field.attr_name, field_value)
 
-        for field_name, field in toolbox_def.resource_fields.items():
-            field_bind: ResourceBind | None = next(
+        for field_name, res_field in toolbox_def.resource_fields.items():
+            res_field_bind: ResourceBind | None = next(
                 (
                     bind
                     for bind in job.resource_bindings
-                    if bind.field_id == field.attr_name
+                    if bind.field_id == res_field.attr_name
                 ),
                 None,
             )
-            if not field_bind:
-                field_bind = next(
+            if not res_field_bind:
+                res_field_bind = next(
                     (
                         bind
                         for bind in setup.resource_bindings
-                        if bind.field_id == field.attr_name
+                        if bind.field_id == res_field.attr_name
                     ),
                     None,
                 )
-                if not field_bind:
-                    if field.required:
+                if not res_field_bind:
+                    if res_field.required:
                         raise ToolWorkerError(
                             f"Context field '{field_name}' is required for ToolBox '{toolbox_def.name}'"
                         )
                     continue
 
-            field_value: Any = self.binder.load_resource(field_bind)
-            setattr(toolbox, field.attr_name, field_value)
+            field_value = self.binder.load_resource(res_field_bind)
+            if res_field.attr_name:
+                setattr(toolbox, res_field.attr_name, field_value)
 
         params_doc = self.binder.find_document(
             document_id=params_bind.binded_id, context=params_bind.context
@@ -156,7 +158,7 @@ class ToolWorker(Worker):
         chat_history: ChatHistory | None = None
 
         if params_doc.doc_model == "chat-history":
-            chat_history: ChatHistory = params_doc.load()
+            chat_history = params_doc.load()
             assistant_message: AssistantMessage | None = None
             for msg in reversed(chat_history.messages):
                 if isinstance(msg, AssistantMessage):
@@ -170,11 +172,12 @@ class ToolWorker(Worker):
             if not assistant_message:
                 raise ToolWorkerError("Assistant's message not found")
 
-            for tool_call in assistant_message.tool_calls:
-                if tool_call.function.name == f"{setup.id}.{setup.active_tool}":
-                    params = json.loads(tool_call.function.arguments)
-                    call_id = tool_call.id
-                    break
+            if assistant_message.tool_calls:
+                for tool_call in assistant_message.tool_calls:
+                    if tool_call.function.name == f"{setup.id}.{setup.active_tool}":
+                        params = json.loads(tool_call.function.arguments)
+                        call_id = tool_call.id
+                        break
         else:
             params = params_doc.load()
 
@@ -211,7 +214,7 @@ class ToolWorker(Worker):
 
         await job.update_status(JobStatus.WORKING, "Saving bindings")
         for field_name, field in toolbox_def.context_fields.items():
-            if not field.context_bind_type.is_output():
+            if not field.context_bind_type.is_output() or not field.attr_name:
                 continue
 
             field_bind: ContextBind | None = next(
@@ -225,5 +228,5 @@ class ToolWorker(Worker):
             if not field_bind:
                 continue
 
-            field_value: Any = getattr(toolbox, field.attr_name)
+            field_value = getattr(toolbox, field.attr_name)
             self.binder.push_context(field_bind, field_value)

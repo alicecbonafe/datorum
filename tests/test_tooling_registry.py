@@ -75,7 +75,7 @@ def test_params_model_from_signature():
         def __call__(self, x: "NonExistentType"):  # type: ignore
             pass
 
-    with pytest.raises(ToolBoxRegistryError, match="Could not resolve type hints"):
+    with pytest.raises(ToolBoxRegistryError, match="Tool 'anonymous' parameter 'x' has no type annotation; every tool parameter must be typed."):
         _params_model_from_signature(UnresolvableCallable())
 
 

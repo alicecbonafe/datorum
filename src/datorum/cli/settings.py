@@ -20,7 +20,7 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
 
     _loaded: bool = PrivateAttr(False)
 
-    def load(self):
+    def load_lazy(self):
         if not self._loaded:
             self.reload()
             self._loaded = True

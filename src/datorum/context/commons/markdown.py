@@ -1,7 +1,7 @@
 import json
 import tomllib
 from pathlib import Path
-from typing import Self
+from typing import Self, Any
 
 import tomli_w
 import yaml
@@ -29,7 +29,7 @@ class MarkdownDocument:
     def __init__(
         self,
         content: str,
-        frontmatter: dict | None = None,
+        frontmatter: dict[str, Any] | None = None,
         frontmatter_format: str | None = None,
     ):
         self.content = content
@@ -38,23 +38,24 @@ class MarkdownDocument:
 
     def dumps(self) -> str:
         raw = self.content
-        if self.frontmatter_format == self.FRONTMATTER_YAML:
-            frontmatter_raw = yaml.safe_dump(
-                self.frontmatter, sort_keys=False, allow_unicode=True
-            )
-            raw = (
-                f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
-            )
-        elif self.frontmatter_format == self.FRONTMATTER_JSON:
-            frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
-            raw = (
-                f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
-            )
-        elif self.frontmatter_format == self.FRONTMATTER_TOML:
-            frontmatter_raw = tomli_w.dumps(self.frontmatter)
-            raw = (
-                f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
-            )
+        if self.frontmatter:
+            if self.frontmatter_format == self.FRONTMATTER_YAML:
+                frontmatter_raw = yaml.safe_dump(
+                    self.frontmatter, sort_keys=False, allow_unicode=True
+                )
+                raw = (
+                    f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
+                )
+            elif self.frontmatter_format == self.FRONTMATTER_JSON:
+                frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
+                raw = (
+                    f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
+                )
+            elif self.frontmatter_format == self.FRONTMATTER_TOML:
+                frontmatter_raw = tomli_w.dumps(self.frontmatter)
+                raw = (
+                    f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
+                )
         return raw
 
     def dump(self, file_path: Path):
