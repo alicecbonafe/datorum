@@ -218,3 +218,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
                 doc_path.unlink()
         del self.documents[id]
 
+    def _set_persistent_recursive(self, persistent_instance, visited=None):
+        super()._set_persistent_recursive(persistent_instance, visited)
+        for doc in self.documents.values():
+            doc._persistent = self

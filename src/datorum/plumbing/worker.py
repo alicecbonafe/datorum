@@ -104,6 +104,8 @@ class PipelineWorker(Worker):
         flow_file_re_str = re.escape(prefix) + r"(\d+)" + re.escape(f"{suffix}.yml")
         flow_file_re = re.compile(flow_file_re_str)
 
+        flow_path.mkdir(parents=True, exist_ok=True)
+
         for candidate in flow_path.iterdir():
             if candidate.is_file():
                 match = flow_file_re.fullmatch(candidate.name)
@@ -213,7 +215,6 @@ class PipelineWorker(Worker):
 
                 current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
                 if isinstance(current_step, HumanInteractionStep):
-                    current_step.interactive
                     existing_interactive = next((
                         b for b in job.context_bindings \
                             if b.field_id == 'interactive'

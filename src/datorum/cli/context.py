@@ -148,14 +148,14 @@ class CliAppContext:
         return (contexts[0] if len(contexts) == 1 else contexts), binded_id
 
     async def _run_job_async(self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool) -> datorum.Job:
-        printer = asyncio.create_task(self._gather_catchers(job))
+        printer = asyncio.create_task(self._gather_catchers(job, exit_on_paused))
         try:
             await worker.run(job)
         finally:
             await printer
         return job
 
-    async def _gather_catchers(self, job: datorum.Job) -> None:
+    async def _gather_catchers(self, job: datorum.Job, exit_on_paused: bool) -> None:
         await asyncio.gather(
             self._catch_chunks(job),
             self._catch_updates(job, exit_on_paused),
@@ -173,7 +173,7 @@ class CliAppContext:
             else:
                 click.echo(f"[UPDATE] {item}")
 
-            if item == f"[{datorum.JobStatus.PAUSED.value.lower}]":
+            if item == f"[{datorum.JobStatus.PAUSED.value.lower()}]":
                 for bind in job.context_bindings:
                     if bind.field_id == "interactive":
                         interactive = self.binder.find_document(bind.binded_id, bind.context)

@@ -35,7 +35,7 @@ class RunGroup(BaseCommandGroup):
             id=f"tool_{selector.replace(".", "_")}",
             context_bindings=[
                 app_ctx.parse_positional_context(params, field_id="tool_params"),
-                app_ctx.parse_positional_context(params, field_id="tool_result"),
+                app_ctx.parse_positional_context(result, field_id="tool_result"),
                 *(app_ctx.parse_context_bind(b) for b in context_binds),
             ],
             resource_bindings=[
@@ -114,6 +114,7 @@ class RunGroup(BaseCommandGroup):
         "--non-interactive", "non_interactive", is_flag=True,
         help=""
     )
+    @click.pass_obj
     def run_pipeline(
         app_ctx: CliAppContext,
         flow_id: str | None,
@@ -129,7 +130,7 @@ class RunGroup(BaseCommandGroup):
             pipeflow = app_ctx.pipeline_worker.create_flow(pipeline_id)
             click.echo(f"Created flow '{pipeflow.id}' at '{pipeflow.settings_path}'")
         else:
-            pipeflow = app_ctx.binder.load_resource(datorum.ResourceBind(
+            pipeflow = app_ctx.pipeline_worker.binder.load_resource(datorum.ResourceBind(
                 field_id="pipeflow",
                 factory_name="restore_pipeflow",
                 selector=flow_id,
