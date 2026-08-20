@@ -4,11 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datorum"
-version = "0.1.0a1.dev4"
-description = "Context engineering AI agent."
+version = "0.1.0a1.dev5"
+description = "A settings-based framework for creating AI agents and pipelines, focusing on the high specialization of smaller models using context engineering."
 readme = "README.md"
 license = "Apache-2.0"
-authors = [{ name = "Datorum Team" }]
+authors = [
+    {name = "Alice Bonafé", email = "alicebonafe@riseup.net"}
+]
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.13",
@@ -21,6 +23,22 @@ dependencies = [
     "RestrictedPython>=8.4",
     "click>=8.4"
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://codeberg.org/alicebonafe/datorum"
+Repository = "https://github.com/alicecbonafe/datorum"
+Issues = "https://codeberg.org/alicebonafe/datorum/issues"
+# Documentation = "https://codeberg.org/alicebonafe/datorum"
 
 [project.optional-dependencies]
 test = [
