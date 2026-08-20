@@ -6,7 +6,6 @@ from typing import (
     Any,
     Literal,
     Protocol,
-    Self,
     Union,
     get_args,
     get_origin,
@@ -272,22 +271,30 @@ class ToolBoxDefinition(BaseModel):
 
     def create_toolbox(self) -> ToolBox:
         if not self.clazz:
-            raise ToolBoxRegistryError(f"ToolBox type is not defined")
+            raise ToolBoxRegistryError("ToolBox type is not defined")
         result: Any = self.clazz()
 
-        def get_toolbox_definition() -> "ToolBoxDefinition":
+        def get_toolbox_definition() -> ToolBoxDefinition:
             return self
 
         async def run_tool(tool_name: str, params: Any = None):
             missing_fields: list[str] = []
             for ctx_field in self.context_fields.values():
-                val = getattr(result, ctx_field.attr_name, None) if ctx_field.attr_name else None
+                val = (
+                    getattr(result, ctx_field.attr_name, None)
+                    if ctx_field.attr_name
+                    else None
+                )
                 if ctx_field.required and (
                     val is None or isinstance(val, BaseToolBoxField)
                 ):
                     missing_fields.append(f"ctx:{ctx_field.name}")
             for res_field in self.resource_fields.values():
-                val = getattr(result, res_field.attr_name, None) if res_field.attr_name else None
+                val = (
+                    getattr(result, res_field.attr_name, None)
+                    if res_field.attr_name
+                    else None
+                )
                 if res_field.required and (
                     val is None or isinstance(val, BaseToolBoxField)
                 ):

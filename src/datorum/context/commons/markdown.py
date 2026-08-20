@@ -1,7 +1,7 @@
 import json
 import tomllib
 from pathlib import Path
-from typing import Self, Any
+from typing import Any, Self
 
 import tomli_w
 import yaml
@@ -43,19 +43,15 @@ class MarkdownDocument:
                 frontmatter_raw = yaml.safe_dump(
                     self.frontmatter, sort_keys=False, allow_unicode=True
                 )
-                raw = (
-                    f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
-                )
+                raw = f"{self.DELIMITER_YAML}{frontmatter_raw}\n{self.DELIMITER_YAML}\n{raw}"
             elif self.frontmatter_format == self.FRONTMATTER_JSON:
-                frontmatter_raw = json.dumps(self.frontmatter, indent=2, ensure_ascii=False)
-                raw = (
-                    f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
+                frontmatter_raw = json.dumps(
+                    self.frontmatter, indent=2, ensure_ascii=False
                 )
+                raw = f"{self.DELIMITER_JSON}{frontmatter_raw}\n{self.DELIMITER_JSON}\n{raw}"
             elif self.frontmatter_format == self.FRONTMATTER_TOML:
                 frontmatter_raw = tomli_w.dumps(self.frontmatter)
-                raw = (
-                    f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
-                )
+                raw = f"{self.DELIMITER_TOML}{frontmatter_raw}\n{self.DELIMITER_TOML}\n{raw}"
         return raw
 
     def dump(self, file_path: Path):

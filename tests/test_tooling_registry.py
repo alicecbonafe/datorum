@@ -7,6 +7,7 @@ from datorum.tooling.registry import (
     ContextField,
     ResourceField,
     FunctionDefinition,
+    ToolBoxDefinition,
     ToolDefinition,
     get_toolbox_definition,
     tool,
@@ -78,6 +79,19 @@ def test_params_model_from_signature():
     with pytest.raises(ToolBoxRegistryError, match="Tool 'anonymous' parameter 'x' has no type annotation; every tool parameter must be typed."):
         _params_model_from_signature(UnresolvableCallable())
 
+@pytest.mark.depends(on=["tests/test_context_settings.py"])
+def test_params_model_from_signature_exception():
+    # Test that a TypeError/NameError in signature inspection raises ToolBoxRegistryError
+    class UninspectableCallable:
+        def __call__(self):
+            pass
+
+        def __signature__(self):
+            raise TypeError("No signature available")
+
+
+    with pytest.raises(ToolBoxRegistryError, match="Could not resolve type hints for function"):
+        _params_model_from_signature(UninspectableCallable())
 
 @pytest.mark.depends(on=["test_params_model_from_signature"])
 def test_unwrap_optional_and_is_optional():
@@ -382,3 +396,17 @@ async def test_toolbox_instance_execution_and_missing_fields():
     # Execute tool without parameters
     res_simple = await tb_instance.run_tool("simple")
     assert res_simple == "ok"
+
+@pytest.mark.depends(on=["test_toolbox_unannotated_field"])
+def test_toolbox_definition_create_without_clazz():
+    # Test that create_toolbox raises ToolBoxRegistryError when clazz is None
+    tb_def = ToolBoxDefinition(
+        name="TestToolBox",
+        tools={},
+        context_fields={},
+        resource_fields={},
+        clazz=None
+    )
+    
+    with pytest.raises(ToolBoxRegistryError, match="ToolBox type is not defined"):
+        tb_def.create_toolbox()
