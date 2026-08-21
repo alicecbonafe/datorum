@@ -92,7 +92,7 @@ class ContextGroup(BaseCommandGroup):
     @staticmethod
     @cli_command("link")
     @click.argument("context_id")
-    @click.argument("doc_file", type=click.Path(exists=True, path_type=Path))
+    @click.argument("doc_file", type=click.Path(path_type=Path))
     @click.option(
         "-t", "--doc-type", "doc_type", default="text/plain", show_default=True
     )
