@@ -71,7 +71,7 @@ source ./venv-datorum/bin/activate
 For a quick installation via pip, you can point directly to the repository.
 
 ```bash
-pip install git+https://github.com/alicecbonafe/datorum.git
+pip install datorum
 ```
 
 For a complete dev install, clone the repository and install the package in development mode.
