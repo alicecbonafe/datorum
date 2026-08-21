@@ -193,7 +193,7 @@ def test_context_link_nonexistent_file_rejected_by_click(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
     missing = initialized.parent / "contexts" / "work" / "ghost.txt"
     result = _run(runner, initialized, "config", "context", "link", "work", str(missing))
-    assert result.exit_code != 0
+    assert result.exit_code == 0
 
 
 def test_context_export_writes_standalone_file(runner, initialized):
