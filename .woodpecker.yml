@@ -6,10 +6,10 @@ steps:
       - pip install --upgrade pip
       - pip install -e .[lint]
 
-      - ruff check . --output-format=github
-      - ruff format --check .
+      - ruff check ./src --output-format=github
+      - ruff format --check ./src
 
-      - mypy . --install-types --non-interactive --check-untyped-defs
+      - mypy ./src --install-types --non-interactive --check-untyped-defs
     when:
       - event: push
         branch: main
@@ -20,7 +20,7 @@ steps:
     commands:
       - pip install --upgrade pip
       - pip install -e .[test]
-      - pytest --cov=datorum --cov-fail-under=100 -v
+      - pytest --cov-fail-under=100
     when:
       - event: push
         branch: main

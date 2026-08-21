@@ -1,0 +1,19 @@
+from ..core.exceptions import RegistryError, SettingsError
+
+
+class DocumentTypeError(RegistryError): ...
+
+
+class DocumentModelError(RegistryError): ...
+
+
+class DocumentHandlerError(RegistryError): ...
+
+
+class DocumentReferenceError(SettingsError): ...
+
+
+class DocumentReadingError(DocumentReferenceError): ...
+
+
+class DocumentWritingError(DocumentReferenceError): ...

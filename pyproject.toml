@@ -1,66 +1,77 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=70.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "datorum"
-version = "0.1.0a1.dev3"
-description = "Context engineering AI agent."
+version = "0.1.0a1"
+description = "A settings-based framework for creating AI agents and pipelines, focusing on the high specialization of smaller models using context engineering."
 readme = "README.md"
 license = "Apache-2.0"
-authors = [{ name = "Datorum Team" }]
-requires-python = ">=3.10"
+authors = [
+    {name = "Alice Bonafé", email = "alicebonafe@riseup.net"}
+]
+requires-python = ">=3.14"
 dependencies = [
-    "cryptography>=49.0",
-    "openai>=2.47",
     "pydantic>=2.13",
+    "httpx>=0.28",
     "python-dotenv>=1.2",
-    "pytest_httpserver>=1.1",
     "beautifulsoup4>=4.15",
     "pyyaml>=6.0",
     "requests>=2.34",
-    "typer>=0.27",
-    "keyring>=25.7",
     "tomli_w>=1.2",
+    "RestrictedPython>=8.4",
+    "click>=8.4"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
+[project.urls]
+Homepage = "https://codeberg.org/alicebonafe/datorum"
+Repository = "https://github.com/alicecbonafe/datorum"
+Issues = "https://codeberg.org/alicebonafe/datorum/issues"
+# Documentation = "https://codeberg.org/alicebonafe/datorum"
+
 [project.optional-dependencies]
-dev = [
-    "pytest>=9.1",
-    "pytest-cov>=7.1",
-    "pytest-mock>=3.15",
-    "pytest-depends>=1.0",
-    "ruff>=0.16",
-    "mypy>=2.3",
-]
 test = [
     "pytest>=9.1",
+    "pytest_httpserver>=1.1",
     "pytest-cov>=7.1",
     "pytest-mock>=3.15",
     "pytest-depends>=1.0",
+    "pytest-asyncio>=1.4",
 ]
 lint = [
-    "pytest>=9.1",
-    "pytest-cov>=7.1",
-    "pytest-mock>=3.15",
-    "pytest-depends>=1.0",
+    "datorum[test]",
     "ruff>=0.16",
     "mypy>=2.3",
+]
+dev = [
+    "datorum[lint]",
 ]
 
 [project.scripts]
 datorum = "datorum.cli:app"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["datorum*"]
-exclude = ["data*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# No --cov-fail-under here on purpose: local/dev runs should show coverage
+# without failing the run. The 100% gate is enforced in CI (.woodpecker.yml).
 addopts = "-v --cov=datorum --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py314"
