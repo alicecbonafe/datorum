@@ -24,13 +24,13 @@ jobs:
           pip install -e .[lint]
 
       - name: Run ruff check
-        run: ruff check . --output-format=github
+        run: ruff check ./src --output-format=github
 
       - name: Run ruff format check
-        run: ruff format --check .
+        run: ruff format --check ./src
 
       - name: Run mypy
-        run: mypy . --install-types --non-interactive --check-untyped-defs
+        run: mypy ./src --install-types --non-interactive --check-untyped-defs
 
   test:
     runs-on: ubuntu-latest
