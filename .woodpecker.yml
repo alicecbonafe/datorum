@@ -14,6 +14,7 @@ steps:
       - event: push
         branch: main
       - event: pull_request
+      - event: tag
 
   test:
     image: python:3.14-slim
@@ -25,3 +26,18 @@ steps:
       - event: push
         branch: main
       - event: pull_request
+      - event: tag
+
+  publish:
+    image: python:3.14-slim
+    depends_on: [lint, test]
+    environment:
+      PYPI_TOKEN:
+        from_secret: pypi_token
+    commands:
+      - pip install --upgrade pip
+      - pip install build twine
+      - python -m build
+      - twine upload --non-interactive --username __token__ --password $PYPI_TOKEN --skip-existing dist/*
+    when:
+      - event: tag

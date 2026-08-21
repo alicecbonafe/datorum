@@ -26,7 +26,7 @@ It's pronounced /da.ˈtoː.rũː/ in Classical Latin — in practice, say da-TOH
 The core context‑engineering machinery is in place and fully tested.
 
 - **Document handling**
-  Within a context, document settings specify a file type (as stored on disk) and a model type (the corresponding Python representation). The most basic example is a plain text (`doc_type = "text/plain"`) file loaded into a string (`doc_model = "str"`). The framework currently maps 3 file types for structured data: YAML (`doc_type = "applictiona/yaml"`), JSON (`"applictiona/json"`), and TOML (`"applictiona/toml"`). These three file formats can be natively mapped as dictionaries (`doc_mode = "dict"`), and the `@datorum.doc_model` decorator allows transforming any `pydantic.BaseModel` model into a representation valid for these formats. This is demonstrated, for instance, by `datorum.ChatHistory` (`doc_model = "chat-history"`), a comprehensive data structure designed for seamless interaction with inference endpoints, which can be stored in any of these three structured data doc types. The framework also provides the `datorum.Markdown` model (`doc_model = "markdown"`) out of the box, separating the handling of Markdown content from the structured data found in the frontmatter of Markdown files (`doc_type = "text/markdown"`), a feature particularly useful for working with indexed and categorized semantic contexts.
+  Within a context, document settings specify a file type (as stored on disk) and a model type (the corresponding Python representation). The most basic example is a plain text (`doc_type = "text/plain"`) file loaded into a string (`doc_model = "str"`). The framework currently maps 3 file types for structured data: YAML (`doc_type = "application/yaml"`), JSON (`"application/json"`), and TOML (`"application/toml"`). These three file formats can be natively mapped as dictionaries (`doc_mode = "dict"`), and the `@datorum.doc_model` decorator allows transforming any `pydantic.BaseModel` model into a representation valid for these formats. This is demonstrated, for instance, by `datorum.ChatHistory` (`doc_model = "chat-history"`), a comprehensive data structure designed for seamless interaction with inference endpoints, which can be stored in any of these three structured data doc types. The framework also provides the `datorum.Markdown` model (`doc_model = "markdown"`) out of the box, separating the handling of Markdown content from the structured data found in the frontmatter of Markdown files (`doc_type = "text/markdown"`), a feature particularly useful for working with indexed and categorized semantic contexts.
 
 - **Execution layers**
   Three worker types are provided, each with a distinct responsibility:
@@ -71,7 +71,7 @@ source ./venv-datorum/bin/activate
 For a quick installation via pip, you can point directly to the repository.
 
 ```bash
-pip install git+https://github.com/alicecbonafe/datorum.git
+pip install datorum
 ```
 
 For a complete dev install, clone the repository and install the package in development mode.
