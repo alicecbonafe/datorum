@@ -22,6 +22,8 @@ from .settings import ToolBoxSetUp, ToolKit
 
 
 class ToolWorker(Worker):
+    """Worker specialized in the use of tools."""
+
     required_context_binds: ClassVar[list[str]] = ["tool_params", "tool_result"]
     required_resource_binds: ClassVar[list[str]] = ["toolbox_setup"]
 

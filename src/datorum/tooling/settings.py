@@ -5,6 +5,8 @@ from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class ToolBoxSetUp(BaseDatorumSettings):
+    """Settings for the materialization of a toolbox with bindings for resources and contexts."""
+
     id: str
     toolbox_name: str
 
@@ -17,4 +19,6 @@ class ToolBoxSetUp(BaseDatorumSettings):
 
 
 class ToolKit(BaseDatorumPersistentSettings):
+    """Persistent configuration structure storing available toolboxes."""
+
     toolboxes: dict[str, ToolBoxSetUp] = Field(default_factory=dict)

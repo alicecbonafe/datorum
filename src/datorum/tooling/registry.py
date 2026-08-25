@@ -187,11 +187,15 @@ def _resolve_call_args(
 
 @runtime_checkable
 class ToolBox(Protocol):
+    """Protocol for class definition with a suite of tools and context/resource fields."""
+
     def get_toolbox_definition(self) -> ToolBoxDefinition: ...
     async def run_tool(self, tool_name: str, params: Any = None): ...
 
 
 class FunctionDefinition(BaseModel):
+    """Function descriptor ready for the inference API."""
+
     name: str
     description: str
     parameters: dict[str, Any] = Field(
@@ -229,6 +233,8 @@ class FunctionDefinition(BaseModel):
 
 
 class ToolDefinition(BaseModel):
+    """Tool descriptor ready for the inference API."""
+
     name: str
     function: FunctionDefinition
 
@@ -246,6 +252,8 @@ class ToolDefinition(BaseModel):
 
 
 class BaseToolBoxField(BaseModel):
+    """Base field specification for toolbox bindings."""
+
     field_type: str
     name: str | None = None
     attr_name: str | None = None
@@ -254,15 +262,21 @@ class BaseToolBoxField(BaseModel):
 
 
 class ContextField(BaseToolBoxField):
+    """Toolbox context bindable field."""
+
     field_type: Literal["context"] = "context"
     context_bind_type: ContextBindType = Field(default=ContextBindType.model)
 
 
 class ResourceField(BaseToolBoxField):
+    """Toolbox resource bindable field."""
+
     field_type: Literal["resource"] = "resource"
 
 
 class ToolBoxDefinition(BaseModel):
+    """Container listing registered tools and field definitions for a toolbox."""
+
     name: str
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)
     context_fields: dict[str, ContextField] = Field(default_factory=dict)
@@ -333,12 +347,29 @@ ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
 
 
 def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
+    """Retrieve registered `ToolBoxDefinition` by toolbox name.
+
+    :param name: Toolbox class or registry identifier
+    :type name: str
+    :returns: ToolBoxDefinition instance
+    :rtype: ToolBoxDefinition
+    :raises ToolBoxRegistryError: If not registered
+    """
+
     if toolbox_name not in ToolBoxRegistry:
         raise ToolBoxRegistryError(f"ToolBox '{toolbox_name}' not found")
     return ToolBoxRegistry[toolbox_name]
 
 
 def tool(name: str | None = None, params: type[BaseModel] | None = None):
+    """Decorator marking a method in a `ToolBox` class as an exposed tool.
+
+    :param name: Optional custom tool name override, defaults to method's name.
+    :type name: str | None, optional
+    :param description: Tool function description string.
+    :type description: str | None, optional
+    """
+
     def decorator(func):
         func._tool_def = ToolDefinition(
             name=name or func.__name__,
@@ -355,6 +386,12 @@ def tool(name: str | None = None, params: type[BaseModel] | None = None):
 
 
 def toolbox(name: str | None = None, force: bool = False):
+    """Class decorator registering a `ToolBox` implementation.
+
+    :param name: Unique toolbox registration identifier.
+    :type name: str | None, optional
+    """
+
     def decorator(cls):
         toolbox_name = name or cls.__name__
         if toolbox_name in ToolBoxRegistry and not force:
