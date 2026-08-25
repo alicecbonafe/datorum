@@ -77,7 +77,7 @@ class Binder:
                 local_context = DocumentContext.load(settings_path=settings_path)
             else:
                 settings_path.mkdir(exist_ok=True, parents=True)
-                local_context = DocumentContext()
+                local_context = DocumentContext(id=local_context_id)
                 local_context.save_as(settings_path=settings_path)
 
             self.local_context[local_context_id] = local_context
@@ -108,7 +108,7 @@ class Binder:
 
             return local_document
 
-    async def add_context(self, context: DocumentContext) -> DocumentContext:
+    def add_context(self, context: DocumentContext) -> DocumentContext:
         self.shared_context[context.id] = context
         return context
 

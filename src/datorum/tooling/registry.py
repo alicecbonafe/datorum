@@ -35,12 +35,7 @@ def _params_model_from_signature(
             name = f"anonymous_{uuid.uuid4().hex[:6]}"
     try:
         signature = inspect.signature(func)
-        if callable(func) and not (
-            inspect.isfunction(func) or inspect.ismethod(func) or inspect.isclass(func)
-        ):
-            hints = get_type_hints(func, include_extras=True)
-        else:
-            hints = get_type_hints(func, include_extras=True)
+        hints = get_type_hints(func, include_extras=True)
 
     except (TypeError, NameError) as exc:
         raise ToolBoxRegistryError(
