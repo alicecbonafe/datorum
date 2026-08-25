@@ -64,7 +64,7 @@ class Job:
         self.id: str = id
         self.context_bindings: list[ContextBind] = context_bindings or []
         self.resource_bindings: list[ResourceBind] = resource_bindings or []
-        self.local_context_id: str | None = local_context_id
+        self.local_context_id: str = local_context_id or id
 
         self.status: JobStatus = JobStatus.IDLE
         self.message: str = "Job created"

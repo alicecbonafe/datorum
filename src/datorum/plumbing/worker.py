@@ -281,6 +281,7 @@ class PipelineWorker(Worker):
                             current_step.toolbox_setup,
                             *current_step.custom_resources,
                         ],
+                        local_context_id=job.local_context_id,
                     )
                     job.delegates.append(tool_job)
 
@@ -308,6 +309,7 @@ class PipelineWorker(Worker):
                             current_step.inference_provider,
                             current_step.agent_role,
                         ],
+                        local_context_id=job.local_context_id,
                     )
                     job.delegates.append(agent_job)
 

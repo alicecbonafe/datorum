@@ -419,6 +419,7 @@ class AgentWorker(Worker):
                                 selector=tool_call.function.name,
                             )
                         ],
+                        local_context_id=job.local_context_id,
                     )
                     job.delegates.append(tool_job)
 
