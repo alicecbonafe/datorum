@@ -325,7 +325,7 @@ class PipelineWorker(Worker):
                         f"Running decision step '{pipeflow.current_step_id}'...",
                     )
 
-                    input_data = self.binder.pull_context(current_step.input_data)
+                    input_data = await self.binder.pull_context(current_step.input_data)
                     if isinstance(input_data, BaseModel):
                         input_data = input_data.model_dump(mode="json")
 

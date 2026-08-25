@@ -213,7 +213,7 @@ class CliAppContext:
             if item == f"[{datorum.JobStatus.PAUSED.value.lower()}]":
                 for bind in job.context_bindings:
                     if bind.field_id == "interactive":
-                        interactive = self.binder.find_document(
+                        interactive = await self.binder.find_document(
                             bind.binded_id, bind.context
                         )
                         click.echo(

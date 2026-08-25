@@ -113,7 +113,7 @@ class ToolWorker(Worker):
                         )
                     continue
 
-            field_value: Any = self.binder.pull_context(ctx_field_bind)
+            field_value: Any = await self.binder.pull_context(ctx_field_bind)
             if field.attr_name:
                 setattr(toolbox, field.attr_name, field_value)
 
@@ -146,10 +146,10 @@ class ToolWorker(Worker):
             if res_field.attr_name:
                 setattr(toolbox, res_field.attr_name, field_value)
 
-        params_doc = self.binder.find_document(
+        params_doc = await self.binder.find_document(
             document_id=params_bind.binded_id, context=params_bind.context
         )
-        result_doc = self.binder.find_document(
+        result_doc = await self.binder.find_document(
             document_id=result_bind.binded_id, context=result_bind.context
         )
 
@@ -229,4 +229,4 @@ class ToolWorker(Worker):
                 continue
 
             field_value = getattr(toolbox, field.attr_name)
-            self.binder.push_context(field_bind, field_value)
+            await self.binder.push_context(field_bind, field_value)

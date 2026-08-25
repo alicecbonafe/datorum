@@ -308,7 +308,7 @@ class AgentWorker(Worker):
             )
         )
 
-        chat_doc = self.binder.find_document(
+        chat_doc = await self.binder.find_document(
             document_id=chat_bind.binded_id, context=chat_bind.context
         )
         chat: ChatHistory = chat_doc.load()

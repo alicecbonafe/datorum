@@ -192,7 +192,7 @@ class Binder:
 
         return document
 
-    def pull_context(self,
+    async def pull_context(self,
         bind: ContextBind,
         local_context_id: str | None = None,
     ) -> Any:
@@ -221,7 +221,7 @@ class Binder:
                 return context.get_domain_metadata(domain=domain_id)
             return context.get_domain_path(domain=domain_id)
 
-        document = self.find_document(
+        document = await self.find_document(
             document_id=bind.binded_id,
             context=bind.context,
             local_context_id=local_context_id if bind.local else None
@@ -242,7 +242,7 @@ class Binder:
             return document.metadata
         return document.doc_path
 
-    def push_context(self,
+    async def push_context(self,
         bind: ContextBind,
         value: Any,
         local_context_id: str | None = None,
@@ -277,14 +277,14 @@ class Binder:
         elif bind.context_bind_type.is_metadata():
             if not isinstance(value, dict):
                 raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
-            document = self.find_document(
+            document = await self.find_document(
                 document_id=bind.binded_id, context=bind.context
             )
             document.metadata = value
             document.persistent.save()
 
         else:
-            document = self.find_document(
+            document = await self.find_document(
                 document_id=bind.binded_id, context=bind.context
             )
 
