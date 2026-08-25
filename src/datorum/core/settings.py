@@ -24,7 +24,12 @@ yaml.add_multi_representer(Enum, represent_enum, Dumper=DatorumDumper)
 
 
 class BaseDatorumSettings(BaseModel):
-    """Base class for Datorum settings."""
+    """Base class for Datorum settings.
+    
+    Provides recursive persistence tracking across nested settings models.
+    
+    :raises SettingsError: Raised when accessing persistent context before set.
+    """
 
     _persistent: BaseDatorumPersistentSettings | None = PrivateAttr(default=None)
 
@@ -119,7 +124,14 @@ class BaseDatorumSettings(BaseModel):
 
 
 class BaseDatorumPersistentSettings(BaseDatorumSettings):
-    """Base class for Datorum persistent settings."""
+    """Base class for Datorum persistent settings.
+
+    Handles loading, saving, and path resolution for top-level settings objects.
+
+    :param settings_path: Path to the underlying YAML file.
+    :type settings_path: pathlib.Path
+    :raises SettingsError: If the settings file is missing or invalid.
+    """
 
     _settings_path: Path | None = PrivateAttr(default=None)
 

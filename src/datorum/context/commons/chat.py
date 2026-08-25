@@ -13,16 +13,28 @@ from ..registry import doc_model
 # 1. Content blocks for vision / multimodal
 # ============================
 class ImageUrl(BaseModel):
+    """Image URL payload for multimodal vision inputs.
+
+    :param url: Image URL or data URI.
+    :type url: str
+    :param detail: Fidelity detail setting, defaults to 'auto'.
+    :type detail: Literal['low', 'high', 'auto'] | None
+    """
+
     url: str
     detail: Literal["low", "high", "auto"] | None = "auto"
 
 
 class TextPart(BaseModel):
+    """Text block content part in multimodal messages."""
+
     type: Literal["text"] = "text"
     text: str
 
 
 class ImagePart(BaseModel):
+    """Image content part in multimodal user messages."""
+
     type: Literal["image_url"] = "image_url"
     image_url: ImageUrl
 
@@ -36,21 +48,21 @@ UserContent = str | list[ContentPart]
 # 2. Function calls / Tools
 # ============================
 class FunctionCall(BaseModel):
-    """Old (deprecated) function call format."""
+    """Deprecated legacy function call structure."""
 
     name: str
     arguments: str  # String JSON
 
 
 class ToolFunction(BaseModel):
-    """Function definition within a tool_call."""
+    """Function call detail payload inside a tool call."""
 
     name: str
     arguments: str  # String JSON
 
 
 class ToolCall(BaseModel):
-    """Tool call in the new format (tools)."""
+    """Tool invocation payload structure."""
 
     id: str
     type: Literal["function"] = "function"
@@ -72,16 +84,22 @@ class _MessageBase(BaseModel):
 
 
 class SystemMessage(_MessageBase):
+    """System message delivering top-level instructions to LLM models."""
+
     role: Literal["system"] = "system"
     content: str
 
 
 class UserMessage(_MessageBase):
+    """User input message containing text or multimodal content blocks."""
+
     role: Literal["user"] = "user"
     content: UserContent
 
 
 class AssistantMessage(_MessageBase):
+    """Assistant response message containing text, tool calls, or function calls."""
+
     role: Literal["assistant"] = "assistant"
     content: str | None = None
     tool_calls: list[ToolCall] | None = None
@@ -91,7 +109,7 @@ class AssistantMessage(_MessageBase):
 
 
 class ToolMessage(_MessageBase):
-    """Response from a called tool."""
+    """Tool execution response message."""
 
     role: Literal["tool"] = "tool"
     content: str
@@ -99,7 +117,7 @@ class ToolMessage(_MessageBase):
 
 
 class FunctionMessage(_MessageBase):
-    """Response from a called function (old format)."""
+    """Legacy function execution response message."""
 
     role: Literal["function"] = "function"
     content: str | None = None
@@ -111,6 +129,7 @@ ChatMessage = Annotated[
     SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage,
     Field(discriminator="role"),
 ]
+ChatMessage.__doc__ = "Discriminated union type covering all supported chat messages."
 
 
 # ============================
@@ -118,7 +137,7 @@ ChatMessage = Annotated[
 # ============================
 @doc_model(id="chat-history")
 class ChatHistory(BaseModel):
-    """Represents the complete message history for the OpenAI API."""
+    """Document model representing an ordered chat turn history."""
 
     messages: list[ChatMessage] = Field(
         default_factory=list, description="Ordered list of chat history messages"
