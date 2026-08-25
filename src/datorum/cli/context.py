@@ -105,13 +105,17 @@ class CliAppContext:
         match = _BIND_RE.match(raw)
         if not match:
             raise BindingSyntaxError(
-                f"Invalid --bind-context value '{raw}' (expected 'field=bind-type(context:binded-id)')"
+                f"Invalid --bind-context value '{raw}' (expected 'field=[_]bind-type([context:]binded-id)')"
             )
         field_id, type_name, value = match.group("field_id", "name", "value")
         if value is None:
             raise BindingSyntaxError(
                 f"Invalid --bind-context value '{raw}': missing '(context:binded-id)'"
             )
+
+        bind_local = type_name.startswith("_")
+        if bind_local:
+            type_name = type_name[1:]
 
         try:
             bind_type = datorum.ContextBindType(type_name)
@@ -126,6 +130,7 @@ class CliAppContext:
             binded_id=binded_id,
             context=context,
             context_bind_type=bind_type,
+            local=bind_local,
         )
 
     def parse_resource_bind(self, raw: str) -> datorum.ResourceBind:
