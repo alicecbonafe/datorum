@@ -10,6 +10,8 @@ from .exceptions import JobStatusError
 
 
 class Broadcaster:
+    """Asynchronous subscription channel broadcaster for streaming events."""
+
     def __init__(self):
         self.history: list[str] = []
         self.subscribers: list[asyncio.Queue] = []
@@ -43,6 +45,8 @@ class Broadcaster:
 
 
 class JobStatus(str, Enum):
+    """Job execution status enumeration."""
+
     IDLE = "idle"
     STARTING = "starting"
     WORKING = "working"
@@ -54,6 +58,16 @@ class JobStatus(str, Enum):
 
 
 class Job:
+    """Execution state and binding parameters for an asynchronous job unit.
+
+    :param id: Job unique identifier.
+    :type id: str
+    :param context_bindings: Configured context bindings.
+    :type context_bindings: list[ContextBind]
+    :param resource_bindings: Configured resource bindings.
+    :type resource_bindings: list[ResourceBind]
+    """
+
     def __init__(
         self,
         id: str,

@@ -17,6 +17,12 @@ _current_job: ContextVar[Job | None] = ContextVar(
 
 
 class Worker(ABC):
+    """Abstract base worker handling execution loops and binding checks.
+
+    :param binder: Binder instance used for state and resource loading.
+    :type binder: Binder
+    """
+
     required_context_binds: ClassVar[list[str]] = []
     required_resource_binds: ClassVar[list[str]] = []
 
