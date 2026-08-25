@@ -6,6 +6,8 @@ from ..core.settings import BaseDatorumSettings
 
 
 class ContextBindType(str, Enum):
+    """Enumeration of context binding modes and target access restrictions."""
+
     model = "model"
     model_input = "model-input"
     model_output = "model-output"
@@ -49,6 +51,19 @@ class ContextBindType(str, Enum):
 
 
 class ContextBind(BaseDatorumSettings):
+    """Binding specification linking a job input/output field to a context item.
+
+    :param field_id: Target field identifier.
+    :type field_id: str
+    :param binded_id: Source document or domain ID.
+    :type binded_id: str
+    :param context: Context ID filter
+    :type context: str | list[str] | None, optional
+    :param context_bind_type: Type mode, defaults to ContextBindType.model.
+    :type context_bind_type: ContextBindType
+    :param local: Whether binding is local context scoped, defaults to False.
+    :type local: bool
+    """
     field_id: str
     binded_id: str
     context: str | list[str] | None = Field(default=None)
@@ -57,6 +72,16 @@ class ContextBind(BaseDatorumSettings):
 
 
 class ResourceBind(BaseDatorumSettings):
+    """Binding specification linking a job field to a resource factory.
+
+    :param field_id: Field identifier.
+    :type field_id: str
+    :param factory_name: Resource factory name.
+    :type factory_name: str
+    :param selector: Resource selector query, defaults to None.
+    :type selector: str | None, optional
+    """
+
     field_id: str
     factory_name: str
     selector: str | None = None

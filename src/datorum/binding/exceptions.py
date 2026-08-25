@@ -1,22 +1,29 @@
 from ..core.exceptions import DatorumBaseError, RegistryError
 
 
-class CredentialError(DatorumBaseError): ...
+class ResourceFactoryError(RegistryError):
+    """Raised for errors in resource factory lookup or registration."""
 
 
-class KeyNotFoundError(CredentialError): ...
+class BinderError(DatorumBaseError):
+    """Base error for binder resolution operations."""
 
 
-class InvalidKeyNameError(CredentialError): ...
+class ResourceBindingError(BinderError):
+    """Raised when resolving a resource binding fails."""
 
 
-class ResourceFactoryError(RegistryError): ...
+class ContextBindingError(BinderError):
+    """Raised when context binding resolution or transfer fails."""
 
 
-class BinderError(DatorumBaseError): ...
+class CredentialError(DatorumBaseError):
+    """Base class for credential and key lookup errors."""
 
 
-class ResourceBindingError(BinderError): ...
+class KeyNotFoundError(CredentialError):
+    """Raised when the factory cannot resolve a requested API key."""
 
 
-class ContextBindingError(BinderError): ...
+class InvalidKeyNameError(CredentialError):
+    """Raised when an API key identifier fails format validation."""

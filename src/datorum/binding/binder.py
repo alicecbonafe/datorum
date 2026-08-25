@@ -21,6 +21,12 @@ from .settings import ContextBind, ResourceBind
 
 
 class Binder:
+    """Manager for context resolution, document state synchronization, and resource loading.
+
+    :param local_context_path: Optional path to local job context folders.
+    :type local_context_path: pathlib.Path | None
+    """
+
     _shared_context: dict[str, DocumentContext] | None = None
     _local_context: dict[str, DocumentContext] | None = None
     _factories: dict[str, Callable] | None = None

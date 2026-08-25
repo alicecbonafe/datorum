@@ -202,13 +202,13 @@ __all__ = [  # noqa: RUF022
     # .binding.credentials
     "register_mapped_api_key_factory",
     # .binding.exceptions
-    "CredentialError",
-    "KeyNotFoundError",
-    "InvalidKeyNameError",
     "ResourceFactoryError",
     "BinderError",
     "ResourceBindingError",
     "ContextBindingError",
+    "CredentialError",
+    "KeyNotFoundError",
+    "InvalidKeyNameError",
     # .work.job import (
     "Broadcaster",
     "JobStatus",
