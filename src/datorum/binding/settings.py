@@ -53,6 +53,7 @@ class ContextBind(BaseDatorumSettings):
     binded_id: str
     context: str | list[str] | None = Field(default=None)
     context_bind_type: ContextBindType = Field(default=ContextBindType.model)
+    local: bool = False
 
 
 class ResourceBind(BaseDatorumSettings):
