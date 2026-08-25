@@ -210,6 +210,7 @@ class PipelineWorker(Worker):
                 f"Pipeflow '{pipeflow.id}' already running in job '{self._active_flows[pipeflow.id]}'"
             )
         self._active_flows[pipeflow.id] = job.id
+        job.local_context_id = pipeflow.id
 
         await job.update_status(JobStatus.WORKING, "Collecting pipeflow resources")
 

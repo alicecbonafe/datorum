@@ -21,7 +21,7 @@ from .settings import ContextBind, ResourceBind
 
 
 class Binder:
-    _contexts: dict[str, DocumentContext] | None = None
+    _shared_context: dict[str, DocumentContext] | None = None
     _local_context: dict[str, DocumentContext] | None = None
     _factories: dict[str, Callable] | None = None
     _locks: dict[str, asyncio.Lock] | None = None
@@ -30,10 +30,10 @@ class Binder:
         self.local_context_path: Path | None = local_context_path
 
     @property
-    def contexts(self) -> dict[str, DocumentContext]:
-        if self._contexts is None:
-            self._contexts = {}
-        return self._contexts
+    def shared_context(self) -> dict[str, DocumentContext]:
+        if self._shared_context is None:
+            self._shared_context = {}
+        return self._shared_context
 
     @property
     def local_context(self) -> dict[str, DocumentContext]:
@@ -56,7 +56,7 @@ class Binder:
     def _get_lock(self, local_context_id: str) -> asyncio.Lock:
         return self.locks.setdefault(local_context_id, asyncio.Lock())
 
-    async def _prepare_local_context(self, local_context_id: str) -> DocumentContext:
+    async def resolve_local_context(self, local_context_id: str) -> DocumentContext:
         if not self.local_context_path:
             raise ContextBindingError("Cannot load local context, path is not defined")
 
@@ -77,15 +77,15 @@ class Binder:
             self.local_context[local_context_id] = local_context
             return local_context
 
-    async def _prepare_local_document(self, shared_document_id: str, shared_context_id: str, local_context_id: str) -> DocumentReference:
-        local_context: DocumentContext = await self._prepare_local_context(local_context_id)
+    async def resolve_local_document(self, shared_document_id: str, shared_context_id: str, local_context_id: str) -> DocumentReference:
+        local_context: DocumentContext = await self.resolve_local_context(local_context_id)
         local_document_id = f"{shared_context_id}.{shared_document_id}"
 
         async with self._get_lock(f"{local_context_id}:{local_document_id}"):
             local_document = local_context.get_document(id=local_document_id)
 
             if not local_document:
-                shared_document = self.contexts[shared_context_id].get_document(id=shared_document_id)
+                shared_document = self.shared_context[shared_context_id].get_document(id=shared_document_id)
 
                 if not shared_document:
                     raise ContextBindingError(
@@ -103,7 +103,7 @@ class Binder:
             return local_document
 
     async def add_context(self, context: DocumentContext) -> DocumentContext:
-        self.contexts[context.id] = context
+        self.shared_context[context.id] = context
         return context
 
     def resource(self, name: str | None = None, force: bool = False):
@@ -128,20 +128,20 @@ class Binder:
         context: str | list[str] | None = None,
     ) -> DocumentContext:
         if isinstance(context, str):
-            if context not in self.contexts:
+            if context not in self.shared_context:
                 raise ContextBindingError(f"Unknown context '{context}'")
-            if not self.contexts[context].knows_domain(domain):
+            if not self.shared_context[context].knows_domain(domain):
                 raise ContextBindingError(
                     f"Unknown domain '{domain}' in context '{context}'"
                 )
-            return self.contexts[context]
+            return self.shared_context[context]
 
-        context_list: list[str] = context or list(self.contexts.keys())
+        context_list: list[str] = context or list(self.shared_context.keys())
         for ctx_id in context_list:
-            if ctx_id not in self.contexts:
+            if ctx_id not in self.shared_context:
                 continue
-            if self.contexts[ctx_id].knows_domain(domain):
-                return self.contexts[ctx_id]
+            if self.shared_context[ctx_id].knows_domain(domain):
+                return self.shared_context[ctx_id]
 
         raise ContextBindingError(
             f"Unknown domain '{domain}' in context '{context or 'all'}'"
@@ -156,29 +156,29 @@ class Binder:
         document: DocumentReference | None = None
 
         if isinstance(context, str):
-            if context not in self.contexts:
+            if context not in self.shared_context:
                 raise ContextBindingError(f"Unknown context '{context}'")
 
             if local_context_id:
-                document = await self._prepare_local_document(
+                document = await self.resolve_local_document(
                     shared_document_id=document_id,
                     shared_context_id=context,
                     local_context_id=local_context_id,
                 )
 
             else:
-                document = self.contexts[context].get_document(id=document_id)
+                document = self.shared_context[context].get_document(id=document_id)
 
         else:
-            context_list: list[str] = context or list(self.contexts.keys())
+            context_list: list[str] = context or list(self.shared_context.keys())
             for ctx_id in context_list:
-                if ctx_id not in self.contexts:
+                if ctx_id not in self.shared_context:
                     continue
 
-                document = self.contexts[ctx_id].get_document(id=document_id)
+                document = self.shared_context[ctx_id].get_document(id=document_id)
                 if document:
                     if local_context_id:
-                        document = await self._prepare_local_document(
+                        document = await self.resolve_local_document(
                             shared_document_id=document_id,
                             shared_context_id=ctx_id,
                             local_context_id=local_context_id,
@@ -210,7 +210,7 @@ class Binder:
             domain_context = bind.context
 
             if bind.local:
-                context = await self._prepare_local_context(local_context_id)
+                context = await self.resolve_local_context(local_context_id)
                 domain_id = f"{domain_context}.{domain_id}"
             else:
                 context = self.find_domain_context(
@@ -264,7 +264,7 @@ class Binder:
             domain_context = bind.context
 
             if bind.local:
-                context = await self._prepare_local_context(local_context_id)
+                context = await self.resolve_local_context(local_context_id)
                 domain_id = f"{domain_context}.{domain_id}"
             else:
                 context = self.find_domain_context(
@@ -277,16 +277,31 @@ class Binder:
         elif bind.context_bind_type.is_metadata():
             if not isinstance(value, dict):
                 raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
-            document = await self.find_document(
-                document_id=bind.binded_id, context=bind.context
-            )
+
+            if bind.local:
+                document = await self.resolve_local_document(
+                    shared_document_id=bind.binded_id,
+                    shared_context_id=bind.context,
+                    local_context_id=local_context_id,
+                )
+            else:
+                document = await self.find_document(
+                    document_id=bind.binded_id, context=bind.context
+                )
             document.metadata = value
             document.persistent.save()
 
         else:
-            document = await self.find_document(
-                document_id=bind.binded_id, context=bind.context
-            )
+            if bind.local:
+                document = await self.resolve_local_document(
+                    shared_document_id=bind.binded_id,
+                    shared_context_id=bind.context,
+                    local_context_id=local_context_id,
+                )
+            else:
+                document = await self.find_document(
+                    document_id=bind.binded_id, context=bind.context
+                )
 
             if bind.context_bind_type.is_model():
                 document.save(value)

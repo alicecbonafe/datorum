@@ -2,7 +2,6 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
@@ -10,11 +9,6 @@ from ..binding.binder import Binder
 from ..context.settings import DocumentContext
 from .exceptions import WorkerStartUpError
 from .job import Job, JobStatus
-
-tmp_dir = f"/tmp/datorum_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}"
-TMP_CONTEXT = DocumentContext(id="tmp-context")
-TMP_CONTEXT.base_path = Path(tmp_dir)
-TMP_CONTEXT.base_path.mkdir(parents=True, exist_ok=True)
 
 _current_job: ContextVar[Job | None] = ContextVar(
     "_current_job",

@@ -6,7 +6,8 @@ import datorum
 
 
 class CliAppSettings(datorum.BaseDatorumPersistentSettings):
-    contexts_path: Path = Field(default_factory=lambda: Path("contexts"))
+    shared_context_path: Path = Field(default_factory=lambda: Path("shared"))
+    local_context_path: Path = Field(default_factory=lambda: Path("local"))
     flows_path: Path = Field(default_factory=lambda: Path("flows"))
     flow_id_template: str = "flow_{index}"
 
@@ -14,7 +15,7 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
     agencykit: datorum.AgencyKit = Field(default_factory=datorum.AgencyKit)
     plumbingkit: datorum.PlumbingKit = Field(default_factory=datorum.PlumbingKit)
 
-    contexts: dict[str, datorum.DocumentContext] = Field(default_factory=dict)
+    shared_context: dict[str, datorum.DocumentContext] = Field(default_factory=dict)
 
     custom_registry: list[Path] = Field(default_factory=list)
 
@@ -29,7 +30,7 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
 
     @model_validator(mode="after")
     def _inject_path(self) -> CliAppSettings:
-        for context_id, context in self.contexts.items():
-            context.base_path = self.contexts_path / context_id
+        for context_id, context in self.shared_context.items():
+            context.base_path = self.shared_context_path / context_id
 
         return self

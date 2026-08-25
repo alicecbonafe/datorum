@@ -1,4 +1,5 @@
 import click
+from datetime import datetime
 
 import datorum
 
@@ -38,7 +39,7 @@ class RunGroup(BaseCommandGroup):
         resource_binds: list[str],
     ):
         job = datorum.Job(
-            id=f"tool_{selector.replace('.', '_')}",
+            id=f"tool_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}",
             context_bindings=[
                 app_ctx.parse_positional_context(params, field_id="tool_params"),
                 app_ctx.parse_positional_context(result, field_id="tool_result"),
@@ -108,7 +109,7 @@ class RunGroup(BaseCommandGroup):
             )
 
         job = datorum.Job(
-            id=f"agent_{role}",
+            id=f"agent_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}",
             context_bindings=[
                 app_ctx.parse_positional_context(chat_history, field_id="chat_history"),
                 *(app_ctx.parse_context_bind(b) for b in context_binds),
@@ -162,7 +163,7 @@ class RunGroup(BaseCommandGroup):
             return
 
         job = datorum.Job(
-            id=f"flow_{pipeflow.id}",
+            id=pipeflow.id,
             resource_bindings=[
                 datorum.ResourceBind(
                     field_id="pipeflow",

@@ -159,9 +159,11 @@ class CliAppContext:
         return asyncio.run(self._run_job_async(worker, job, exit_on_paused))
 
     def _create_binder(self) -> datorum.Binder:
-        self._binder = datorum.Binder()
+        self._binder = datorum.Binder(
+            local_context_path=self.settings.local_context_path
+        )
 
-        for ctx in self.settings.contexts.values():
+        for ctx in self.settings.shared_context.values():
             self._binder.add_context(context=ctx)
 
         try:
@@ -184,8 +186,8 @@ class CliAppContext:
         if ":" not in value:
             return None, value
         context_part, binded_id = value.rsplit(":", 1)
-        contexts = context_part.split(",")
-        return (contexts[0] if len(contexts) == 1 else contexts), binded_id
+        shared_context = context_part.split(",")
+        return (shared_context[0] if len(shared_context) == 1 else shared_context), binded_id
 
     async def _run_job_async(
         self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool
