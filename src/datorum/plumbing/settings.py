@@ -9,6 +9,8 @@ from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class BasePipelineStep(BaseDatorumSettings):
+    """Base class for step definitions in a pipeline."""
+
     type: str
     id: str
     target_id: str | None = None
@@ -16,6 +18,8 @@ class BasePipelineStep(BaseDatorumSettings):
 
 
 class HumanInteractionStep(BasePipelineStep):
+    """Pipeline step pausing execution for user input or file edits."""
+
     type: Literal["human"] = "human"
 
     interactive_document_id: str
@@ -23,6 +27,8 @@ class HumanInteractionStep(BasePipelineStep):
 
 
 class ToolStep(BasePipelineStep):
+    """Pipeline step executing a tool."""
+
     type: Literal["tool"] = "tool"
 
     tool_params: ContextBind
@@ -34,6 +40,8 @@ class ToolStep(BasePipelineStep):
 
 
 class AgentStep(BasePipelineStep):
+    """Pipeline step executing an agent turn."""
+
     type: Literal["agent"] = "agent"
 
     chat_history: ContextBind
@@ -42,6 +50,8 @@ class AgentStep(BasePipelineStep):
 
 
 class DecisionStep(BasePipelineStep):
+    """Pipeline step performing dynamic path branching decisions."""
+
     type: Literal["decision"] = "decision"
 
     target_options: list[str] = Field(default_factory=list)
@@ -52,6 +62,8 @@ class DecisionStep(BasePipelineStep):
 
 
 class Pipeline(BaseDatorumSettings):
+    """Workflow pipeline containing ordered execution steps."""
+
     id: str
     description: str | None = None
 
@@ -66,6 +78,8 @@ class Pipeline(BaseDatorumSettings):
 
 
 class PipeFlowState(str, Enum):
+    """Execution state tracking current pipeline step position and context values."""
+
     planning = "planning"
     started = "started"
     paused = "paused"
@@ -74,6 +88,8 @@ class PipeFlowState(str, Enum):
 
 
 class PipeFlow(BaseDatorumPersistentSettings):
+    """Persistent runtime state instance of a pipeline flow."""
+
     id: str
     pipeline: Pipeline
 
@@ -99,4 +115,6 @@ class PipeFlow(BaseDatorumPersistentSettings):
 
 
 class PlumbingKit(BaseDatorumPersistentSettings):
+    """Persistent configuration structure managing registered pipeline workflows."""
+
     pipelines: dict[str, Pipeline] = Field(default_factory=dict)

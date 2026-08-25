@@ -80,6 +80,8 @@ def _run_code(
 
 
 class PipelineWorker(Worker):
+    """Worker executing pipelines step-by-step."""
+
     def __init__(
         self,
         binder: Binder,
