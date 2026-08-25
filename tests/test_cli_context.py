@@ -8,8 +8,11 @@ through a full CliRunner invocation:
     indirectly through parse_context_bind's regex-gated callers.
 """
 import asyncio
+from pathlib import Path
+import sys
 from unittest.mock import patch
 
+import click
 import pytest
 
 import datorum
@@ -230,3 +233,68 @@ class TestBroadcastEcho:
         job.is_streaming = False
         await app_ctx._catch_logs(job)
         assert capsys.readouterr().out == "log1\nlog2\n"
+
+def test_load_custom_registry_file_not_found(tmp_path):
+    """Test that a missing registry file raises a ClickException (lines 79-87)."""
+    settings_path = tmp_path / "settings.yml"
+    app_ctx = CliAppContext(settings_path=settings_path)
+    app_ctx.settings.custom_registry = [tmp_path / "missing.py"]
+    
+    with pytest.raises(click.ClickException, match="Registry file not found:"):
+        app_ctx.load_custom_registry()
+
+def test_load_custom_registry_spec_error(tmp_path, mocker):
+    """Test that a missing module spec raises a ClickException (lines 88-93)."""
+    settings_path = tmp_path / "settings.yml"
+    registry_file = tmp_path / "valid.py"
+    registry_file.write_text("pass")
+    
+    app_ctx = CliAppContext(settings_path=settings_path)
+    app_ctx.settings.custom_registry = [registry_file]
+    
+    # Mock spec_from_file_location to return None
+    mocker.patch("importlib.util.spec_from_file_location", return_value=None)
+    
+    with pytest.raises(click.ClickException, match="Failed to load custom registry:"):
+        app_ctx.load_custom_registry()
+
+def test_load_custom_registry_exec_error(tmp_path):
+    """Test that an error during module execution raises a ClickException (lines 94-100)."""
+    settings_path = tmp_path / "settings.yml"
+    registry_file = tmp_path / "error.py"
+    registry_file.write_text("raise ValueError('Intentional Exception')")
+    
+    app_ctx = CliAppContext(settings_path=settings_path)
+    app_ctx.settings.custom_registry = [registry_file]
+    
+    with pytest.raises(click.ClickException, match="An error occurred while loading custom registry"):
+        app_ctx.load_custom_registry()
+
+def test_load_custom_registry_success(tmp_path):
+    """Test the successful execution flow of load_custom_registry."""
+    settings_path = tmp_path / "settings.yml"
+    registry_file = tmp_path / "success.py"
+    registry_file.write_text("TEST_VAR = 42")
+    
+    app_ctx = CliAppContext(settings_path=settings_path)
+    app_ctx.settings.custom_registry = [registry_file]
+    
+    app_ctx.load_custom_registry()
+    
+    # Verify the module was loaded correctly and injected into sys.modules
+    module_key = ".".join(p for p in registry_file.resolve().parts if "/" not in p)
+    assert module_key in sys.modules
+    assert getattr(sys.modules[module_key], "TEST_VAR") == 42
+
+def test_parse_context_bind_local():
+    """Test parse_context_bind successfully strips the '_' prefix for local binds (line 118)."""
+    app_ctx = CliAppContext(settings_path=Path("dummy.yml"))
+    
+    # Prefixing the type with '_' sets bind_local to True and strips the prefix
+    bind = app_ctx.parse_context_bind("my_field=_model(my_ctx:my_doc)")
+    
+    assert bind.field_id == "my_field"
+    assert bind.context_bind_type == datorum.ContextBindType.model
+    assert bind.context == "my_ctx"
+    assert bind.binded_id == "my_doc"
+    assert bind.local is True

@@ -658,7 +658,7 @@ async def test_work_decision_step_invalid_input_type_raises(tmp_path):
         target_options=["a"],
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="raw", doc_type="text/plain", doc_model="text")
     doc.save("just some text")
 
@@ -687,7 +687,7 @@ async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch
         steps={"decide": step, "route_a": route_a},
     )
     worker = _decision_worker(tmp_path, pipeline)
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="decision_in", doc_type="application/json", doc_model="decision-input")
     doc.save(DecisionInput(score=7))
 
@@ -715,7 +715,7 @@ async def test_work_decision_step_process_error_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -737,7 +737,7 @@ async def test_work_decision_step_timeout_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -761,7 +761,7 @@ async def test_work_decision_step_empty_queue_raises(tmp_path, monkeypatch):
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -783,7 +783,7 @@ async def test_work_decision_step_invalid_target_option_raises(tmp_path, monkeyp
         code="1",
     )
     worker = _decision_worker(tmp_path, _decision_pipeline(step))
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"x": 1})
 
@@ -815,7 +815,7 @@ async def test_work_decision_step_real_subprocess_execution(tmp_path):
         steps={"decide": step, "big": big},
     )
     worker = _decision_worker(tmp_path, pipeline)
-    worker.binder.contexts[ctx.id] = ctx
+    worker.binder.shared_context[ctx.id] = ctx
     doc = ctx.create_document(id="d", doc_type="application/json", doc_model="dict")
     doc.save({"score": 10})
 

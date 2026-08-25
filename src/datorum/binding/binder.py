@@ -76,7 +76,7 @@ class Binder:
             if settings_path.exists():
                 local_context = DocumentContext.load(settings_path=settings_path)
             else:
-                settings_path.mkdir(exist_ok=True, parents=True)
+                settings_path.parent.mkdir(exist_ok=True, parents=True)
                 local_context = DocumentContext(id=local_context_id)
                 local_context.save_as(settings_path=settings_path)
 
