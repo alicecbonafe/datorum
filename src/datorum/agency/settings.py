@@ -6,13 +6,13 @@ from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 
 
 class InferenceServiceProvider(BaseDatorumSettings):
-    """OpenAI-compatible API service provider settings."""
+    """Inference API service provider settings."""
 
-    id: str
-    description: str | None = Field(default=None)
+    id: str = Field(description="Provider identifier.")
+    description: str | None = Field(None)
 
     base_url: str = Field(
-        description="API endpoint base URL (usually ending in 'v1/')."
+        description="Base endpoint URL."
     )
     api_key_selector: str | None = Field(
         default=None,
@@ -24,7 +24,7 @@ class InferenceServiceProvider(BaseDatorumSettings):
 
 
 class AgentRole(BaseDatorumSettings):
-    """Role based API call parameters."""
+    """Agent role configuration controlling inference params and default system instructions."""
 
     id: str
     description: str | None = Field(default=None)
@@ -43,7 +43,7 @@ class AgentRole(BaseDatorumSettings):
 
 
 class AgencyKit(BaseDatorumPersistentSettings):
-    """Daturum configuration data structure."""
+    """Persistent settings managing inference providers and agent roles."""
 
     providers: dict[str, InferenceServiceProvider] = Field(default_factory=dict)
     roles: dict[str, AgentRole] = Field(default_factory=dict)

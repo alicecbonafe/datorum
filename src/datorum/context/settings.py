@@ -20,22 +20,12 @@ from .registry import (
 
 
 class DocumentReference(BaseDatorumSettings):
-    """Reference pointing to a physical document on disk within a context.
+    """Reference pointing to a physical document on disk within a context."""
 
-    :param id: Unique document identifier within the context.
-    :type id: str
-    :param doc_type: MIME content type, defaults to 'text/plain'.
-    :type doc_type: str
-    :param doc_model: Document model type, defaults to 'text'.
-    :type doc_model: str
-    :param extension: Explicit file extension override.
-    :type extension: str | None, optional
-    """
-
-    id: str
-    doc_type: str = "text/plain"
-    doc_model: str = "text"
-    extension: str | None = None
+    id: str = Field(description="Unique document identifier within the context.")
+    doc_type: str = Field("text/plain", description="MIME content type, defaults to 'text/plain'.")
+    doc_model: str = Field("text", description="Document model type, defaults to 'text'.")
+    extension: str | None = Field(Nonedescription="Explicit file extension override.")
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -161,13 +151,9 @@ class DocumentReference(BaseDatorumSettings):
 
 
 class DocumentContext(BaseDatorumPersistentSettings):
-    """Collection of managed document references and domain metadata.
+    """Collection of managed document references and domain metadata."""
 
-    :param id: Context scope identifier.
-    :type id: str
-    """
-
-    id: str
+    id: str = Field(description="Context scope identifier.")
     documents: dict[str, DocumentReference] = Field(default_factory=dict)
     domain_metadata: dict[str, dict[str, Any]] = Field(default_factory=dict)
 

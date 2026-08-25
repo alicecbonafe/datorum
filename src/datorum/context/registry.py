@@ -19,13 +19,7 @@ from .exceptions import (
 
 
 class DocumentType(BaseModel):
-    """Represents the document content type, as writen in file, such as json or markdown.
-
-    :param id: MIME-style content type identifier.
-    :type id: str
-    :param extensions: List of extensions associated with this document type.
-    :type extensions: list[str]
-    """
+    """Represents the document content type, as writen in file, such as json or markdown."""
 
     id: str = Field(description="MIME-style content type identifier.")
     extensions: list[str] = Field(
@@ -35,15 +29,7 @@ class DocumentType(BaseModel):
 
 
 class DocumentModel(BaseModel):
-    """Maps a Python class to a document model identifier.
-    
-    :param id: Document model identifier.
-    :type id: str
-    :param clazz: Python class bound to this model.
-    :type clazz: type
-    :param default_doc_type: Default content type for serialization.
-    :type default_doc_type: str
-    """
+    """Maps a Python class to a document model identifier."""
 
     id: str = Field(description="Document model identifier.")
     clazz: type = Field(description="Python class bound to this model.")
@@ -54,13 +40,7 @@ class DocumentModel(BaseModel):
 
 
 class DocumentHandler(BaseModel):
-    """Holds serializer and deserializer callables for a content type and model pair.
-
-    :param doc_type: Document type identifier.
-    :type doc_type: str
-    :param doc_model: Document model identifier.
-    :type doc_model: str
-    """
+    """Holds serializer and deserializer callables for a content type and model pair."""
 
     doc_type: str = Field(description="Document type identifier.")
     doc_model: str = Field(description="Document model identifier.")

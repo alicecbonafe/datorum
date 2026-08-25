@@ -31,6 +31,8 @@ from .settings import (
 
 
 class AgentWorker(Worker):
+    """Worker handling agent execution loops and tool delegate invocations."""
+
     required_context_binds: ClassVar[list[str]] = ["chat_history"]
     required_resource_binds: ClassVar[list[str]] = ["inference_provider", "agent_role"]
 
