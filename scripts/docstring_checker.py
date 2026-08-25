@@ -18,7 +18,7 @@ def is_rest_docstring(doc: str | None) -> bool:
     if not doc or not doc.strip():
         return False
 
-    rest_indicators = [":param", ":type", ":return:", ":rtype:", ":raises:", "::", "``"]
+    rest_indicators = [":param", ":type", ":return:", ":rtype:", ":raises", "::", "``"]
     lines = doc.strip().splitlines()
 
     if len(lines) == 1:
