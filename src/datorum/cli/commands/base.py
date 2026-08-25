@@ -54,6 +54,7 @@ class BaseCommandGroup(click.Group):
             ctx = click.get_current_context(silent=True)
             if ctx and ctx.obj and hasattr(ctx.obj, "settings"):
                 ctx.obj.settings.load_lazy()
+                ctx.obj.load_custom_registry()
             return bound_method(*args, **kwargs)
 
         return wrapper

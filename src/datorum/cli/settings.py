@@ -16,6 +16,8 @@ class CliAppSettings(datorum.BaseDatorumPersistentSettings):
 
     contexts: dict[str, datorum.DocumentContext] = Field(default_factory=dict)
 
+    custom_registry: list[Path] = Field(default_factory=list)
+
     api_keys: dict[str, str] | None = None
 
     _loaded: bool = PrivateAttr(False)

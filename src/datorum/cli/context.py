@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -70,6 +71,35 @@ class CliAppContext:
                 flow_id_template=self.settings.flow_id_template,
             )
         return self._pipeline_worker
+
+    def load_custom_registry(self):
+        if not self.settings.custom_registry:
+            return
+
+        base_dir = self.settings.settings_path.parent
+        for file_path in self.settings.custom_registry:
+            module_key = ".".join([p for p in file_path.parts if "/" not in p])
+            module_path = file_path.resolve()
+            if not module_path.exists():
+                raise click.ClickException(
+                    f"Registry file not found: {module_path}"
+                )
+
+            module_spec = importlib.util.spec_from_file_location(
+                module_path.stem, module_path
+            )
+            if module_spec is None or module_spec.loader is None:
+                raise click.ClickException(
+                    f"Failed to load custom registry: {module_path}"
+                )
+            module = importlib.util.module_from_spec(module_spec)
+            sys.modules[module_key] = module
+            try:
+                module_spec.loader.exec_module(module)
+            except Exception as e:
+                raise click.ClickException(
+                    f"An error occurred while loading custom registry '{module_path}': {e}"
+                )
 
     def parse_context_bind(self, raw: str) -> datorum.ContextBind:
         match = _BIND_RE.match(raw)
