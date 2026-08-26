@@ -6,6 +6,7 @@ from pydantic import Field, PrivateAttr
 
 from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 from .exceptions import (
+    DocumentReferenceError,
     DocumentReadingError,
     DocumentWritingError,
 )
@@ -33,6 +34,12 @@ class DocumentReference(BaseDatorumSettings):
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @property
+    def context(self) -> "DocumentContext":
+        if isinstance(self.persistent, DocumentContext):
+            return self.persistent
+        raise DocumentReferenceError(f"Document out of context: '{self.id}'")
+        
     @property
     def registry_doc_type(self) -> DocumentType:
         return get_doc_type(self.doc_type)
@@ -207,6 +214,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
             id=id,
             doc_type=doc_type,
             doc_model=doc_model,
+            extension=extension,
         )
         self.documents[id] = document
         document._set_persistent_recursive(self)

@@ -224,7 +224,7 @@ class Binder:
             domain_id = bind.binded_id
             domain_context = bind.context
 
-            if bind.local:
+            if bind.local and local_context_id:
                 context = await self.resolve_local_context(local_context_id)
                 domain_id = f"{domain_context}.{domain_id}"
             else:
@@ -278,16 +278,12 @@ class Binder:
                 raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
 
             domain_id = bind.binded_id
-            domain_context = bind.context
+            context = self.find_domain_context(domain_id, bind.context)
 
-            if bind.local:
+            if bind.local and local_context_id:
+                domain_context = context.id
                 context = await self.resolve_local_context(local_context_id)
                 domain_id = f"{domain_context}.{domain_id}"
-            else:
-                context = self.find_domain_context(
-                    domain=domain_id,
-                    context=domain_context,
-                )
 
             context.set_domain_metadata(domain=domain_id, metadata=value)
             context.persistent.save()
@@ -296,29 +292,28 @@ class Binder:
             if not isinstance(value, dict):
                 raise ContextBindingError(f"Wrong metadata type: '{type(value)}'")
 
-            if bind.local:
+            document: DocumentReference = await self.find_document(
+                document_id=bind.binded_id, context=bind.context
+            )
+            if bind.local and local_context_id:
                 document = await self.resolve_local_document(
-                    shared_document_id=bind.binded_id,
-                    shared_context_id=bind.context,
+                    shared_document_id=document.id,
+                    shared_context_id=document.context.id,
                     local_context_id=local_context_id,
                 )
-            else:
-                document = await self.find_document(
-                    document_id=bind.binded_id, context=bind.context
-                )
+
             document.metadata = value
             document.persistent.save()
 
         else:
-            if bind.local:
+            document = await self.find_document(
+                document_id=bind.binded_id, context=bind.context
+            )
+            if bind.local and local_context_id:
                 document = await self.resolve_local_document(
-                    shared_document_id=bind.binded_id,
-                    shared_context_id=bind.context,
+                    shared_document_id=document.id,
+                    shared_context_id=document.context.id,
                     local_context_id=local_context_id,
-                )
-            else:
-                document = await self.find_document(
-                    document_id=bind.binded_id, context=bind.context
                 )
 
             if bind.context_bind_type.is_model():
