@@ -2,11 +2,9 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from pathlib import Path
 from typing import ClassVar
 
 from ..binding.binder import Binder
-from ..context.settings import DocumentContext
 from .exceptions import WorkerStartUpError
 from .job import Job, JobStatus
 

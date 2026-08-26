@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 import click
-from datetime import datetime, UTC
 
 import datorum
 

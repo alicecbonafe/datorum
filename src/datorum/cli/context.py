@@ -76,7 +76,6 @@ class CliAppContext:
         if not self.settings.custom_registry:
             return
 
-        base_dir = self.settings.settings_path.parent
         for file_path in self.settings.custom_registry:
             module_key = ".".join([p for p in file_path.parts if "/" not in p])
             module_path = file_path.resolve()
@@ -96,7 +95,7 @@ class CliAppContext:
             sys.modules[module_key] = module
             try:
                 module_spec.loader.exec_module(module)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 raise click.ClickException(
                     f"An error occurred while loading custom registry '{module_path}': {e}"
                 )
