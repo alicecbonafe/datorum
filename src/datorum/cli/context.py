@@ -80,9 +80,7 @@ class CliAppContext:
             module_key = ".".join([p for p in file_path.parts if "/" not in p])
             module_path = file_path.resolve()
             if not module_path.exists():
-                raise click.ClickException(
-                    f"Registry file not found: {module_path}"
-                )
+                raise click.ClickException(f"Registry file not found: {module_path}")
 
             module_spec = importlib.util.spec_from_file_location(
                 module_path.stem, module_path
@@ -186,7 +184,9 @@ class CliAppContext:
             return None, value
         context_part, binded_id = value.rsplit(":", 1)
         shared_context = context_part.split(",")
-        return (shared_context[0] if len(shared_context) == 1 else shared_context), binded_id
+        return (
+            shared_context[0] if len(shared_context) == 1 else shared_context
+        ), binded_id
 
     async def _run_job_async(
         self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool

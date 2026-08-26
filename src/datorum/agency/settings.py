@@ -11,9 +11,7 @@ class InferenceServiceProvider(BaseDatorumSettings):
     id: str = Field(description="Provider identifier.")
     description: str | None = Field(None)
 
-    base_url: str = Field(
-        description="Base endpoint URL."
-    )
+    base_url: str = Field(description="Base endpoint URL.")
     api_key_selector: str | None = Field(
         default=None,
         description="Used if API key resource selector is not the provider ID.",

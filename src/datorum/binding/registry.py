@@ -100,7 +100,7 @@ def register_resource_factory(
 
 def get_resource_factory(factory_name: str) -> Callable:
     """Retrieve a registered resource factory function by name.
-    
+
     :param factory_name: Factory name identifier.
     :type factory_name: str
     :returns: Factory callable.
@@ -121,6 +121,7 @@ def resource(name: str | None = None, force: bool = False):
     :param force: Overwrite existing factory registration, defaults to False.
     :type force: bool, optional
     """
+
     def decorator(func):
         factory_name = name or func.__name__
         return register_resource_factory(

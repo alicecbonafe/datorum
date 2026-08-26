@@ -64,6 +64,7 @@ class ContextBind(BaseDatorumSettings):
     :param local: Whether binding is local context scoped, defaults to False.
     :type local: bool
     """
+
     field_id: str
     binded_id: str
     context: str | list[str] | None = Field(default=None)

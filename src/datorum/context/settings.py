@@ -23,8 +23,12 @@ class DocumentReference(BaseDatorumSettings):
     """Reference pointing to a physical document on disk within a context."""
 
     id: str = Field(description="Unique document identifier within the context.")
-    doc_type: str = Field("text/plain", description="MIME content type, defaults to 'text/plain'.")
-    doc_model: str = Field("text", description="Document model type, defaults to 'text'.")
+    doc_type: str = Field(
+        "text/plain", description="MIME content type, defaults to 'text/plain'."
+    )
+    doc_model: str = Field(
+        "text", description="Document model type, defaults to 'text'."
+    )
     extension: str | None = Field(None, description="Explicit file extension override.")
 
     metadata: dict[str, Any] = Field(default_factory=dict)

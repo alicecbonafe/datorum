@@ -25,9 +25,9 @@ yaml.add_multi_representer(Enum, represent_enum, Dumper=DatorumDumper)
 
 class BaseDatorumSettings(BaseModel):
     """Base class for Datorum settings.
-    
+
     Provides recursive persistence tracking across nested settings models.
-    
+
     :raises SettingsError: Raised when accessing persistent context before set.
     """
 

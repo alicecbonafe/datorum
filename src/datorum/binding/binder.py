@@ -70,7 +70,9 @@ class Binder:
             if local_context_id in self.local_context:
                 return self.local_context[local_context_id]
 
-            settings_path = self.local_context_path / local_context_id / "datorum.context.yml"
+            settings_path = (
+                self.local_context_path / local_context_id / "datorum.context.yml"
+            )
             local_context: DocumentContext
 
             if settings_path.exists():
@@ -83,15 +85,21 @@ class Binder:
             self.local_context[local_context_id] = local_context
             return local_context
 
-    async def resolve_local_document(self, shared_document_id: str, shared_context_id: str, local_context_id: str) -> DocumentReference:
-        local_context: DocumentContext = await self.resolve_local_context(local_context_id)
+    async def resolve_local_document(
+        self, shared_document_id: str, shared_context_id: str, local_context_id: str
+    ) -> DocumentReference:
+        local_context: DocumentContext = await self.resolve_local_context(
+            local_context_id
+        )
         local_document_id = f"{shared_context_id}.{shared_document_id}"
 
         async with self._get_lock(f"{local_context_id}:{local_document_id}"):
             local_document = local_context.get_document(id=local_document_id)
 
             if not local_document:
-                shared_document = self.shared_context[shared_context_id].get_document(id=shared_document_id)
+                shared_document = self.shared_context[shared_context_id].get_document(
+                    id=shared_document_id
+                )
 
                 if not shared_document:
                     raise ContextBindingError(
@@ -198,7 +206,8 @@ class Binder:
 
         return document
 
-    async def pull_context(self,
+    async def pull_context(
+        self,
         bind: ContextBind,
         local_context_id: str | None = None,
     ) -> Any:
@@ -220,7 +229,8 @@ class Binder:
                 domain_id = f"{domain_context}.{domain_id}"
             else:
                 context = self.find_domain_context(
-                    domain=domain_id, context=domain_context,
+                    domain=domain_id,
+                    context=domain_context,
                 )
 
             if bind.context_bind_type.is_metadata():
@@ -230,7 +240,7 @@ class Binder:
         document = await self.find_document(
             document_id=bind.binded_id,
             context=bind.context,
-            local_context_id=local_context_id if bind.local else None
+            local_context_id=local_context_id if bind.local else None,
         )
 
         if bind.context_bind_type.is_io() and not document.doc_path.exists():
@@ -248,7 +258,8 @@ class Binder:
             return document.metadata
         return document.doc_path
 
-    async def push_context(self,
+    async def push_context(
+        self,
         bind: ContextBind,
         value: Any,
         local_context_id: str | None = None,
@@ -274,7 +285,8 @@ class Binder:
                 domain_id = f"{domain_context}.{domain_id}"
             else:
                 context = self.find_domain_context(
-                    domain=domain_id, context=domain_context,
+                    domain=domain_id,
+                    context=domain_context,
                 )
 
             context.set_domain_metadata(domain=domain_id, metadata=value)
