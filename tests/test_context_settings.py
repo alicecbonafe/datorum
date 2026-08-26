@@ -20,6 +20,7 @@ from datorum.context.exceptions import (
     DocumentTypeError,
     DocumentModelError,
     DocumentHandlerError,
+    DocumentReferenceError,
     DocumentReadingError,
     DocumentWritingError,
 )
@@ -176,6 +177,10 @@ def test_document_context(tmp_path: Path):
     assert context_1.knows_domain(domain)
     assert context_1.get_domain_path(domain) == context_1.base_path / "other" / "domain"
     assert context_1.get_domain_metadata(domain)["author"] == "Mocked Author"
+
+    document_1._persistent = BaseDatorumPersistentSettings()
+    with pytest.raises(DocumentReferenceError, match=f"Document out of context: '{document_1.id}'"):
+        assert document_1.context
 
 @pytest.mark.depends(on=["test_document_context"])
 def test_special_cases(tmp_path: Path):
