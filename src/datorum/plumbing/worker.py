@@ -124,6 +124,19 @@ class PipelineWorker(Worker):
     def register_flow_factories(
         self, flow_path: Path, flow_id_template: str = "flow_{index}"
     ):
+        """Register `create_pipeflow`/`restore_pipeflow` resource factories backed by disk.
+
+        Scans `flow_path` for existing flow files matching `flow_id_template` and
+        registers two Binder resources: one that creates a new `PipeFlow` from a
+        pipeline ID, and one that restores an existing one from disk by flow ID.
+
+        :param flow_path: Directory flow files are read from and written to.
+        :type flow_path: pathlib.Path
+        :param flow_id_template: Filename template for new flows; must contain
+            `{index}`, defaults to 'flow_{index}'.
+        :type flow_id_template: str, optional
+        """
+
         flow_files: dict[str, Path] = {}
         last_index: int = -1
 
@@ -194,6 +207,16 @@ class PipelineWorker(Worker):
             return flow
 
     def create_flow(self, pipeline_id: str):
+        """Create a new `PipeFlow` from a registered pipeline, via the `create_pipeflow` resource.
+
+        :param pipeline_id: ID of the pipeline template to instantiate.
+        :type pipeline_id: str
+        :returns: The newly created `PipeFlow`.
+        :rtype: PipeFlow
+        :raises PipelineWorkerError: If `register_flow_factories` wasn't called first,
+            or `pipeline_id` isn't a known pipeline.
+        """
+
         return self.binder.load_resource(
             ResourceBind(
                 field_id="pipeflow",
@@ -203,6 +226,14 @@ class PipelineWorker(Worker):
         )
 
     async def work(self, job: Job):
+        """Create or restore a pipe flow and run it to completion, step by step.
+
+        :param job: Job carrying a `create_pipeflow` or `restore_pipeflow` resource
+            binding.
+        :type job: Job
+        :raises PipelineWorkerError: If neither binding is provided, or a step fails.
+        """
+
         await job.update_status(JobStatus.WORKING, "Creating/restoring pipeflow")
 
         pipeflow: PipeFlow

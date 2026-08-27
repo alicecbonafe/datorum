@@ -11,10 +11,16 @@ from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 class BasePipelineStep(BaseDatorumSettings):
     """Base class for step definitions in a pipeline."""
 
-    type: str
-    id: str
-    target_id: str | None = None
-    description: str | None = None
+    type: str = Field(description="Step type discriminator.")
+    id: str = Field(description="Step identifier, unique within its pipeline.")
+    target_id: str | None = Field(
+        default=None,
+        description="ID of the next step to run after this one.",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Human-readable description of the step.",
+    )
 
 
 class HumanInteractionStep(BasePipelineStep):
@@ -22,43 +28,71 @@ class HumanInteractionStep(BasePipelineStep):
 
     type: Literal["human"] = "human"
 
-    interactive_document_id: str
-    interactive_document_context: str | list[str] | None = Field(default=None)
+    # TODO Connect interactive as context bind
+    interactive_document_id: str = Field(description="ID of the document the user is asked to edit.")
+    interactive_document_context: str | list[str] | None = Field(
+        default=None,
+        description="Context ID filter for the interactive document.",
+    )
 
 
 class ToolStep(BasePipelineStep):
     """Pipeline step executing a tool."""
 
-    type: Literal["tool"] = "tool"
+    type: Literal["tool"] = Field(
+        default="tool",
+        description="Step discriminator, always 'tool'.",
+    )
 
-    tool_params: ContextBind
-    tool_result: ContextBind
-    toolbox_setup: ResourceBind
+    tool_params: ContextBind = Field(description="Context binding supplying the tool's parameters.")
+    tool_result: ContextBind = Field(description="Context binding the tool's result is written to.")
+    toolbox_setup: ResourceBind = Field(description="Resource binding selecting the toolbox setup and tool to run.")
 
-    custom_context: list[ContextBind] = Field(default_factory=list)
-    custom_resources: list[ResourceBind] = Field(default_factory=list)
+    custom_context: list[ContextBind] = Field(
+        default_factory=list,
+        description="Additional context bindings for the toolbox's own fields.",
+    )
+    custom_resources: list[ResourceBind] = Field(
+        default_factory=list,
+        description="Additional resource bindings for the toolbox's own fields.",
+    )
 
 
 class AgentStep(BasePipelineStep):
     """Pipeline step executing an agent turn."""
 
-    type: Literal["agent"] = "agent"
+    type: Literal["agent"] = Field(
+        default="agent",
+        description="Step discriminator, always 'agent'.",
+    )
 
-    chat_history: ContextBind
-    inference_provider: ResourceBind
-    agent_role: ResourceBind
+    chat_history: ContextBind = Field(description="Context binding for the agent turn's chat history.")
+    inference_provider: ResourceBind = Field(description="Resource binding selecting the inference provider.")
+    agent_role: ResourceBind = Field(description="Resource binding selecting the agent role.")
 
 
 class DecisionStep(BasePipelineStep):
     """Pipeline step performing dynamic path branching decisions."""
 
-    type: Literal["decision"] = "decision"
+    type: Literal["decision"] = Field(
+        default="decision",
+        description="Step discriminator, always 'decision'.",
+    )
 
-    target_options: list[str] = Field(default_factory=list)
-    code_type: Literal["formula", "snippet"] = "formula"
-    code: str = ""
+    target_options: list[str] = Field(
+        default_factory=list,
+        description="Valid target step IDs the decision code may return.",
+    )
+    code_type: Literal["formula", "snippet"] = Field(
+        default="formula",
+        description="Whether `code` is evaluated with `eval` ('formula') or executed with `exec` ('snippet').",
+    )
+    code: str = Field(
+        default="",
+        description="Restricted Python code determining the next `target_id`.",
+    )
 
-    input_data: ContextBind
+    input_data: ContextBind = Field(description="Context binding supplying the data the decision code runs against.")
 
 
 class Pipeline(BaseDatorumSettings):
@@ -70,8 +104,11 @@ class Pipeline(BaseDatorumSettings):
     the context.
     """
 
-    id: str
-    description: str | None = None
+    id: str = Field(description="Pipeline identifier.")
+    description: str | None = Field(
+        default=None,
+        description="Human-readable description of the pipeline.",
+    )
 
     steps: dict[
         str,
@@ -79,8 +116,14 @@ class Pipeline(BaseDatorumSettings):
             HumanInteractionStep | ToolStep | AgentStep | DecisionStep,
             Field(discriminator="type"),
         ],
-    ] = Field(default_factory=dict)
-    first_step_id: str = "in"
+    ] = Field(
+        default_factory=dict,
+        description="Pipeline steps, keyed by step ID.",
+    )
+    first_step_id: str = Field(
+        default="in",
+        description="ID of the step a new flow starts at.",
+    )
 
 
 class PipeFlowState(str, Enum):
@@ -103,18 +146,42 @@ class PipeFlow(BaseDatorumPersistentSettings):
     modification of a pipeline that has already started, without affecting the original.
     """
 
-    id: str
-    pipeline: Pipeline
+    id: str = Field(description="Flow instance identifier.")
+    pipeline: Pipeline = Field(description="Working copy of the pipeline this flow is executing.")
 
-    state: PipeFlowState = PipeFlowState.planning
-    current_step_id: str | None = None
-    step_history: list[str] = Field(default_factory=list)
+    state: PipeFlowState = Field(
+        default=PipeFlowState.planning,
+        description="Current lifecycle state of the flow.",
+    )
+    current_step_id: str | None = Field(
+        default=None,
+        description="ID of the step currently executing or last executed.",
+    )
+    step_history: list[str] = Field(
+        default_factory=list,
+        description="IDs of steps executed so far, in order.",
+    )
 
-    started_at: datetime | None = None
-    last_updated_at: datetime | None = None
-    finished_at: datetime | None = None
+    started_at: datetime | None = Field(
+        default=None,
+        description="Timestamp the flow left the 'planning' state.",
+    )
+    last_updated_at: datetime | None = Field(
+        default=None,
+        description="Timestamp of the flow's last save.",
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        description="Timestamp the flow reached 'finished' or 'crashed'.",
+    )
 
     def save(self):
+        """Persist the flow, stamping `started_at`/`last_updated_at`/`finished_at` as appropriate.
+
+        Overrides `BaseDatorumPersistentSettings.save` to keep the flow's timestamps in
+        sync with its `state` before delegating to the base implementation.
+        """
+
         now = datetime.now().astimezone()
         if self.state != PipeFlowState.planning and self.started_at is None:
             self.started_at = now
@@ -133,4 +200,7 @@ class PlumbingKit(BaseDatorumPersistentSettings):
     In practice, pipelines in this class serve as templates for use in `PipeFlow`.
     """
 
-    pipelines: dict[str, Pipeline] = Field(default_factory=dict)
+    pipelines: dict[str, Pipeline] = Field(
+        default_factory=dict,
+        description="Registered pipeline templates, keyed by pipeline ID.",
+    )
