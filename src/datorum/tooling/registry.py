@@ -270,7 +270,15 @@ class ResourceField(BaseToolBoxField):
 
 
 class ToolBoxDefinition(BaseModel):
-    """Container listing registered tools and field definitions for a toolbox."""
+    """Container listing registered tools and field definitions for a toolbox.
+    
+    This definition takes place at runtime, via decorators. A definition refers to a
+    Python type with a set of methods decorated as tools.
+
+    `ToolBoxDefinition` also enables the declaration of fields for binding context
+    information and runtime resources. This makes it possible to create flexible
+    toolboxes that are easily adaptable to different contexts.
+    """
 
     name: str
     tools: dict[str, ToolDefinition] = Field(default_factory=dict)

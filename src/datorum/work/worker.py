@@ -16,6 +16,21 @@ _current_job: ContextVar[Job | None] = ContextVar(
 
 class Worker(ABC):
     """Abstract base worker handling execution loops and binding checks.
+    
+    A Worker operates based on a Binder, starting from a predefined set of contexts and
+    potentially utilizing its own resources. 
+
+    Using this Binder, the Worker handles Jobs by first verifying that all required
+    bindings have been satisfied. These bindings are defined in the
+    `required_context_binds` and `required_resource_binds` class variables. 
+
+    Workers can be triggered in two ways:
+
+    * `start`: The standard method for applications to launch the Worker. It performs
+      the necessary checks and launches an asynchronous process as an `asyncio` task. 
+    * `run`: The method that controls the actual execution, handling errors and
+      concurrency. It is generally used by other Workers with `await` to execute
+      sub-jobs within the same operation (and using the same Binder).
 
     :param binder: Binder instance used for state and resource loading.
     :type binder: Binder

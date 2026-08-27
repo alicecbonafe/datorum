@@ -23,6 +23,24 @@ from .settings import ContextBind, ResourceBind
 class Binder:
     """Manager for context resolution, document state synchronization, and resource loading.
 
+    The class operates with two levels of context:
+
+    * **Shared context**: Acts as the pre-existing knowledge base; it is read by all
+      operations but modified only by memory persistence operations.
+    * **Local context**: Restricted to the specific operation; its documents are copies
+      extracted from the shared context that store the operation's states and results.
+
+    Thus, the Binder is responsible for:
+
+    * Maintaining shared contexts and creating local contexts for operations when
+      necessary.
+    * Automatically resolving shared and local documents, copying them from the shared
+      context when required. 
+
+    Additionally, Binder maintains resource factories to enable isolation during
+    resource resolution. When a factory is not found in the local registry, Binder
+    resolves the resource using the global registry.
+
     :param local_context_path: Optional path to local job context folders.
     :type local_context_path: pathlib.Path | None
     """
