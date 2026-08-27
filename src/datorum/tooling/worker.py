@@ -22,6 +22,39 @@ from .settings import ToolBoxSetUp, ToolKit
 
 
 class ToolWorker(Worker):
+    """Worker specialized in the use of tools.
+
+    A Tool Worker utilizes tools defined in its `ToolKit`, using a set of parameters
+    defined in the context.
+
+    The `ToolKit` containing `ToolBoxSetUps` is defined in the Worker's constructor,
+    making it available to `Jobs` as a binded resource. The binding for this resource
+    must have `field_id == "toolbox_setup"` and a selector composed of the toolbox
+    setup ID followed by the tool name, separated by a dot.
+
+    Before executing the tool, the Worker checks the context and resource fields,
+    requesting the Binder to resolve the bindings declared in the setup. This allows the
+    setup, defined in the settings, to have its behavior pre-customized by context
+    documents.
+
+    The Worker then reads the tool parameters by resolving the context binding defined
+    by `field_id == "tool_params"`. These parameters are prepared for the tool according
+    to the method signature. After using the tool, the Worker saves the resulting output
+    to the document resolved via the context binding defined by
+    `field_id == "tool_result"`.
+
+    Note that when "tool_params" is a `ChatHistory`, the Worker retrieves the tool
+    parameters from the tool calls within the latest `AssistantMessage`. Similarly, when
+    "tool_result" is a `ChatHistory`, the Worker saves the result by appending a
+    `ToolMessage` to the end of the message list. This means it is possible to directly
+    plug in a `ChatHistory` to enable tool execution by AI agents as well.
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    :param toolkit: Collection of toolbox setups available to the worker.
+    :type toolkit: ToolKit
+    """
+
     required_context_binds: ClassVar[list[str]] = ["tool_params", "tool_result"]
     required_resource_binds: ClassVar[list[str]] = ["toolbox_setup"]
 
@@ -58,6 +91,15 @@ class ToolWorker(Worker):
             return setup
 
     async def work(self, job: Job):
+        """Execute the tool selected by the job's `toolbox_setup` resource binding.
+
+        :param job: Job carrying the `toolbox_setup`, `tool_params`, and `tool_result`
+            bindings.
+        :type job: Job
+        :raises ToolWorkerError: If the tool isn't found, isn't enabled, or a required
+            context/resource field is missing.
+        """
+
         await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
         setup_bind: ResourceBind = next(
@@ -113,7 +155,7 @@ class ToolWorker(Worker):
                         )
                     continue
 
-            field_value: Any = self.binder.pull_context(ctx_field_bind)
+            field_value: Any = await self.binder.pull_context(ctx_field_bind)
             if field.attr_name:
                 setattr(toolbox, field.attr_name, field_value)
 
@@ -146,10 +188,10 @@ class ToolWorker(Worker):
             if res_field.attr_name:
                 setattr(toolbox, res_field.attr_name, field_value)
 
-        params_doc = self.binder.find_document(
+        params_doc = await self.binder.find_document(
             document_id=params_bind.binded_id, context=params_bind.context
         )
-        result_doc = self.binder.find_document(
+        result_doc = await self.binder.find_document(
             document_id=result_bind.binded_id, context=result_bind.context
         )
 
@@ -229,4 +271,4 @@ class ToolWorker(Worker):
                 continue
 
             field_value = getattr(toolbox, field.attr_name)
-            self.binder.push_context(field_bind, field_value)
+            await self.binder.push_context(field_bind, field_value)

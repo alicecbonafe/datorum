@@ -75,10 +75,21 @@ ResourceFactoryRegistry: dict[str, Callable] = {}
 def register_resource_factory(
     name: str, factory: Callable, force: bool = False
 ) -> Callable | None:
+    """Register a resource factory function.
+
+    :param name: Unique name for the resource factory.
+    :type name: str
+    :param factory: Factory callable.
+    :type factory: collections.abc.Callable
+    :param force: Overwrite existing factory, defaults to False.
+    :type force: bool, optional
+    :returns: Registered factory callable, or `None` if `name` is registered and `force` is false.
+    :rtype: collections.abc.Callable | None
+    :raises ResourceFactoryError: If signature invalid.
+    """
     if name in ResourceFactoryRegistry and not force:
         return None
-        # raise ResourceFactoryError(
-        #     f"Resource factory '{name}' is already registered, use 'force=True' to overwrite")
+
     if not validate_factory_signature(factory):
         raise ResourceFactoryError(
             f"Resource factory '{name}' has not a compatible signature"
@@ -88,12 +99,29 @@ def register_resource_factory(
 
 
 def get_resource_factory(factory_name: str) -> Callable:
+    """Retrieve a registered resource factory function by name.
+
+    :param factory_name: Factory name identifier.
+    :type factory_name: str
+    :returns: Factory callable.
+    :rtype: collections.abc.Callable
+    :raises ResourceFactoryError: If factory is not registered.
+    """
+
     if factory_name not in ResourceFactoryRegistry:
         raise ResourceFactoryError(f"Resource factory '{factory_name}' not found")
     return ResourceFactoryRegistry[factory_name]
 
 
 def resource(name: str | None = None, force: bool = False):
+    """Decorator to register a resource factory callable.
+
+    :param name: Factory name override.
+    :type name: str | None, optional
+    :param force: Overwrite existing factory registration, defaults to False.
+    :type force: bool, optional
+    """
+
     def decorator(func):
         factory_name = name or func.__name__
         return register_resource_factory(

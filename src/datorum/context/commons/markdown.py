@@ -18,6 +18,16 @@ register_doc_type("text/markdown", ["md", "markdown", "markdn", "mdown"])
 
 @doc_model(id="markdown", doc_type="text/markdown")
 class MarkdownDocument:
+    """Document model for Markdown files with YAML, JSON, or TOML frontmatter.
+
+    :param content: Raw Markdown body content.
+    :type content: str
+    :param frontmatter: Parsed metadata headers, defaults to None.
+    :type frontmatter: dict[str, Any] | None
+    :param frontmatter_format: Format ('yaml', 'json', 'toml'), defaults to 'yaml'
+    :type frontmatter_format: str | None
+    """
+
     FRONTMATTER_YAML = "yaml"
     FRONTMATTER_JSON = "json"
     FRONTMATTER_TOML = "toml"

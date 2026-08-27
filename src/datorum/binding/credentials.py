@@ -17,6 +17,20 @@ def register_mapped_api_key_factory(
     force: bool = False,
     binder: Binder | None = None,
 ):
+    """Register standard 'api_key' resource factory fetching key values from env or dict source.
+
+    :param source: Mapping source containing keys, defaults to os.environ.
+    :type source: collections.abc.Mapping[str, str]
+    :param key_name_match: Regex pattern for key validation.
+    :type key_name_match: str | None, optional
+    :param key_name_formatter: Formatter transforming key names.
+    :type key_name_formatter: collections.abc.Callable[[str], str] | None, optional
+    :param force: Overwrite existing factory registration, defaults to False.
+    :type force: bool
+    :param binder: Optional local Binder instance to register factory on.
+    :type binder: Binder | None
+    """
+
     if not force and "api_key" in ResourceFactoryRegistry:
         return
 

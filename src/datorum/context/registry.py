@@ -21,7 +21,7 @@ from .exceptions import (
 class DocumentType(BaseModel):
     """Represents the document content type, as writen in file, such as json or markdown."""
 
-    id: str = Field(description="Document type identifier.")
+    id: str = Field(description="MIME-style content type identifier.")
     extensions: list[str] = Field(
         default_factory=list,
         description="List of extensions associated with this document type.",
@@ -29,21 +29,21 @@ class DocumentType(BaseModel):
 
 
 class DocumentModel(BaseModel):
-    """Represents the document model, associated with a python type, such as dict or a data model."""
+    """Maps a Python class to a document model identifier."""
 
     id: str = Field(description="Document model identifier.")
-    clazz: type = Field(description="Python class that represents the model.")
+    clazz: type = Field(description="Python class bound to this model.")
     default_doc_type: str = Field(
         default="application/json",
-        description="Default document type associated with this model.",
+        description="Default content type for serialization.",
     )
 
 
 class DocumentHandler(BaseModel):
-    """Holds runtime defined serializer and deserializer to convert between a doc_type and a doc_model."""
+    """Holds serializer and deserializer callables for a content type and model pair."""
 
-    doc_type: str = Field(description="Document type id for this handler.")
-    doc_model: str = Field(description="Document model id for this handler.")
+    doc_type: str = Field(description="Document type identifier.")
+    doc_model: str = Field(description="Document model identifier.")
 
     _serializer: Callable | None = PrivateAttr(default=None)
     _deserializer: Callable | None = PrivateAttr(default=None)
@@ -81,7 +81,18 @@ DocumentHandlerRegistry: dict[tuple[str, str], DocumentHandler] = {}
 def register_doc_type(
     id: str, extensions: list[str], force: bool = False
 ) -> DocumentType:
-    """Creates a document type and registers it."""
+    """Register a new document content type.
+
+    :param id: MIME-style content type string.
+    :type id: str
+    :param extensions: File extension aliases.
+    :type extensions: list[str]
+    :param force: Whether to overwrite existing registration, defaults to False.
+    :type force: bool, optional
+    :returns: Registered `DocumentType` instance.
+    :rtype: DocumentType
+    :raises DocumentTypeError: If already registered and `force` is False.
+    """
     if id in DocumentTypeRegistry and not force:
         raise DocumentTypeError(f"Doc type '{id}' is already registered")
     doc_type = DocumentType(id=id, extensions=extensions)
@@ -90,7 +101,14 @@ def register_doc_type(
 
 
 def get_doc_type(id: str) -> DocumentType:
-    """Return the registered document type instance with the specified 'id'."""
+    """Retrieve a registered document type by identifier.
+
+    :param id: Content type identifier.
+    :type id: str
+    :returns: Found `DocumentType` instance.
+    :rtype: DocumentType
+    :raises DocumentTypeError: If the type is not registered.
+    """
     if id not in DocumentTypeRegistry:
         raise DocumentTypeError(f"Doc type '{id}' not found in registry")
     return DocumentTypeRegistry[id]
@@ -99,7 +117,20 @@ def get_doc_type(id: str) -> DocumentType:
 def register_doc_model(
     id: str, clazz: type, default_doc_type: str | None = None, force: bool = False
 ) -> DocumentModel:
-    """Creates a document model and registers it."""
+    """Register a class as a document model.
+
+    :param id: Document model identifier
+    :type id: str
+    :param clazz: Target Python class.
+    :type clazz: type
+    :param default_doc_type: Default content type, defaults to 'application/json'.
+    :type default_doc_type: str | None, optional
+    :param force: Overwrite existing registration, defaults to False.
+    :type force: bool, optional
+    :returns: Registered `DocumentModel`.
+    :rtype: DocumentModel
+    :raises DocumentModelError: If already registered and `force` is False.
+    """
     if id in DocumentModelRegistry and not force:
         raise DocumentModelError(f"Doc model '{id}' is already registered")
     doc_model = DocumentModel(id=id, clazz=clazz)
@@ -110,7 +141,14 @@ def register_doc_model(
 
 
 def get_doc_model(id: str) -> DocumentModel:
-    """Return the registered document model instance with the specified 'id'."""
+    """Retrieve a registered document model by identifier.
+
+    :param id: Model identifier
+    :type id: str
+    :returns: Found `DocumentModel` instance
+    :rtype: DocumentModel
+    :raises DocumentModelError: If the model is not found.
+    """
     if id not in DocumentModelRegistry:
         raise DocumentModelError(f"Doc model '{id}' not found in registry")
     return DocumentModelRegistry[id]
@@ -122,7 +160,18 @@ def register_pydantic_based_handler(
     doc_type: str | None = None,  # None == all (json, yaml, toml)
     doc_model: str | None = None,
 ):
-    """Creates a document handler and registers it."""
+    """Register serialization handlers for a Pydantic model class.
+
+    :param model_type: Pydantic model subclass.
+    :type model_type: type
+    :param model_id: Optional model identifier override.
+    :type model_id: str | None, optional
+    :param doc_type: Target document content type.
+    :type doc_type: str | None, optional
+    :param doc_model: Model name alias.
+    :type doc_model: str | None, optional
+    :raises DocumentHandlerError: If prerequisite dict handler missing.
+    """
     model_id = model_id or doc_model or model_type.__name__
 
     DocumentModelRegistry[model_id] = DocumentModel(
@@ -173,7 +222,18 @@ def register_pydantic_based_handler(
 def get_doc_handler(
     doc_type: str, doc_model: str, create: bool = False
 ) -> DocumentHandler:
-    """Return the registered document handler for the type+model combination."""
+    """Retrieve or create a document handler pair.
+
+    :param doc_type: Target content type.
+    :type doc_type: str
+    :param doc_model: Target model identifier.
+    :type doc_model: str
+    :param create: Automatically instantiate if missing, defaults to False.
+    :type create: bool, optional
+    :returns: Document handler instance.
+    :rtype: DocumentHandler
+    :raises DocumentHandlerError: If missing and `create` is False.
+    """
     id = (doc_type, doc_model)
     if id not in DocumentHandlerRegistry:
         if create:
@@ -189,7 +249,15 @@ def get_doc_handler(
 def find_handlers(
     doc_type: str | None = None, doc_model: str | None = None
 ) -> list[DocumentHandler]:
-    """Finds all document handler for the specified type and/or model."""
+    """Find registered document handlers matching optional filter criteria.
+
+    :param doc_type: Filter by content type.
+    :type doc_type: str | None, optional
+    :param doc_model: Filter by document model.
+    :type doc_model: str | None, optional
+    :returns: Matching document handler list.
+    :rtype: list[DocumentHandler]
+    """
     if doc_type is None and doc_model is None:
         return list(DocumentHandlerRegistry.values())
     if doc_type is None:
@@ -214,7 +282,15 @@ def find_handlers(
 
 
 def doc_model(id: str, doc_type: str | None = None, force: bool = False):
-    """Decorator for registering classes as document models."""
+    """Decorator to register a class as a document model.
+
+    :param id: Document model identifier.
+    :type id: str
+    :param doc_type: Default content type.
+    :type doc_type: str | None, optional
+    :param force: Overwrite existing registration, defaults to False.
+    :type force: bool, optional
+    """
 
     def decorator(cls):
         if issubclass(cls, BaseModel):
@@ -237,7 +313,13 @@ def doc_model(id: str, doc_type: str | None = None, force: bool = False):
 
 
 def serializer(doc_type: str, doc_model: str):
-    """Decorator for registering the model->type serializer"""
+    """Decorator to register a document serializer function.
+
+    :param doc_type: Content type identifier.
+    :type doc_type: str
+    :param doc_model: Document model identifier.
+    :type doc_model: str
+    """
 
     def decorator(func):
         get_doc_handler(
@@ -249,7 +331,13 @@ def serializer(doc_type: str, doc_model: str):
 
 
 def deserializer(doc_type: str, doc_model: str):
-    """Decorator for registering the type->model deserializer"""
+    """Decorator to register a document deserializer function.
+
+    :param doc_type: Content type identifier.
+    :type doc_type: str
+    :param doc_model: Document model identifier.
+    :type doc_model: str
+    """
 
     def decorator(func):
         get_doc_handler(

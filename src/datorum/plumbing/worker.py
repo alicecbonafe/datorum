@@ -19,7 +19,7 @@ from RestrictedPython.Guards import (
 
 from ..agency.worker import AgentWorker
 from ..binding.binder import Binder
-from ..binding.settings import ContextBind, ContextBindType, ResourceBind
+from ..binding.settings import ResourceBind
 from ..tooling.worker import ToolWorker
 from ..work.job import Job, JobStatus
 from ..work.worker import Worker
@@ -80,6 +80,32 @@ def _run_code(
 
 
 class PipelineWorker(Worker):
+    """Worker executing pipelines step-by-step.
+
+    A Pipeline Worker is responsible for creating, retrieving, and executing pipe flows.
+
+    Pipe flow execution proceeds through a loop of steps. Each step can be one of four
+    types:
+
+    - `ToolStep`: Delegates tool execution to the `tool_worker`.
+    - `AgentStep`: Delegates an inference request to the `agent_worker`.
+    - `HumanInteractionStep`: Suspends execution, waiting for the user to edit the
+      interaction document (HITL).
+    - `DecisionStep`: Safely executes configured code to determine the next step. The
+      code is executed using `eval` if defined as `formula`, or `exec` if defined as
+      `snippet`. The worker verifies whether the execution result is a valid target and
+      updates the `target_id`.
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    :param plumbingkit: Collection of pipeline definitions.
+    :type plumbingkit: PlumbingKit
+    :param agent_worker: Responsible for delegated agent jobs.
+    :type agent_worker: AgentWorker
+    :param tool_worker: Responsible for delegated tool jobs.
+    :type tool_worker: ToolWorker
+    """
+
     def __init__(
         self,
         binder: Binder,
@@ -98,6 +124,19 @@ class PipelineWorker(Worker):
     def register_flow_factories(
         self, flow_path: Path, flow_id_template: str = "flow_{index}"
     ):
+        """Register `create_pipeflow`/`restore_pipeflow` resource factories backed by disk.
+
+        Scans `flow_path` for existing flow files matching `flow_id_template` and
+        registers two Binder resources: one that creates a new `PipeFlow` from a
+        pipeline ID, and one that restores an existing one from disk by flow ID.
+
+        :param flow_path: Directory flow files are read from and written to.
+        :type flow_path: pathlib.Path
+        :param flow_id_template: Filename template for new flows; must contain
+            `{index}`, defaults to 'flow_{index}'.
+        :type flow_id_template: str, optional
+        """
+
         flow_files: dict[str, Path] = {}
         last_index: int = -1
 
@@ -168,6 +207,16 @@ class PipelineWorker(Worker):
             return flow
 
     def create_flow(self, pipeline_id: str):
+        """Create a new `PipeFlow` from a registered pipeline, via the `create_pipeflow` resource.
+
+        :param pipeline_id: ID of the pipeline template to instantiate.
+        :type pipeline_id: str
+        :returns: The newly created `PipeFlow`.
+        :rtype: PipeFlow
+        :raises PipelineWorkerError: If `register_flow_factories` wasn't called first,
+            or `pipeline_id` isn't a known pipeline.
+        """
+
         return self.binder.load_resource(
             ResourceBind(
                 field_id="pipeflow",
@@ -177,6 +226,14 @@ class PipelineWorker(Worker):
         )
 
     async def work(self, job: Job):
+        """Create or restore a pipe flow and run it to completion, step by step.
+
+        :param job: Job carrying a `create_pipeflow` or `restore_pipeflow` resource
+            binding.
+        :type job: Job
+        :raises PipelineWorkerError: If neither binding is provided, or a step fails.
+        """
+
         await job.update_status(JobStatus.WORKING, "Creating/restoring pipeflow")
 
         pipeflow: PipeFlow
@@ -210,6 +267,7 @@ class PipelineWorker(Worker):
                 f"Pipeflow '{pipeflow.id}' already running in job '{self._active_flows[pipeflow.id]}'"
             )
         self._active_flows[pipeflow.id] = job.id
+        job.local_context_id = pipeflow.id
 
         await job.update_status(JobStatus.WORKING, "Collecting pipeflow resources")
 
@@ -232,31 +290,13 @@ class PipelineWorker(Worker):
 
                 current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
                 if isinstance(current_step, HumanInteractionStep):
-                    existing_interactive = next(
-                        (
-                            b
-                            for b in job.context_bindings
-                            if b.field_id == "interactive"
-                        ),
-                        None,
-                    )
-                    if existing_interactive:
-                        existing_interactive.binded_id = (
-                            current_step.interactive_document_id
-                        )
-                        existing_interactive.context = (
-                            current_step.interactive_document_context
-                        )
-                        existing_interactive.context_bind_type = ContextBindType.model
-                    else:
-                        job.context_bindings.append(
-                            ContextBind(
-                                field_id="interactive",
-                                binded_id=current_step.interactive_document_id,
-                                context=current_step.interactive_document_context,
-                                context_bind_type=ContextBindType.model,
-                            )
-                        )
+                    # Remove old interactive
+                    for bind in job.context_bindings:
+                        if bind.field_id == "interactive":
+                            job.context_bindings.remove(bind)
+
+                    job.context_bindings.append(current_step.interactive)
+
                     pipeflow.state = PipeFlowState.paused
                     pipeflow.save()
                     await job.update_status(
@@ -281,6 +321,7 @@ class PipelineWorker(Worker):
                             current_step.toolbox_setup,
                             *current_step.custom_resources,
                         ],
+                        local_context_id=job.local_context_id,
                     )
                     job.delegates.append(tool_job)
 
@@ -308,6 +349,7 @@ class PipelineWorker(Worker):
                             current_step.inference_provider,
                             current_step.agent_role,
                         ],
+                        local_context_id=job.local_context_id,
                     )
                     job.delegates.append(agent_job)
 
@@ -325,7 +367,7 @@ class PipelineWorker(Worker):
                         f"Running decision step '{pipeflow.current_step_id}'...",
                     )
 
-                    input_data = self.binder.pull_context(current_step.input_data)
+                    input_data = await self.binder.pull_context(current_step.input_data)
                     if isinstance(input_data, BaseModel):
                         input_data = input_data.model_dump(mode="json")
 

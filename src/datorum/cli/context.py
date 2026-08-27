@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -21,6 +22,14 @@ class BindingSyntaxError(datorum.DatorumBaseError):
 
 
 class CliAppContext:
+    """Runtime context for the CLI application.
+
+    It provides a shared binder and one worker of each type, all via lazy loading.
+
+    :param settings_path: Path for the CLI application settings file.
+    :type settings_path: pathlib.Path
+    """
+
     def __init__(self, settings_path: Path):
         self.settings = CliAppSettings()
         self.settings.settings_path = settings_path
@@ -71,17 +80,47 @@ class CliAppContext:
             )
         return self._pipeline_worker
 
+    def load_custom_registry(self):
+        if not self.settings.custom_registry:
+            return
+
+        for file_path in self.settings.custom_registry:
+            module_key = ".".join([p for p in file_path.parts if "/" not in p])
+            module_path = file_path.resolve()
+            if not module_path.exists():
+                raise click.ClickException(f"Registry file not found: {module_path}")
+
+            module_spec = importlib.util.spec_from_file_location(
+                module_path.stem, module_path
+            )
+            if module_spec is None or module_spec.loader is None:
+                raise click.ClickException(
+                    f"Failed to load custom registry: {module_path}"
+                )
+            module = importlib.util.module_from_spec(module_spec)
+            sys.modules[module_key] = module
+            try:
+                module_spec.loader.exec_module(module)
+            except Exception as e:  # noqa: BLE001
+                raise click.ClickException(
+                    f"An error occurred while loading custom registry '{module_path}': {e}"
+                )
+
     def parse_context_bind(self, raw: str) -> datorum.ContextBind:
         match = _BIND_RE.match(raw)
         if not match:
             raise BindingSyntaxError(
-                f"Invalid --bind-context value '{raw}' (expected 'field=bind-type(context:binded-id)')"
+                f"Invalid --bind-context value '{raw}' (expected 'field=[_]bind-type([context:]binded-id)')"
             )
         field_id, type_name, value = match.group("field_id", "name", "value")
         if value is None:
             raise BindingSyntaxError(
                 f"Invalid --bind-context value '{raw}': missing '(context:binded-id)'"
             )
+
+        bind_local = type_name.startswith("_")
+        if bind_local:
+            type_name = type_name[1:]
 
         try:
             bind_type = datorum.ContextBindType(type_name)
@@ -96,6 +135,7 @@ class CliAppContext:
             binded_id=binded_id,
             context=context,
             context_bind_type=bind_type,
+            local=bind_local,
         )
 
     def parse_resource_bind(self, raw: str) -> datorum.ResourceBind:
@@ -124,9 +164,11 @@ class CliAppContext:
         return asyncio.run(self._run_job_async(worker, job, exit_on_paused))
 
     def _create_binder(self) -> datorum.Binder:
-        self._binder = datorum.Binder()
+        self._binder = datorum.Binder(
+            local_context_path=self.settings.local_context_path
+        )
 
-        for ctx in self.settings.contexts.values():
+        for ctx in self.settings.shared_context.values():
             self._binder.add_context(context=ctx)
 
         try:
@@ -149,8 +191,10 @@ class CliAppContext:
         if ":" not in value:
             return None, value
         context_part, binded_id = value.rsplit(":", 1)
-        contexts = context_part.split(",")
-        return (contexts[0] if len(contexts) == 1 else contexts), binded_id
+        shared_context = context_part.split(",")
+        return (
+            shared_context[0] if len(shared_context) == 1 else shared_context
+        ), binded_id
 
     async def _run_job_async(
         self, worker: datorum.Worker, job: datorum.Job, exit_on_paused: bool
@@ -183,7 +227,7 @@ class CliAppContext:
             if item == f"[{datorum.JobStatus.PAUSED.value.lower()}]":
                 for bind in job.context_bindings:
                     if bind.field_id == "interactive":
-                        interactive = self.binder.find_document(
+                        interactive = await self.binder.find_document(
                             bind.binded_id, bind.context
                         )
                         click.echo(

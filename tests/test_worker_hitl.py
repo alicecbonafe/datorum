@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import datorum
+from datorum.binding.settings import ContextBind
 from datorum.plumbing.settings import HumanInteractionStep, Pipeline, ToolStep
 from datorum.plumbing.worker import PipelineWorker
 from datorum.tooling.worker import ToolWorker
@@ -33,8 +34,11 @@ def _hitl_pipeline(target_id=None) -> Pipeline:
         steps={
             "in": HumanInteractionStep(
                 id="in",
-                interactive_document_id="chat",
-                interactive_document_context="ctx",
+                interactive=ContextBind(
+                    field_id="interactive",
+                    binded_id="chat",
+                    context="ctx",
+                ),
                 target_id=target_id,
             ),
         },
@@ -126,11 +130,11 @@ class TestHumanInteractionPause:
             steps={
                 "first": HumanInteractionStep(
                     id="first", target_id="second",
-                    interactive_document_id="chat-1", interactive_document_context="ctx-a",
+                    interactive=ContextBind(field_id="interactive", binded_id="chat-1", context="ctx-a"),
                 ),
                 "second": HumanInteractionStep(
                     id="second", target_id=None,
-                    interactive_document_id="chat-2", interactive_document_context="ctx-b",
+                    interactive=ContextBind(field_id="interactive", binded_id="chat-2", context="ctx-b"),
                 ),
             },
         )

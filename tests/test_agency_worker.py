@@ -63,7 +63,7 @@ def _make_agent_worker(
     stubbed `api_key` resource factory (a real deployment would resolve this
     from a secrets store, which is out of scope here)."""
     binder: Binder = Binder()
-    binder.contexts[ctx.id] = ctx
+    binder.shared_context[ctx.id] = ctx
     tool_worker = ToolWorker(binder=binder, toolkit=toolkit or ToolKit())
     worker = AgentWorker(binder=binder, agencykit=agencykit, tool_worker=tool_worker)
 

@@ -82,11 +82,11 @@ class ContextGroup(BaseCommandGroup):
             raise click.ClickException(f"Invalid context id: '{context_id}'")
 
         context = datorum.DocumentContext(id=context_id)
-        context.base_path = app_ctx.settings.contexts_path / sanitized_id
+        context.base_path = app_ctx.settings.shared_context_path / sanitized_id
         if create_dir:
             context.base_path.mkdir(parents=True, exist_ok=True)
 
-        app_ctx.settings.contexts[sanitized_id] = context
+        app_ctx.settings.shared_context[sanitized_id] = context
         app_ctx.settings.save()
 
     @staticmethod
@@ -108,13 +108,13 @@ class ContextGroup(BaseCommandGroup):
         click.echo(f"Linking document '{doc_file}' to context '{context_id}'...")
 
         sanitized_id = _sanitize_id(context_id)
-        if sanitized_id not in app_ctx.settings.contexts:
+        if sanitized_id not in app_ctx.settings.shared_context:
             msg = f"Document context not found: '{context_id}'"
             if context_id != sanitized_id:
                 msg = f"{msg} (sanitized: '{sanitized_id}')"
             raise click.ClickException(msg)
 
-        context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
+        context: datorum.DocumentContext = app_ctx.settings.shared_context[sanitized_id]
 
         context_base = context.base_path.resolve()
         doc_path = doc_file.resolve()
@@ -152,13 +152,13 @@ class ContextGroup(BaseCommandGroup):
         click.echo(f"Exporting document context '{context_id}' to '{output_file}'...")
 
         sanitized_id = _sanitize_id(context_id)
-        if sanitized_id not in app_ctx.settings.contexts:
+        if sanitized_id not in app_ctx.settings.shared_context:
             msg = f"Document context not found: '{context_id}'"
             if context_id != sanitized_id:
                 msg = f"{msg} (sanitized: '{sanitized_id}')"
             raise click.ClickException(msg)
 
-        context: datorum.DocumentContext = app_ctx.settings.contexts[sanitized_id]
+        context: datorum.DocumentContext = app_ctx.settings.shared_context[sanitized_id]
         context.save_as(output_file)
 
         click.echo("Done!")
@@ -177,10 +177,10 @@ class ConfigGroup(BaseCommandGroup):
     @cli_command("init", load_settings=False)
     @click.option(
         "-c",
-        "--contexts",
-        "contexts_path",
+        "--shared_context",
+        "shared_context_path",
         type=click.Path(path_type=Path),
-        default=Path("contexts"),
+        default=Path("shared_context"),
         show_default=True,
     )
     @click.option(
@@ -202,7 +202,7 @@ class ConfigGroup(BaseCommandGroup):
     @click.pass_obj
     def init_config(
         app_ctx: CliAppContext,
-        contexts_path: Path,
+        shared_context_path: Path,
         flows_path: Path,
         flow_id_template: str,
         sample_data: bool,
@@ -214,7 +214,7 @@ class ConfigGroup(BaseCommandGroup):
             )
 
         click.echo(f"Initializing config at {app_ctx.settings.settings_path}...")
-        app_ctx.settings.contexts_path = contexts_path
+        app_ctx.settings.shared_context_path = shared_context_path
         app_ctx.settings.flows_path = flows_path
         app_ctx.settings.flow_id_template = flow_id_template
 

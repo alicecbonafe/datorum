@@ -17,7 +17,11 @@ def cli_command(name=None, load_settings: bool = True, **click_kwargs):
 
 
 class BaseCommandGroup(click.Group):
-    """Base Group that automatically registers commands attached to class attributes."""
+    """Base Group that automatically registers commands for methods decorated with `cli_command`.
+
+    :param name: Group name, passed to `click.Group` constructor.
+    :type name: str, optional
+    """
 
     def __init__(self, name=None, **attrs):
         super().__init__(name=name, **attrs)
@@ -54,6 +58,7 @@ class BaseCommandGroup(click.Group):
             ctx = click.get_current_context(silent=True)
             if ctx and ctx.obj and hasattr(ctx.obj, "settings"):
                 ctx.obj.settings.load_lazy()
+                ctx.obj.load_custom_registry()
             return bound_method(*args, **kwargs)
 
         return wrapper

@@ -2,19 +2,11 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import ClassVar
 
 from ..binding.binder import Binder
-from ..context.settings import DocumentContext
 from .exceptions import WorkerStartUpError
 from .job import Job, JobStatus
-
-tmp_dir = f"/tmp/datorum_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}"
-TMP_CONTEXT = DocumentContext(id="tmp-context")
-TMP_CONTEXT.base_path = Path(tmp_dir)
-TMP_CONTEXT.base_path.mkdir(parents=True, exist_ok=True)
 
 _current_job: ContextVar[Job | None] = ContextVar(
     "_current_job",
@@ -23,6 +15,27 @@ _current_job: ContextVar[Job | None] = ContextVar(
 
 
 class Worker(ABC):
+    """Abstract base worker handling execution loops and binding checks.
+
+    A Worker operates based on a Binder, starting from a predefined set of contexts and
+    potentially utilizing its own resources.
+
+    Using this Binder, the Worker handles Jobs by first verifying that all required
+    bindings have been satisfied. These bindings are defined in the
+    `required_context_binds` and `required_resource_binds` class variables.
+
+    Workers can be triggered in two ways:
+
+    * `start`: The standard method for applications to launch the Worker. It performs
+      the necessary checks and launches an asynchronous process as an `asyncio` task.
+    * `run`: The method that controls the actual execution, handling errors and
+      concurrency. It is generally used by other Workers with `await` to execute
+      sub-jobs within the same operation (and using the same Binder).
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    """
+
     required_context_binds: ClassVar[list[str]] = []
     required_resource_binds: ClassVar[list[str]] = []
 

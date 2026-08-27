@@ -145,8 +145,12 @@ def hitl_pipeline_kit(linked_context):
         "        type: human\n"
         '        id: "in"\n'
         "        target_id: null\n"
-        "        interactive_document_id: chat.txt\n"
-        "        interactive_document_context: work\n"
+        "        interactive:\n"
+        "          field_id: interactive\n"
+        "          binded_id: chat.txt\n"
+        "          context: work\n"
+        "          context_bind_type: model\n"
+        "          local: false\n"
     )
     return pipeline_file
 
@@ -201,3 +205,18 @@ def test_run_pipeline_unknown_pipeline_id_reports_clean_error(runner, linked_con
     result = _run(runner, linked_context, "run", "pipeline", "-p", "no-such-pipeline")
     assert result.exit_code != 0
     assert "Traceback" not in result.output
+
+def test_run_pipeline_interactive_resumes_on_enter(runner, linked_context, hitl_pipeline_kit, monkeypatch):
+    _run(runner, linked_context, "config", "import", "pipelines", str(hitl_pipeline_kit))
+    _run(runner, linked_context, "run", "pipeline", "-p", "hitl-pipe", "--create-only")
+
+    import click
+    def mock_getchar():
+        return "\r"  # ENTER → resume
+    monkeypatch.setattr(click, "getchar", mock_getchar)
+
+    result = _run(runner, linked_context, "run", "pipeline", "flow_0")
+    assert result.exit_code == 0
+
+    flow_file = linked_context.parent / "flows" / "flow_0.yml"
+    assert "state: finished" in flow_file.read_text()

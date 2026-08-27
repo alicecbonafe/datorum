@@ -7,6 +7,7 @@ from pydantic import Field, PrivateAttr
 from ..core.settings import BaseDatorumPersistentSettings, BaseDatorumSettings
 from .exceptions import (
     DocumentReadingError,
+    DocumentReferenceError,
     DocumentWritingError,
 )
 from .registry import (
@@ -20,12 +21,24 @@ from .registry import (
 
 
 class DocumentReference(BaseDatorumSettings):
-    id: str
-    doc_type: str = "text/plain"
-    doc_model: str = "text"
-    extension: str | None = None
+    """Reference pointing to a physical document on disk within a context."""
+
+    id: str = Field(description="Unique document identifier within the context.")
+    doc_type: str = Field(
+        "text/plain", description="MIME content type, defaults to 'text/plain'."
+    )
+    doc_model: str = Field(
+        "text", description="Document model type, defaults to 'text'."
+    )
+    extension: str | None = Field(None, description="Explicit file extension override.")
 
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def context(self) -> DocumentContext:
+        if isinstance(self.persistent, DocumentContext):
+            return self.persistent
+        raise DocumentReferenceError(f"Document out of context: '{self.id}'")
 
     @property
     def registry_doc_type(self) -> DocumentType:
@@ -149,7 +162,9 @@ class DocumentReference(BaseDatorumSettings):
 
 
 class DocumentContext(BaseDatorumPersistentSettings):
-    id: str
+    """Collection of managed document references and domain metadata."""
+
+    id: str = Field(description="Context scope identifier.")
     documents: dict[str, DocumentReference] = Field(default_factory=dict)
     domain_metadata: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
@@ -199,6 +214,7 @@ class DocumentContext(BaseDatorumPersistentSettings):
             id=id,
             doc_type=doc_type,
             doc_model=doc_model,
+            extension=extension,
         )
         self.documents[id] = document
         document._set_persistent_recursive(self)

@@ -1,10 +1,10 @@
 class DatorumBaseError(Exception):
-    """Base class for all Datorum errors."""
+    """Base exception class for all errors in the Datorum framework."""
 
 
 class SettingsError(DatorumBaseError):
-    """Settings related errors."""
+    """Raised when an error occurs during settings initialization or persistence."""
 
 
 class RegistryError(DatorumBaseError):
-    """Registry related errors."""
+    """Raised when registry lookup or registration operations fail."""

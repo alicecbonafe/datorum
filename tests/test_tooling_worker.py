@@ -133,7 +133,7 @@ def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
 
 def _make_worker(ctx: DocumentContext, toolkit: ToolKit) -> ToolWorker:
     binder = Binder()
-    binder.contexts[ctx.id] = ctx
+    binder.shared_context[ctx.id] = ctx
     worker = ToolWorker(binder=binder, toolkit=toolkit)
     return worker
 

@@ -10,6 +10,8 @@ from .exceptions import JobStatusError
 
 
 class Broadcaster:
+    """Asynchronous subscription channel broadcaster for streaming events."""
+
     def __init__(self):
         self.history: list[str] = []
         self.subscribers: list[asyncio.Queue] = []
@@ -43,6 +45,8 @@ class Broadcaster:
 
 
 class JobStatus(str, Enum):
+    """Job execution status enumeration."""
+
     IDLE = "idle"
     STARTING = "starting"
     WORKING = "working"
@@ -54,15 +58,48 @@ class JobStatus(str, Enum):
 
 
 class Job:
+    """Execution state and binding parameters for an asynchronous job unit.
+
+    A job is a runtime object defined by a set of bindings and an ID for a local
+    context. Bindings must meet the Worker's requirements, though some workers may allow
+    optional bindings. The local context definition enables the creation of delegated
+    jobs and, consequently, collaboration between workers. Once defined, the Job's state
+    can be monitored via Broadcasters.
+
+    Jobs also provide pause/resume control by managing state update concurrency:
+
+    * When a pause is requested, the state is updated to `JobStatus.PAUSING`.
+    * When the Worker attempts to update the state to `JobStatus.WORKING`, the state is
+      first updated to `JobStatus.PAUSED`, and execution enters a waiting state.
+    * When a resume is requested, the operation that changes the state to
+      `JobStatus.WORKING` is released.
+
+    This makes the process transparent to the Worker, avoiding forced interruptions that
+    could lead to data loss. Note that this is not a checkpoint, as the state is not
+    persisted. If the application is interrupted, paused Jobs are lost. Checkpoints are
+    implemented only for pipelines.
+
+    :param id: Job unique identifier.
+    :type id: str
+    :param context_bindings: Configured context bindings.
+    :type context_bindings: list[ContextBind], optional
+    :param resource_bindings: Configured resource bindings.
+    :type resource_bindings: list[ResourceBind], optional
+    :param local_context_id: Identifier for the local context to be used.
+    :type local_context_id: str, optional
+    """
+
     def __init__(
         self,
         id: str,
         context_bindings: list[ContextBind] | None = None,
         resource_bindings: list[ResourceBind] | None = None,
+        local_context_id: str | None = None,
     ):
         self.id: str = id
         self.context_bindings: list[ContextBind] = context_bindings or []
         self.resource_bindings: list[ResourceBind] = resource_bindings or []
+        self.local_context_id: str = local_context_id or id
 
         self.status: JobStatus = JobStatus.IDLE
         self.message: str = "Job created"
