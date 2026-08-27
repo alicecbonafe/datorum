@@ -35,7 +35,13 @@ def _resource_bind(field_id: str, factory_name: str, selector: str | None = None
 # ==============================================================================
 
 def test_human_interaction_step_defaults():
-    step = HumanInteractionStep(id="s1", interactive_document_id="chat_doc")
+    step = HumanInteractionStep(
+        id="s1",
+        interactive=ContextBind(
+            field_id="interactive",
+            binded_id="chat_doc",
+        ),
+    )
     assert step.type == "human"
     assert step.target_id is None
     assert step.description is None
@@ -82,7 +88,13 @@ def test_pipeline_defaults_and_discriminated_union_from_dicts():
             "in": {
                 "type": "human",
                 "id": "in",
-                "interactive_document_id": "doc1",
+                "interactive": {
+                    "field_id": "interactive",
+                    "binded_id": "doc1",
+                    "context": None,
+                    "context_bind_type": "model",
+                    "local": False,
+                }
             },
             "decide": {
                 "type": "decision",
@@ -188,7 +200,14 @@ def test_pipe_flow_save_does_not_overwrite_existing_finished_at(tmp_path: Path):
 
 
 def test_pipe_flow_roundtrip_load(tmp_path: Path):
-    step = HumanInteractionStep(id="in", interactive_document_id="chat_history", target_id=None)
+    step = HumanInteractionStep(
+        id="in",
+        interactive=ContextBind(
+            field_id="interactive",
+            binded_id="chat_history",
+        ),
+        target_id=None,
+    )
     pipeline = Pipeline(id="pipe1", steps={"in": step}, first_step_id="in")
     flow = PipeFlow(id="flow1", pipeline=pipeline, state=PipeFlowState.started, current_step_id="in")
     flow.save_as(tmp_path / "flow1.yml")

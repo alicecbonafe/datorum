@@ -38,6 +38,9 @@ from datorum.work.job import Job, JobStatus
 # Fixtures / helpers
 # ==============================================================================
 
+def _interactive_bind(doc_id: str = "doc1", ctx: str | None = None) -> ContextBind:
+    return ContextBind(field_id="interactive", binded_id=doc_id, context=ctx)
+
 def _make_context(tmp_path: Path, ctx_id: str = "ctx1") -> DocumentContext:
     ctx = DocumentContext(id=ctx_id)
     ctx.save_as(tmp_path / f"{ctx_id}.yml")
@@ -452,7 +455,7 @@ async def test_work_unknown_step_raises(tmp_path):
 async def test_work_recovers_non_planning_flow(tmp_path):
     """When a flow is restored mid-flight (state != planning), work() should
     resume from `current_step_id` rather than reset to `first_step_id`."""
-    step = HumanInteractionStep(id="only", interactive_document_id="doc1")
+    step = HumanInteractionStep(id="only", interactive=_interactive_bind("doc1"))
     pipeline = Pipeline(id="pipe1", first_step_id="unused", steps={"only": step})
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
@@ -497,7 +500,7 @@ async def test_work_active_flow_tracked_and_released(tmp_path):
 
 @pytest.mark.asyncio
 async def test_work_rejects_concurrent_run_of_same_pipeflow(tmp_path):
-    step = HumanInteractionStep(id="in", interactive_document_id="doc1", interactive_document_context=None)
+    step = HumanInteractionStep(id="in", interactive=_interactive_bind("doc1"))
     pipeline = Pipeline(id="pipe1", first_step_id="in", steps={"in": step})
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
@@ -523,7 +526,7 @@ async def test_work_rejects_concurrent_run_of_same_pipeflow(tmp_path):
 
 @pytest.mark.asyncio
 async def test_work_human_interaction_step_pauses_then_resumes(tmp_path):
-    step = HumanInteractionStep(id="in", interactive_document_id="doc1", interactive_document_context=None)
+    step = HumanInteractionStep(id="in", interactive=_interactive_bind("doc1"))
     pipeline = Pipeline(id="pipe1", first_step_id="in", steps={"in": step})
     worker = _make_pipeline_worker(
         tmp_path, plumbingkit=PlumbingKit(pipelines={"pipe1": pipeline})
@@ -680,7 +683,7 @@ async def test_work_decision_step_success_with_model_input(tmp_path, monkeypatch
         code="input_data['score'] > 5",
     )
     route_a = HumanInteractionStep(
-        id="route_a", interactive_document_id="doc1", interactive_document_context=None,
+        id="route_a", interactive=_interactive_bind("doc1"),
     )
     pipeline = Pipeline(
         id="pipe1", first_step_id="decide",
@@ -808,7 +811,7 @@ async def test_work_decision_step_real_subprocess_execution(tmp_path):
         code="'big' if input_data['score'] > 5 else 'small'",
     )
     big = HumanInteractionStep(
-        id="big", interactive_document_id="doc1", interactive_document_context=None,
+        id="big", interactive=_interactive_bind("doc1"),
     )
     pipeline = Pipeline(
         id="pipe1", first_step_id="decide",
