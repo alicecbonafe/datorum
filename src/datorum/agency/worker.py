@@ -98,11 +98,29 @@ class AgentWorker(Worker):
             return self.get_role(role_id)
 
     def get_role(self, role_id: str) -> AgentRole:
+        """Look up a configured agent role by ID.
+
+        :param role_id: Role identifier.
+        :type role_id: str
+        :returns: The matching `AgentRole`.
+        :rtype: AgentRole
+        :raises AgentWorkerError: If no role with that ID is configured.
+        """
+
         if role_id not in self.agencykit.roles:
             raise AgentWorkerError(f"Role not found: '{role_id}'")
         return self.agencykit.roles[role_id]
 
     def get_provider(self, provider_id: str) -> InferenceServiceProvider:
+        """Look up a configured inference provider by ID.
+
+        :param provider_id: Provider identifier.
+        :type provider_id: str
+        :returns: The matching `InferenceServiceProvider`.
+        :rtype: InferenceServiceProvider
+        :raises AgentWorkerError: If no provider with that ID is configured.
+        """
+
         if provider_id not in self.agencykit.providers:
             raise AgentWorkerError(f"Provider not found: '{provider_id}'")
         return self.agencykit.providers[provider_id]
@@ -110,6 +128,15 @@ class AgentWorker(Worker):
     def get_preferred_provider(
         self, preferred_models: list[str]
     ) -> InferenceServiceProvider:
+        """Find the first configured provider offering one of the preferred models.
+
+        :param preferred_models: Model names, in order of preference.
+        :type preferred_models: list[str]
+        :returns: The first matching `InferenceServiceProvider`.
+        :rtype: InferenceServiceProvider
+        :raises AgentWorkerError: If no configured provider offers any of the models.
+        """
+
         for model in preferred_models:
             for provider in self.agencykit.providers.values():
                 if model in provider.models:
@@ -310,6 +337,19 @@ class AgentWorker(Worker):
         return message, response_meta
 
     async def work(self, job: Job):
+        """Run one agent turn: request inference, then dispatch any resulting tool calls.
+
+        Loops up to `role.tool_max_iter` times, delegating each tool call to
+        `tool_worker` as a sub-job, until the model responds without requesting more
+        tool calls.
+
+        :param job: Job carrying the `chat_history` context binding and
+            `inference_provider`/`agent_role` resource bindings.
+        :type job: Job
+        :raises AgentWorkerError: If `chat_history` isn't bound as a model, the chat
+            history is empty, or no model/provider can be resolved for the role.
+        """
+
         await job.update_status(JobStatus.WORKING, "Collecting agent resources")
 
         role_bind: ResourceBind = next(
