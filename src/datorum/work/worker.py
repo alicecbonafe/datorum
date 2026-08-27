@@ -32,7 +32,7 @@ class Worker(ABC):
       concurrency. It is generally used by other Workers with `await` to execute
       sub-jobs within the same operation (and using the same Binder).
 
-    :param binder: Binder instance used for state and resource loading.
+    :param binder: Binder instance used for context and resource loading.
     :type binder: Binder
     """
 

@@ -82,9 +82,11 @@ class Job:
     :param id: Job unique identifier.
     :type id: str
     :param context_bindings: Configured context bindings.
-    :type context_bindings: list[ContextBind]
+    :type context_bindings: list[ContextBind], optional
     :param resource_bindings: Configured resource bindings.
-    :type resource_bindings: list[ResourceBind]
+    :type resource_bindings: list[ResourceBind], optional
+    :param local_context_id: Identifier for the local context to be used.
+    :type local_context_id: str, optional
     """
 
     def __init__(

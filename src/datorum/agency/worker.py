@@ -61,6 +61,13 @@ class AgentWorker(Worker):
     limit the number of tool calls. For instance, this allows a smaller model to be
     forced to use tools for one or two iterations, effectively preparing the context for
     a more capable model.
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    :param agencykit: Collection of settings defining providers and roles.
+    :type agencykit: AgencyKit
+    :param tool_worker: Responsible for delegated tool jobs.
+    :type tool_worker: ToolWorker
     """
 
     required_context_binds: ClassVar[list[str]] = ["chat_history"]

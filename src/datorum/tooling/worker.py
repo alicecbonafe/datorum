@@ -44,10 +44,15 @@ class ToolWorker(Worker):
     `field_id == "tool_result"`. 
 
     Note that when "tool_params" is a `ChatHistory`, the Worker retrieves the tool
-    parameters from the tool calls within the latest `AssistantMessage`.Similarly, when
+    parameters from the tool calls within the latest `AssistantMessage`. Similarly, when
     "tool_result" is a `ChatHistory`, the Worker saves the result by appending a
     `ToolMessage` to the end of the message list. This means it is possible to directly
     plug in a `ChatHistory` to enable tool execution by AI agents as well.
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    :param toolkit: Collection of toolbox setups available to the worker.
+    :type toolkit: ToolKit
     """
 
     required_context_binds: ClassVar[list[str]] = ["tool_params", "tool_result"]

@@ -81,18 +81,29 @@ def _run_code(
 
 class PipelineWorker(Worker):
     """Worker executing pipelines step-by-step.
-    
-    Um Pipeline Worker é responsável por criar, recuperar e executar pipe flows.
 
-    A execução de pipe flows se dá em um loop de steps.
-    Cada step pode ser de um entre os quatro tipos:
+    A Pipeline Worker is responsible for creating, retrieving, and executing pipe flows.
 
-    - `ToolStep`: Delega ao `tool_worker` a execução de uma ferramenta.
-    - `AgentStep`: Delega ao `agent_worker` a requisição de uma inferência.
-    - `HumanStep`: Suspende a execução, aguardando que o usuário edite o documento de interação (HITL).
-    - `DecisionStep`: Executa de forma segura o código configurado para determinar o próximo passo.
-      O código é executado com `eval` de for definido como `formula` ou com `exec` se for definido como `snippet`.
-      O worker verifica se o resultado da execução é um target válido e altera o `target_id`.
+    Pipe flow execution proceeds through a loop of steps. Each step can be one of four
+    types:
+
+    - `ToolStep`: Delegates tool execution to the `tool_worker`. 
+    - `AgentStep`: Delegates an inference request to the `agent_worker`. 
+    - `HumanInteractionStep`: Suspends execution, waiting for the user to edit the
+      interaction document (HITL). 
+    - `DecisionStep`: Safely executes configured code to determine the next step. The
+      code is executed using `eval` if defined as `formula`, or `exec` if defined as
+      `snippet`. The worker verifies whether the execution result is a valid target and
+      updates the `target_id`.
+
+    :param binder: Binder instance used for context and resource loading.
+    :type binder: Binder
+    :param plumbingkit: Collection of pipeline definitions.
+    :type plumbingkit: PlumbingKit
+    :param agent_worker: Responsible for delegated agent jobs.
+    :type agent_worker: AgentWorker
+    :param tool_worker: Responsible for delegated tool jobs.
+    :type tool_worker: ToolWorker
     """
 
     def __init__(

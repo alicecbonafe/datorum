@@ -22,6 +22,13 @@ class BindingSyntaxError(datorum.DatorumBaseError):
 
 
 class CliAppContext:
+    """Runtime context for the CLI application.
+
+    It provides a shared binder and one worker of each type, all via lazy loading.
+
+    :param settings_path: Path for the CLI application settings file.
+    :type settings_path: pathlib.Path
+    """
     def __init__(self, settings_path: Path):
         self.settings = CliAppSettings()
         self.settings.settings_path = settings_path

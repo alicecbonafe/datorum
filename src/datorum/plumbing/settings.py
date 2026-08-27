@@ -40,9 +40,7 @@ class ToolStep(BasePipelineStep):
 
 
 class AgentStep(BasePipelineStep):
-    """Pipeline step executing an agent turn.
-    
-    """
+    """Pipeline step executing an agent turn."""
 
     type: Literal["agent"] = "agent"
 

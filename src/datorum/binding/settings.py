@@ -86,24 +86,22 @@ class ContextBind(BaseDatorumSettings):
 
     When `local` is `True`, the information is handled in the local context after
     being copied from the shared context upon first use.
-
-    :param field_id: Target field identifier.
-    :type field_id: str
-    :param binded_id: Source document or domain ID.
-    :type binded_id: str
-    :param context: Context ID filter
-    :type context: str | list[str] | None, optional
-    :param context_bind_type: Type mode, defaults to ContextBindType.model.
-    :type context_bind_type: ContextBindType
-    :param local: Whether binding is local context scoped, defaults to False.
-    :type local: bool
     """
 
-    field_id: str
-    binded_id: str
-    context: str | list[str] | None = Field(default=None)
-    context_bind_type: ContextBindType = Field(default=ContextBindType.model)
-    local: bool = False
+    field_id: str = Field(description="Target field identifier.")
+    binded_id: str = Field(description="Source document or domain ID.")
+    context: str | list[str] | None = Field(
+        default=None,
+        description="Context ID filter.",
+    )
+    context_bind_type: ContextBindType = Field(
+        default=ContextBindType.model,
+        description="Type mode, defaults to 'ContextBindType.model'."
+    )
+    local: bool = Field(
+        default=False,
+        description="Whether binding is local context scoped, defaults to False.",
+    )
 
 
 class ResourceBind(BaseDatorumSettings):
@@ -111,15 +109,11 @@ class ResourceBind(BaseDatorumSettings):
 
     Allows associating runtime resources (such as API key resolution) with a specific
     field to be used by the Worker.
-
-    :param field_id: Field identifier.
-    :type field_id: str
-    :param factory_name: Resource factory name.
-    :type factory_name: str
-    :param selector: Resource selector query, defaults to None.
-    :type selector: str | None, optional
     """
 
-    field_id: str
-    factory_name: str
-    selector: str | None = None
+    field_id: str = Field(description="Field identifier.")
+    factory_name: str = Field(description="Resource factory name.")
+    selector: str | None = Field(
+        default=None,
+        description="Resource selector query, defaults to None.",
+    )
