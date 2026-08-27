@@ -21,18 +21,32 @@ from .registry import (
 
 
 class DocumentReference(BaseDatorumSettings):
-    """Reference pointing to a physical document on disk within a context."""
+    """Reference pointing to a physical document on disk within a context.
+
+    The `id` doubles as the document's dotted path within the context: leading
+    segments become domain folders and the last segment becomes the file's base name.
+    The file's on-disk extension is resolved from `extension` when set, or otherwise
+    inferred from the registered `DocumentType` for `doc_type`.
+    """
 
     id: str = Field(description="Unique document identifier within the context.")
     doc_type: str = Field(
-        "text/plain", description="MIME content type, defaults to 'text/plain'."
+        default="text/plain",
+        description="MIME content type, defaults to 'text/plain'.",
     )
     doc_model: str = Field(
-        "text", description="Document model type, defaults to 'text'."
+        default="text",
+        description="Document model type, defaults to 'text'.",
     )
-    extension: str | None = Field(None, description="Explicit file extension override.")
+    extension: str | None = Field(
+        default=None,
+        description="Explicit file extension override."
+    )
 
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arbitrary user-defined metadata associated with the document.",
+    )
 
     @property
     def context(self) -> DocumentContext:
@@ -105,6 +119,14 @@ class DocumentReference(BaseDatorumSettings):
         return domain_list, base_name, extension
 
     def load(self) -> Any:
+        """Read and deserialize the document from disk.
+
+        :returns: Deserialized document data, typed per the registered doc model.
+        :rtype: Any
+        :raises DocumentReadingError: If the file is missing or no deserializer is
+            registered for the document's `doc_type`/`doc_model` pair.
+        """
+
         doc_path = self.doc_path
         if not doc_path.exists():
             raise DocumentReadingError(
@@ -119,9 +141,20 @@ class DocumentReference(BaseDatorumSettings):
         return handler.deserializer(doc_path)
 
     def save(self, data: Any) -> Path:
+        """Serialize and write `data` to disk at this reference's document path.
+
+        :param data: Instance of the document's registered model class to persist.
+        :type data: Any
+        :returns: Path the document was written to.
+        :rtype: pathlib.Path
+        :raises DocumentReferenceError: If `data` isn't an instance of the registered doc model class.
+        :raises DocumentWritingError: If no serializer is registered for the document's
+            `doc_type`/`doc_model` pair.
+        """
+
         expected_type = self.registry_doc_model.clazz
         if not isinstance(data, expected_type):
-            raise TypeError(
+            raise DocumentReferenceError(
                 f"Expected instance of {expected_type.__name__} for doc_model "
                 f"'{self.doc_model}', got {type(data).__name__}"
             )
@@ -138,6 +171,19 @@ class DocumentReference(BaseDatorumSettings):
         return doc_path
 
     def copy_to(self, target: DocumentReference) -> DocumentReference:
+        """Copy this document's content to another reference's location.
+
+        When both references share the same `doc_type`, the underlying file is copied
+        directly; otherwise the source is loaded and re-serialized through `target`.
+
+        :param target: Destination document reference. Must share this reference's `doc_model`.
+        :type target: DocumentReference
+        :returns: The `target` reference, for chaining.
+        :rtype: DocumentReference
+        :raises DocumentWritingError: If `doc_model` differs between the two references,
+            or the source file doesn't exist.
+        """
+
         if self.doc_model != target.doc_model:
             raise DocumentWritingError(
                 f"Cannot copy a '{self.doc_model}' to '{target.doc_model}'"
@@ -162,11 +208,22 @@ class DocumentReference(BaseDatorumSettings):
 
 
 class DocumentContext(BaseDatorumPersistentSettings):
-    """Collection of managed document references and domain metadata."""
+    """Collection of managed document references and domain metadata.
+
+    A context is the persistent, shared knowledge base a `Binder` resolves context
+    bindings against; `Binder` also creates smaller, per-job local contexts by copying
+    documents out of a shared context on demand.
+    """
 
     id: str = Field(description="Context scope identifier.")
-    documents: dict[str, DocumentReference] = Field(default_factory=dict)
-    domain_metadata: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    documents: dict[str, DocumentReference] = Field(
+        default_factory=dict,
+        description="Document references managed within this context, keyed by ID.",
+    )
+    domain_metadata: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Arbitrary metadata keyed by domain name.",
+    )
 
     _base_path: Path | None = PrivateAttr(default=None)
 
@@ -181,26 +238,67 @@ class DocumentContext(BaseDatorumPersistentSettings):
         self._base_path = value
 
     def knows_domain(self, domain: str) -> bool:
+        """Check whether a domain has metadata or at least one document in it.
+
+        :param domain: Dotted domain name.
+        :type domain: str
+        :returns: True if the domain has metadata registered or any document whose ID
+            is prefixed with it.
+        :rtype: bool
+        """
+
         if domain in self.domain_metadata:
             return True
 
         return any(doc.startswith(f"{domain}.") for doc in self.documents)
 
     def get_domain_path(self, domain: str) -> Path:
+        """Resolve the on-disk folder path corresponding to a domain.
+
+        :param domain: Dotted domain name.
+        :type domain: str
+        :returns: Path to the domain's folder under `base_path`.
+        :rtype: pathlib.Path
+        """
+
         domain_path = self.base_path
         for step in domain.split("."):
             domain_path /= step
         return domain_path
 
     def get_domain_metadata(self, domain: str) -> dict[str, Any] | None:
+        """Retrieve the metadata dict registered for a domain, if any.
+
+        :param domain: Dotted domain name.
+        :type domain: str
+        :returns: Metadata dict, or None if the domain has no metadata registered.
+        :rtype: dict[str, Any] | None
+        """
+
         if domain not in self.domain_metadata:
             return None
         return self.domain_metadata[domain]
 
     def set_domain_metadata(self, domain: str, metadata: dict[str, Any]):
+        """Set (replacing) the metadata dict for a domain.
+
+        :param domain: Dotted domain name.
+        :type domain: str
+        :param metadata: Metadata to store; a shallow copy is kept.
+        :type metadata: dict[str, Any]
+        """
+
         self.domain_metadata[domain] = metadata.copy()
 
     def get_document(self, id: str) -> DocumentReference | None:
+        """Retrieve a managed document reference by ID.
+
+        :param id: Document identifier.
+        :type id: str
+        :returns: The matching `DocumentReference`, or None if not found.
+        :rtype: DocumentReference | None
+        """
+
         return self.documents.get(id)
 
     def create_document(
@@ -210,6 +308,20 @@ class DocumentContext(BaseDatorumPersistentSettings):
         doc_model: str = "text",
         extension: str | None = None,
     ) -> DocumentReference:
+        """Create, register, and return a new document reference in this context.
+
+        :param id: Document identifier, also used to derive its on-disk path.
+        :type id: str
+        :param doc_type: MIME content type, defaults to 'text/plain'.
+        :type doc_type: str, optional
+        :param doc_model: Document model type, defaults to 'text'.
+        :type doc_model: str, optional
+        :param extension: Explicit file extension override, defaults to None.
+        :type extension: str | None, optional
+        :returns: The newly created and registered `DocumentReference`.
+        :rtype: DocumentReference
+        """
+
         document = DocumentReference(
             id=id,
             doc_type=doc_type,
@@ -221,6 +333,14 @@ class DocumentContext(BaseDatorumPersistentSettings):
         return document
 
     def drop_document(self, id: str, remove_file: bool = False):
+        """Unregister a document reference from this context.
+
+        :param id: Document identifier to remove.
+        :type id: str
+        :param remove_file: Whether to also delete the file on disk, defaults to False.
+        :type remove_file: bool, optional
+        """
+
         if remove_file:
             doc_path = self.documents[id].doc_path
             if doc_path.exists():
