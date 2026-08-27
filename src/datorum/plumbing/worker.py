@@ -80,7 +80,20 @@ def _run_code(
 
 
 class PipelineWorker(Worker):
-    """Worker executing pipelines step-by-step."""
+    """Worker executing pipelines step-by-step.
+    
+    Um Pipeline Worker é responsável por criar, recuperar e executar pipe flows.
+
+    A execução de pipe flows se dá em um loop de steps.
+    Cada step pode ser de um entre os quatro tipos:
+
+    - `ToolStep`: Delega ao `tool_worker` a execução de uma ferramenta.
+    - `AgentStep`: Delega ao `agent_worker` a requisição de uma inferência.
+    - `HumanStep`: Suspende a execução, aguardando que o usuário edite o documento de interação (HITL).
+    - `DecisionStep`: Executa de forma segura o código configurado para determinar o próximo passo.
+      O código é executado com `eval` de for definido como `formula` ou com `exec` se for definido como `snippet`.
+      O worker verifica se o resultado da execução é um target válido e altera o `target_id`.
+    """
 
     def __init__(
         self,

@@ -22,7 +22,33 @@ from .settings import ToolBoxSetUp, ToolKit
 
 
 class ToolWorker(Worker):
-    """Worker specialized in the use of tools."""
+    """Worker specialized in the use of tools.
+
+    A Tool Worker utilizes tools defined in its `ToolKit`, using a set of parameters
+    defined in the context.
+
+    The `ToolKit` containing `ToolBoxSetUps` is defined in the Worker's constructor,
+    making it available to `Jobs` as a binded resource. The binding for this resource
+    must have `field_id == "toolbox_setup"` and a selector composed of the toolbox
+    setup ID followed by the tool name, separated by a dot.
+
+    Before executing the tool, the Worker checks the context and resource fields,
+    requesting the Binder to resolve the bindings declared in the setup. This allows the
+    setup, defined in the settings, to have its behavior pre-customized by context
+    documents. 
+
+    The Worker then reads the tool parameters by resolving the context binding defined
+    by `field_id == "tool_params"`. These parameters are prepared for the tool according
+    to the method signature. After using the tool, the Worker saves the resulting output
+    to the document resolved via the context binding defined by
+    `field_id == "tool_result"`. 
+
+    Note that when "tool_params" is a `ChatHistory`, the Worker retrieves the tool
+    parameters from the tool calls within the latest `AssistantMessage`.Similarly, when
+    "tool_result" is a `ChatHistory`, the Worker saves the result by appending a
+    `ToolMessage` to the end of the message list. This means it is possible to directly
+    plug in a `ChatHistory` to enable tool execution by AI agents as well.
+    """
 
     required_context_binds: ClassVar[list[str]] = ["tool_params", "tool_result"]
     required_resource_binds: ClassVar[list[str]] = ["toolbox_setup"]

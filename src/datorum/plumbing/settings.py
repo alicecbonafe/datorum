@@ -40,7 +40,9 @@ class ToolStep(BasePipelineStep):
 
 
 class AgentStep(BasePipelineStep):
-    """Pipeline step executing an agent turn."""
+    """Pipeline step executing an agent turn.
+    
+    """
 
     type: Literal["agent"] = "agent"
 
@@ -62,7 +64,13 @@ class DecisionStep(BasePipelineStep):
 
 
 class Pipeline(BaseDatorumSettings):
-    """Workflow pipeline containing ordered execution steps."""
+    """Workflow pipeline containing ordered execution steps.
+
+    A pipeline centralizes the settings for an entire chain of steps via the `target_id`
+    field of each step, which serves as the reference for the next step. When the step
+    is a `DecisionStep`, the target ID is dynamically modified based on a document from
+    the context.
+    """
 
     id: str
     description: str | None = None
@@ -88,7 +96,14 @@ class PipeFlowState(str, Enum):
 
 
 class PipeFlow(BaseDatorumPersistentSettings):
-    """Persistent runtime state instance of a pipeline flow."""
+    """Persistent runtime state instance of a pipeline flow.
+
+    This class represents a pipeline flow, including its current state, enabling it to
+    be resumed, much like a checkpointing mechanism.
+
+    The pipe flow also maintains a copy of the original pipeline. This allows for manual
+    modification of a pipeline that has already started, without affecting the original.
+    """
 
     id: str
     pipeline: Pipeline
@@ -115,6 +130,9 @@ class PipeFlow(BaseDatorumPersistentSettings):
 
 
 class PlumbingKit(BaseDatorumPersistentSettings):
-    """Persistent configuration structure managing registered pipeline workflows."""
+    """Persistent configuration structure managing registered pipeline workflows.
+
+    In practice, pipelines in this class serve as templates for use in `PipeFlow`.
+    """
 
     pipelines: dict[str, Pipeline] = Field(default_factory=dict)

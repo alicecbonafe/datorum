@@ -31,7 +31,37 @@ from .settings import (
 
 
 class AgentWorker(Worker):
-    """Worker handling agent execution loops and tool delegate invocations."""
+    """Worker handling agent execution loops and tool delegate invocations.
+
+    An Agent Worker associates with a `ChatHistory` to request an inference from a
+    provider.
+
+    The Agent Worker utilizes a `ToolWorker` to enable tool calls by the model. This is
+    considered a single operation that shares the local context. Thus, the `ChatHistory`
+    can (and likely should) be defined as a local context.
+
+    The provider from which inference is requested is defined by the resource bind with
+    `field_id == "inference_provider"`. Each provider defines, at the settings level, a
+    selector to resolve the API key as a runtime resource, by the factory named
+    `api_key`. If this selector is absent, the provider ID itself is assumed to be the
+    selector. 
+
+    The agent role is defined by the resource bind with `field_id == "agent_role"`. Each
+    role has a list of preferred models, ordered by preference. The Worker searches for
+    each preferred model within the provider's model list. The role also defines
+    parameters such as temperature, top-p, and max tokens.
+
+    Each role includes a `system_instructions` field, though it is not used directly by
+    the Worker. The purpose of this field is to provide a configurable foundation for
+    tools that construct the `ChatHistory`. This allows instructions to be modified
+    based on the model, thereby better leveraging its capabilities.
+
+    The role also defines the agent's behavior regarding tool usage. It is possible to
+    restrict which tools are available to the model, force the model to call tools, and
+    limit the number of tool calls. For instance, this allows a smaller model to be
+    forced to use tools for one or two iterations, effectively preparing the context for
+    a more capable model.
+    """
 
     required_context_binds: ClassVar[list[str]] = ["chat_history"]
     required_resource_binds: ClassVar[list[str]] = ["inference_provider", "agent_role"]
