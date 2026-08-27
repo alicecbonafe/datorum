@@ -35,13 +35,13 @@ class ToolWorker(Worker):
     Before executing the tool, the Worker checks the context and resource fields,
     requesting the Binder to resolve the bindings declared in the setup. This allows the
     setup, defined in the settings, to have its behavior pre-customized by context
-    documents. 
+    documents.
 
     The Worker then reads the tool parameters by resolving the context binding defined
     by `field_id == "tool_params"`. These parameters are prepared for the tool according
     to the method signature. After using the tool, the Worker saves the resulting output
     to the document resolved via the context binding defined by
-    `field_id == "tool_result"`. 
+    `field_id == "tool_result"`.
 
     Note that when "tool_params" is a `ChatHistory`, the Worker retrieves the tool
     parameters from the tool calls within the latest `AssistantMessage`. Similarly, when

@@ -18,7 +18,7 @@ def cli_command(name=None, load_settings: bool = True, **click_kwargs):
 
 class BaseCommandGroup(click.Group):
     """Base Group that automatically registers commands for methods decorated with `cli_command`.
-    
+
     :param name: Group name, passed to `click.Group` constructor.
     :type name: str, optional
     """

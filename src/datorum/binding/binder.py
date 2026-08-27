@@ -35,7 +35,7 @@ class Binder:
     * Maintaining shared contexts and creating local contexts for operations when
       necessary.
     * Automatically resolving shared and local documents, copying them from the shared
-      context when required. 
+      context when required.
 
     Additionally, Binder maintains resource factories to enable isolation during
     resource resolution. When a factory is not found in the local registry, Binder

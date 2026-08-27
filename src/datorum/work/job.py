@@ -64,15 +64,15 @@ class Job:
     context. Bindings must meet the Worker's requirements, though some workers may allow
     optional bindings. The local context definition enables the creation of delegated
     jobs and, consequently, collaboration between workers. Once defined, the Job's state
-    can be monitored via Broadcasters. 
+    can be monitored via Broadcasters.
 
     Jobs also provide pause/resume control by managing state update concurrency:
 
-    * When a pause is requested, the state is updated to `JobStatus.PAUSING`. 
+    * When a pause is requested, the state is updated to `JobStatus.PAUSING`.
     * When the Worker attempts to update the state to `JobStatus.WORKING`, the state is
-      first updated to `JobStatus.PAUSED`, and execution enters a waiting state. 
+      first updated to `JobStatus.PAUSED`, and execution enters a waiting state.
     * When a resume is requested, the operation that changes the state to
-      `JobStatus.WORKING` is released. 
+      `JobStatus.WORKING` is released.
 
     This makes the process transparent to the Worker, avoiding forced interruptions that
     could lead to data loss. Note that this is not a checkpoint, as the state is not

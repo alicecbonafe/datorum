@@ -31,7 +31,9 @@ class HumanInteractionStep(BasePipelineStep):
         description="Step discriminator, always 'human'.",
     )
 
-    interactive: ContextBind = Field(description="Context binding supplying the document the user is asked to edit.")
+    interactive: ContextBind = Field(
+        description="Context binding supplying the document the user is asked to edit."
+    )
 
     # DEPRECATED:
     # interactive_document_id: str = Field(description="ID of the document the user is asked to edit.")
@@ -49,9 +51,15 @@ class ToolStep(BasePipelineStep):
         description="Step discriminator, always 'tool'.",
     )
 
-    tool_params: ContextBind = Field(description="Context binding supplying the tool's parameters.")
-    tool_result: ContextBind = Field(description="Context binding the tool's result is written to.")
-    toolbox_setup: ResourceBind = Field(description="Resource binding selecting the toolbox setup and tool to run.")
+    tool_params: ContextBind = Field(
+        description="Context binding supplying the tool's parameters."
+    )
+    tool_result: ContextBind = Field(
+        description="Context binding the tool's result is written to."
+    )
+    toolbox_setup: ResourceBind = Field(
+        description="Resource binding selecting the toolbox setup and tool to run."
+    )
 
     custom_context: list[ContextBind] = Field(
         default_factory=list,
@@ -71,9 +79,15 @@ class AgentStep(BasePipelineStep):
         description="Step discriminator, always 'agent'.",
     )
 
-    chat_history: ContextBind = Field(description="Context binding for the agent turn's chat history.")
-    inference_provider: ResourceBind = Field(description="Resource binding selecting the inference provider.")
-    agent_role: ResourceBind = Field(description="Resource binding selecting the agent role.")
+    chat_history: ContextBind = Field(
+        description="Context binding for the agent turn's chat history."
+    )
+    inference_provider: ResourceBind = Field(
+        description="Resource binding selecting the inference provider."
+    )
+    agent_role: ResourceBind = Field(
+        description="Resource binding selecting the agent role."
+    )
 
 
 class DecisionStep(BasePipelineStep):
@@ -97,7 +111,9 @@ class DecisionStep(BasePipelineStep):
         description="Restricted Python code determining the next `target_id`.",
     )
 
-    input_data: ContextBind = Field(description="Context binding supplying the data the decision code runs against.")
+    input_data: ContextBind = Field(
+        description="Context binding supplying the data the decision code runs against."
+    )
 
 
 class Pipeline(BaseDatorumSettings):
@@ -152,7 +168,9 @@ class PipeFlow(BaseDatorumPersistentSettings):
     """
 
     id: str = Field(description="Flow instance identifier.")
-    pipeline: Pipeline = Field(description="Working copy of the pipeline this flow is executing.")
+    pipeline: Pipeline = Field(
+        description="Working copy of the pipeline this flow is executing."
+    )
 
     state: PipeFlowState = Field(
         default=PipeFlowState.planning,

@@ -7,7 +7,7 @@ from ..core.settings import BaseDatorumSettings
 
 class ContextBindType(str, Enum):
     """Enumeration of context binding modes and target access restrictions.
-    
+
     This enumeration defines how the target is to be handled and the direction allowed
     by the binding.
 
@@ -22,15 +22,15 @@ class ContextBindType(str, Enum):
     * **Path**: The path to the file referenced by the document, or to the folder
       corresponding to a domain within a context. These are items ending in `-path`.
     * **Metadata**: Metadata for a document or domain. These are items ending in
-      `-metadata`. 
+      `-metadata`.
 
     The binding can allow the following directions:
 
     * **Input**: Used for inputting information to the Worker; treated as read-only.
-      These are items ending in `-input` and `-path`. 
+      These are items ending in `-input` and `-path`.
     * **Output**: Used for outputting information from the Worker; treated as
       write-only. Useful when the file's prior existence on disk is uncertain. These are
-      items ending in `-output`. 
+      items ending in `-output`.
     * **Both**: Accessed for both reading and writing. These are items with no specific
       suffix or those ending in `-metadata`.
 
@@ -96,7 +96,7 @@ class ContextBind(BaseDatorumSettings):
     )
     context_bind_type: ContextBindType = Field(
         default=ContextBindType.model,
-        description="Type mode, defaults to 'ContextBindType.model'."
+        description="Type mode, defaults to 'ContextBindType.model'.",
     )
     local: bool = Field(
         default=False,

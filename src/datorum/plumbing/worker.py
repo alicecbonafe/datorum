@@ -19,7 +19,7 @@ from RestrictedPython.Guards import (
 
 from ..agency.worker import AgentWorker
 from ..binding.binder import Binder
-from ..binding.settings import ContextBind, ContextBindType, ResourceBind
+from ..binding.settings import ResourceBind
 from ..tooling.worker import ToolWorker
 from ..work.job import Job, JobStatus
 from ..work.worker import Worker
@@ -87,10 +87,10 @@ class PipelineWorker(Worker):
     Pipe flow execution proceeds through a loop of steps. Each step can be one of four
     types:
 
-    - `ToolStep`: Delegates tool execution to the `tool_worker`. 
-    - `AgentStep`: Delegates an inference request to the `agent_worker`. 
+    - `ToolStep`: Delegates tool execution to the `tool_worker`.
+    - `AgentStep`: Delegates an inference request to the `agent_worker`.
     - `HumanInteractionStep`: Suspends execution, waiting for the user to edit the
-      interaction document (HITL). 
+      interaction document (HITL).
     - `DecisionStep`: Safely executes configured code to determine the next step. The
       code is executed using `eval` if defined as `formula`, or `exec` if defined as
       `snippet`. The worker verifies whether the execution result is a valid target and

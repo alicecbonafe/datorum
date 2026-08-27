@@ -256,7 +256,9 @@ class ToolDefinition(BaseModel):
     """Tool descriptor ready for the inference API."""
 
     name: str = Field(description="Tool name.")
-    function: FunctionDefinition = Field(description="Function descriptor for this tool.")
+    function: FunctionDefinition = Field(
+        description="Function descriptor for this tool."
+    )
 
     _returns: type[BaseModel] | type[str] = PrivateAttr(default=str)
 
@@ -270,29 +272,29 @@ class ToolDefinition(BaseModel):
 
     type: Literal["function"] = Field(
         default="function",
-        description="Tool discriminator, always 'function' (OpenAI API protocol compatibility)."
+        description="Tool discriminator, always 'function' (OpenAI API protocol compatibility).",
     )
 
 
 class BaseToolBoxField(BaseModel):
     """Base field specification for toolbox bindings."""
 
-    field_type: str = Field(description="Binding kind discriminator ('context' or 'resource').")
+    field_type: str = Field(
+        description="Binding kind discriminator ('context' or 'resource')."
+    )
     name: str | None = Field(
-        default=None,
-        description="Field name as exposed on the toolbox definition."
+        default=None, description="Field name as exposed on the toolbox definition."
     )
     attr_name: str | None = Field(
         default=None,
-        description="Name of the attribute this field binds to on the toolbox instance."
+        description="Name of the attribute this field binds to on the toolbox instance.",
     )
     description: str | None = Field(
-        default=None,
-        description="Human-readable description of the field."
+        default=None, description="Human-readable description of the field."
     )
     required: bool | None = Field(
         default=None,
-        description="Whether the field must be bound, defaults to inferring from the attribute's type hint."
+        description="Whether the field must be bound, defaults to inferring from the attribute's type hint.",
     )
 
 
@@ -300,12 +302,11 @@ class ContextField(BaseToolBoxField):
     """Toolbox context bindable field."""
 
     field_type: Literal["context"] = Field(
-        default="context",
-        description="Binding kind discriminator, always 'context'."
+        default="context", description="Binding kind discriminator, always 'context'."
     )
     context_bind_type: ContextBindType = Field(
         default=ContextBindType.model,
-        description="Expected context binding mode for this field."
+        description="Expected context binding mode for this field.",
     )
 
 
@@ -320,7 +321,7 @@ class ResourceField(BaseToolBoxField):
 
 class ToolBoxDefinition(BaseModel):
     """Container listing registered tools and field definitions for a toolbox.
-    
+
     This definition takes place at runtime, via decorators. A definition refers to a
     Python type with a set of methods decorated as tools.
 
@@ -331,8 +332,7 @@ class ToolBoxDefinition(BaseModel):
 
     name: str = Field(description="Toolbox registration name.")
     tools: dict[str, ToolDefinition] = Field(
-        default_factory=dict,
-        description="Registered tools, keyed by tool name."
+        default_factory=dict, description="Registered tools, keyed by tool name."
     )
     context_fields: dict[str, ContextField] = Field(
         default_factory=dict,

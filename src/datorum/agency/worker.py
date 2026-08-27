@@ -44,7 +44,7 @@ class AgentWorker(Worker):
     `field_id == "inference_provider"`. Each provider defines, at the settings level, a
     selector to resolve the API key as a runtime resource, by the factory named
     `api_key`. If this selector is absent, the provider ID itself is assumed to be the
-    selector. 
+    selector.
 
     The agent role is defined by the resource bind with `field_id == "agent_role"`. Each
     role has a list of preferred models, ordered by preference. The Worker searches for
