@@ -290,31 +290,13 @@ class PipelineWorker(Worker):
 
                 current_step = pipeflow.pipeline.steps[pipeflow.current_step_id]
                 if isinstance(current_step, HumanInteractionStep):
-                    existing_interactive = next(
-                        (
-                            b
-                            for b in job.context_bindings
-                            if b.field_id == "interactive"
-                        ),
-                        None,
-                    )
-                    if existing_interactive:
-                        existing_interactive.binded_id = (
-                            current_step.interactive_document_id
-                        )
-                        existing_interactive.context = (
-                            current_step.interactive_document_context
-                        )
-                        existing_interactive.context_bind_type = ContextBindType.model
-                    else:
-                        job.context_bindings.append(
-                            ContextBind(
-                                field_id="interactive",
-                                binded_id=current_step.interactive_document_id,
-                                context=current_step.interactive_document_context,
-                                context_bind_type=ContextBindType.model,
-                            )
-                        )
+                    # Remove old interactive
+                    for bind in job.context_bindings:
+                        if bind.field_id == "interactive":
+                            job.context_bindings.remove(bind)
+
+                    job.context_bindings.append(current_step.interactive)
+
                     pipeflow.state = PipeFlowState.paused
                     pipeflow.save()
                     await job.update_status(

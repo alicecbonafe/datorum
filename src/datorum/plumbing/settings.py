@@ -26,14 +26,19 @@ class BasePipelineStep(BaseDatorumSettings):
 class HumanInteractionStep(BasePipelineStep):
     """Pipeline step pausing execution for user input or file edits."""
 
-    type: Literal["human"] = "human"
-
-    # TODO Connect interactive as context bind
-    interactive_document_id: str = Field(description="ID of the document the user is asked to edit.")
-    interactive_document_context: str | list[str] | None = Field(
-        default=None,
-        description="Context ID filter for the interactive document.",
+    type: Literal["human"] = Field(
+        default="human",
+        description="Step discriminator, always 'human'.",
     )
+
+    interactive: ContextBind = Field(description="Context binding supplying the document the user is asked to edit.")
+
+    # DEPRECATED:
+    # interactive_document_id: str = Field(description="ID of the document the user is asked to edit.")
+    # interactive_document_context: str | list[str] | None = Field(
+    #     default=None,
+    #     description="Context ID filter for the interactive document.",
+    # )
 
 
 class ToolStep(BasePipelineStep):
