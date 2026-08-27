@@ -39,8 +39,7 @@ class DocumentReference(BaseDatorumSettings):
         description="Document model type, defaults to 'text'.",
     )
     extension: str | None = Field(
-        default=None,
-        description="Explicit file extension override."
+        default=None, description="Explicit file extension override."
     )
 
     metadata: dict[str, Any] = Field(

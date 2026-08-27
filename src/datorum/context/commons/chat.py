@@ -26,8 +26,7 @@ class TextPart(BaseModel):
     """Text block content part in multimodal messages."""
 
     type: Literal["text"] = Field(
-        default="text",
-        description="Content part discriminator, always 'text'."
+        default="text", description="Content part discriminator, always 'text'."
     )
     text: str = Field(description="Text content.")
 
@@ -72,7 +71,9 @@ class ToolCall(BaseModel):
         default="function",
         description="Tool call discriminator, always 'function'.",
     )
-    function: ToolFunction = Field(description="Function call detail for this tool call.")
+    function: ToolFunction = Field(
+        description="Function call detail for this tool call."
+    )
 
 
 # ============================
@@ -119,7 +120,9 @@ class UserMessage(_MessageBase):
         default="user",
         description="Message role discriminator, always 'user'.",
     )
-    content: UserContent = Field(description="Message content: plain text, or a list of text/image parts.")
+    content: UserContent = Field(
+        description="Message content: plain text, or a list of text/image parts."
+    )
 
 
 class AssistantMessage(_MessageBase):
@@ -151,7 +154,9 @@ class ToolMessage(_MessageBase):
         description="Message role discriminator, always 'tool'.",
     )
     content: str = Field(description="Tool execution result content.")
-    tool_call_id: str = Field(description="ID of the `ToolCall` this message is a response to.")
+    tool_call_id: str = Field(
+        description="ID of the `ToolCall` this message is a response to."
+    )
 
 
 class FunctionMessage(_MessageBase):
