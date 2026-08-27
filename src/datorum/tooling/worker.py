@@ -91,6 +91,15 @@ class ToolWorker(Worker):
             return setup
 
     async def work(self, job: Job):
+        """Execute the tool selected by the job's `toolbox_setup` resource binding.
+
+        :param job: Job carrying the `toolbox_setup`, `tool_params`, and `tool_result`
+            bindings.
+        :type job: Job
+        :raises ToolWorkerError: If the tool isn't found, isn't enabled, or a required
+            context/resource field is missing.
+        """
+
         await job.update_status(JobStatus.WORKING, "Collecting toolbox resources")
 
         setup_bind: ResourceBind = next(

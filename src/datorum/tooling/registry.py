@@ -184,21 +184,32 @@ def _resolve_call_args(
 class ToolBox(Protocol):
     """Protocol for class definition with a suite of tools and context/resource fields."""
 
-    def get_toolbox_definition(self) -> ToolBoxDefinition: ...
-    async def run_tool(self, tool_name: str, params: Any = None): ...
+    def get_toolbox_definition(self) -> ToolBoxDefinition:
+        """Return the `ToolBoxDefinition` this instance was created from."""
+
+    async def run_tool(self, tool_name: str, params: Any = None):
+        """Invoke a registered tool by name with the given parameters.
+
+        :param tool_name: Name of the tool to run.
+        :type tool_name: str
+        :param params: Tool parameters, matched against the tool's params model or
+            passed as keyword arguments, defaults to None.
+        :type params: Any, optional
+        """
 
 
 class FunctionDefinition(BaseModel):
     """Function descriptor ready for the inference API."""
 
-    name: str
-    description: str
+    name: str = Field(description="Function name, as presented to the inference API.")
+    description: str = Field(description="Human-readable description of the function.")
     parameters: dict[str, Any] = Field(
         default_factory=lambda: {
             "type": "object",
             "properties": {},
             "additionalProperties": False,
-        }
+        },
+        description="JSON Schema for the function's parameters.",
     )
 
     _parameters_model: type[BaseModel] | None = PrivateAttr(default=None)
@@ -215,6 +226,20 @@ class FunctionDefinition(BaseModel):
     def from_params_model(
         cls, name: str, description: str, params_model: type[BaseModel] | None
     ) -> FunctionDefinition:
+        """Build a `FunctionDefinition` from a name/description and an optional params model.
+
+        :param name: Function name.
+        :type name: str
+        :param description: Function description.
+        :type description: str
+        :param params_model: Pydantic model describing the function's parameters, or
+            None for a zero-parameter function.
+        :type params_model: type[BaseModel] | None
+        :returns: The built `FunctionDefinition`, with `parameters_model` set when a
+            model was given.
+        :rtype: FunctionDefinition
+        """
+
         if params_model is not None:
             schema = params_model.model_json_schema()
             schema.pop("title", None)
@@ -230,8 +255,8 @@ class FunctionDefinition(BaseModel):
 class ToolDefinition(BaseModel):
     """Tool descriptor ready for the inference API."""
 
-    name: str
-    function: FunctionDefinition
+    name: str = Field(description="Tool name.")
+    function: FunctionDefinition = Field(description="Function descriptor for this tool.")
 
     _returns: type[BaseModel] | type[str] = PrivateAttr(default=str)
 
@@ -243,30 +268,54 @@ class ToolDefinition(BaseModel):
     def returns(self, value: type[BaseModel] | type[str]):
         self._returns = value
 
-    type: Literal["function"] = "function"  # OpenAI API protocol compatibility
+    type: Literal["function"] = Field(
+        default="function",
+        description="Tool discriminator, always 'function' (OpenAI API protocol compatibility)."
+    )
 
 
 class BaseToolBoxField(BaseModel):
     """Base field specification for toolbox bindings."""
 
-    field_type: str
-    name: str | None = None
-    attr_name: str | None = None
-    description: str | None = None
-    required: bool | None = None
+    field_type: str = Field(description="Binding kind discriminator ('context' or 'resource').")
+    name: str | None = Field(
+        default=None,
+        description="Field name as exposed on the toolbox definition."
+    )
+    attr_name: str | None = Field(
+        default=None,
+        description="Name of the attribute this field binds to on the toolbox instance."
+    )
+    description: str | None = Field(
+        default=None,
+        description="Human-readable description of the field."
+    )
+    required: bool | None = Field(
+        default=None,
+        description="Whether the field must be bound, defaults to inferring from the attribute's type hint."
+    )
 
 
 class ContextField(BaseToolBoxField):
     """Toolbox context bindable field."""
 
-    field_type: Literal["context"] = "context"
-    context_bind_type: ContextBindType = Field(default=ContextBindType.model)
+    field_type: Literal["context"] = Field(
+        default="context",
+        description="Binding kind discriminator, always 'context'."
+    )
+    context_bind_type: ContextBindType = Field(
+        default=ContextBindType.model,
+        description="Expected context binding mode for this field."
+    )
 
 
 class ResourceField(BaseToolBoxField):
     """Toolbox resource bindable field."""
 
-    field_type: Literal["resource"] = "resource"
+    field_type: Literal["resource"] = Field(
+        default="resource",
+        description="Binding kind discriminator, always 'resource'.",
+    )
 
 
 class ToolBoxDefinition(BaseModel):
@@ -280,13 +329,32 @@ class ToolBoxDefinition(BaseModel):
     toolboxes that are easily adaptable to different contexts.
     """
 
-    name: str
-    tools: dict[str, ToolDefinition] = Field(default_factory=dict)
-    context_fields: dict[str, ContextField] = Field(default_factory=dict)
-    resource_fields: dict[str, ResourceField] = Field(default_factory=dict)
-    clazz: type[Any] | None = Field(default=None, exclude=True)
+    name: str = Field(description="Toolbox registration name.")
+    tools: dict[str, ToolDefinition] = Field(
+        default_factory=dict,
+        description="Registered tools, keyed by tool name."
+    )
+    context_fields: dict[str, ContextField] = Field(
+        default_factory=dict,
+        description="Registered context-bindable fields, keyed by field name.",
+    )
+    resource_fields: dict[str, ResourceField] = Field(
+        default_factory=dict,
+        description="Registered resource-bindable fields, keyed by field name.",
+    )
+    clazz: type[Any] | None = Field(
+        default=None,
+        exclude=True,
+        description="Python class this definition was built from.",
+    )
 
     def create_toolbox(self) -> ToolBox:
+        """Instantiate this definition's class and wire up `get_toolbox_definition`/`run_tool`.
+
+        :returns: An instance of `clazz` implementing the `ToolBox` protocol.
+        :rtype: ToolBox
+        :raises ToolBoxRegistryError: If `clazz` isn't set.
+        """
         if not self.clazz:
             raise ToolBoxRegistryError("ToolBox type is not defined")
         result: Any = self.clazz()
@@ -352,8 +420,8 @@ ToolBoxRegistry: dict[str, ToolBoxDefinition] = {}
 def get_toolbox_definition(toolbox_name: str) -> ToolBoxDefinition:
     """Retrieve registered `ToolBoxDefinition` by toolbox name.
 
-    :param name: Toolbox class or registry identifier
-    :type name: str
+    :param toolbox_name: Toolbox class or registry identifier
+    :type toolbox_name: str
     :returns: ToolBoxDefinition instance
     :rtype: ToolBoxDefinition
     :raises ToolBoxRegistryError: If not registered
@@ -369,8 +437,9 @@ def tool(name: str | None = None, params: type[BaseModel] | None = None):
 
     :param name: Optional custom tool name override, defaults to method's name.
     :type name: str | None, optional
-    :param description: Tool function description string.
-    :type description: str | None, optional
+    :param params: Optional explicit params model, defaults to inferring from the
+        function's own signature.
+    :type params: type[pydantic.BaseModel] | None, optional
     """
 
     def decorator(func):
