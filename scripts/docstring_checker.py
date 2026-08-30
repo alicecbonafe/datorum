@@ -63,17 +63,17 @@ def get_own_docstring(obj: Any) -> str | None:
     return None
 
 
-def check_package(package_name: str) -> None:
+def check_package(package_name: str) -> bool:
     try:
         pkg = importlib.import_module(package_name)
     except ImportError as e:
         print(f"{RED}Error importing package '{package_name}': {e}{RESET}")
-        return
+        return False
 
     exported_names = getattr(pkg, "__all__", None)
     if exported_names is None:
         print(f"{RED}Error: `{package_name}.__init__.py` does not define an `__all__` list.{RESET}")
-        return
+        return False
 
     inconsistencies: List[str] = []
 
@@ -148,7 +148,7 @@ def check_package(package_name: str) -> None:
 
             # 3. Pydantic BaseModel fields
             if issubclass(obj, pydantic.BaseModel):
-                fields: Dict[str, Any] = getattr(obj, "model_fields", getattr(obj, "model_fields", {}))
+                fields: Dict[str, Any] = getattr(obj, "model_fields", {})
                 for f_name, field_info in fields.items():
                     if f_name.startswith("_"):
                         continue
@@ -193,7 +193,10 @@ def check_package(package_name: str) -> None:
     print("-" * 60)
     print(f"{BOLD}Overall Package Compliance  : {format_pct(total_passed, total_checks)}{RESET}")
 
+    return not inconsistencies
+
 
 if __name__ == "__main__":
     target = sys.argv[1] if len(sys.argv) > 1 else input("Enter package name to check: ")
-    check_package(target)
+    if not check_package(target):
+        sys.exit(1)
