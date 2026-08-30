@@ -42,7 +42,7 @@ steps:
 
   publish:
     image: python:3.14-slim
-    depends_on: [lint, test]
+    depends_on: [lint, test, docstrings]
     environment:
       PYPI_TOKEN:
         from_secret: pypi_token
