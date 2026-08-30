@@ -81,6 +81,15 @@ class Binder:
         return self.locks.setdefault(local_context_id, asyncio.Lock())
 
     async def resolve_local_context(self, local_context_id: str) -> DocumentContext:
+        """Load or create the local `DocumentContext` for an operation, caching it.
+
+        :param local_context_id: Identifier of the local context (usually a job ID).
+        :type local_context_id: str
+        :returns: The loaded or newly created local `DocumentContext`.
+        :rtype: DocumentContext
+        :raises ContextBindingError: If `local_context_path` was not set on this Binder.
+        """
+
         if not self.local_context_path:
             raise ContextBindingError("Cannot load local context, path is not defined")
 
@@ -106,6 +115,22 @@ class Binder:
     async def resolve_local_document(
         self, shared_document_id: str, shared_context_id: str, local_context_id: str
     ) -> DocumentReference:
+        """Get or create the local copy of a shared document within a local context.
+
+        If the document doesn't already exist in the local context, it's created and
+        its content is copied over from the shared document.
+
+        :param shared_document_id: ID of the source document in the shared context.
+        :type shared_document_id: str
+        :param shared_context_id: ID of the shared context holding the source document.
+        :type shared_context_id: str
+        :param local_context_id: Identifier of the local context to resolve into.
+        :type local_context_id: str
+        :returns: The local `DocumentReference`.
+        :rtype: DocumentReference
+        :raises ContextBindingError: If the shared document doesn't exist.
+        """
+
         local_context: DocumentContext = await self.resolve_local_context(
             local_context_id
         )
@@ -135,10 +160,31 @@ class Binder:
             return local_document
 
     def add_context(self, context: DocumentContext) -> DocumentContext:
+        """Register a `DocumentContext` as one of this Binder's shared contexts.
+
+        :param context: Context to register, keyed by its `id`.
+        :type context: DocumentContext
+        :returns: The registered `context`, for chaining.
+        :rtype: DocumentContext
+        """
+
         self.shared_context[context.id] = context
         return context
 
     def resource(self, name: str | None = None, force: bool = False):
+        """Decorator registering a function as a resource factory on this Binder.
+
+        Factories registered here are checked before falling back to the global
+        registry, allowing an operation to override a resource resolution locally.
+
+        :param name: Factory name override, defaults to the function's own name.
+        :type name: str | None, optional
+        :param force: Overwrite an existing factory of the same name, defaults to False.
+        :type force: bool, optional
+        :raises ResourceBindingError: If already registered and `force` is False, or if
+            the function's signature isn't a valid factory signature.
+        """
+
         def decorator(func):
             factory_name = name or func.__name__
             if factory_name in self.factories and not force:
@@ -159,6 +205,19 @@ class Binder:
         domain: str,
         context: str | list[str] | None = None,
     ) -> DocumentContext:
+        """Find the shared context that knows about a given domain.
+
+        :param domain: Dotted domain name to search for.
+        :type domain: str
+        :param context: Context ID, list of context IDs to search, or None to search
+            every registered shared context, defaults to None.
+        :type context: str | list[str] | None, optional
+        :returns: The first shared context that knows the domain.
+        :rtype: DocumentContext
+        :raises ContextBindingError: If a named context is unknown, or no candidate
+            context knows the domain.
+        """
+
         if isinstance(context, str):
             if context not in self.shared_context:
                 raise ContextBindingError(f"Unknown context '{context}'")
@@ -185,6 +244,22 @@ class Binder:
         context: str | list[str] | None = None,
         local_context_id: str | None = None,
     ) -> DocumentReference:
+        """Find a document by ID, optionally resolving its local-context copy.
+
+        :param document_id: Document identifier to search for.
+        :type document_id: str
+        :param context: Context ID, list of context IDs to search, or None to search
+            every registered shared context, defaults to None.
+        :type context: str | list[str] | None, optional
+        :param local_context_id: When set, resolve and return the local copy of the
+            found document instead of the shared one, defaults to None.
+        :type local_context_id: str | None, optional
+        :returns: The found (or local-resolved) `DocumentReference`.
+        :rtype: DocumentReference
+        :raises ContextBindingError: If a named context is unknown, or the document
+            isn't found in any candidate context.
+        """
+
         document: DocumentReference | None = None
 
         if isinstance(context, str):
@@ -229,6 +304,23 @@ class Binder:
         bind: ContextBind,
         local_context_id: str | None = None,
     ) -> Any:
+        """Resolve a context binding for reading, per its `ContextBindType`.
+
+        Depending on `bind.context_bind_type`, returns a deserialized model instance,
+        raw text, raw bytes, a metadata dict, or a filesystem path.
+
+        :param bind: Context binding to resolve. Must allow input access.
+        :type bind: ContextBind
+        :param local_context_id: Local context to resolve into, required when
+            `bind.local` is True, defaults to None.
+        :type local_context_id: str | None, optional
+        :returns: The resolved value, typed per the binding's `context_bind_type`.
+        :rtype: Any
+        :raises ContextBindingError: If the binding is local but no `local_context_id`
+            is given, the binding doesn't allow input access, or the target file is
+            missing for a mode that requires it.
+        """
+
         if bind.local and not local_context_id:
             raise ContextBindingError(
                 f"Local context not defined for the local bind '{bind.binded_id!s}'"
@@ -282,6 +374,25 @@ class Binder:
         value: Any,
         local_context_id: str | None = None,
     ):
+        """Resolve a context binding for writing, per its `ContextBindType`.
+
+        Depending on `bind.context_bind_type`, persists `value` as a serialized model,
+        raw text, raw bytes, or domain/document metadata, updating the underlying
+        document or context settings on disk.
+
+        :param bind: Context binding to resolve. Must allow output access.
+        :type bind: ContextBind
+        :param value: Value to write; its expected type depends on the binding's
+            `context_bind_type` (e.g. a `dict` for metadata modes).
+        :type value: Any
+        :param local_context_id: Local context to resolve into, required when
+            `bind.local` is True, defaults to None.
+        :type local_context_id: str | None, optional
+        :raises ContextBindingError: If the binding is local but no `local_context_id`
+            is given, the binding doesn't allow output access, or `value` isn't a
+            `dict` for a metadata mode.
+        """
+
         if bind.local and not local_context_id:
             raise ContextBindingError(
                 f"Local context not defined for the local bind '{bind.binded_id!s}'"
@@ -342,6 +453,18 @@ class Binder:
                 document.doc_path.write_bytes(bytes(value))
 
     def load_resource(self, bind: ResourceBind) -> Any:
+        """Resolve a resource binding by calling its factory with the bind's selector.
+
+        Looks up `bind.factory_name` in this Binder's local factories first, falling
+        back to the global resource factory registry.
+
+        :param bind: Resource binding to resolve.
+        :type bind: ResourceBind
+        :returns: The value produced by the resolved factory.
+        :rtype: Any
+        :raises ResourceFactoryError: If the factory name isn't registered anywhere.
+        """
+
         factory: Callable = (
             self.factories[bind.factory_name]
             if bind.factory_name in self.factories

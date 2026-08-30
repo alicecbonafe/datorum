@@ -47,6 +47,12 @@ class MarkdownDocument:
         self.frontmatter_format = frontmatter_format or self.FRONTMATTER_YAML
 
     def dumps(self) -> str:
+        """Render the document to its Markdown text, including any frontmatter block.
+
+        :returns: Full Markdown text with the frontmatter serialized and delimited.
+        :rtype: str
+        """
+
         raw = self.content
         if self.frontmatter:
             if self.frontmatter_format == self.FRONTMATTER_YAML:
@@ -65,10 +71,26 @@ class MarkdownDocument:
         return raw
 
     def dump(self, file_path: Path):
+        """Render the document and write it to a file.
+
+        :param file_path: Destination file path.
+        :type file_path: pathlib.Path
+        """
+
         file_path.write_text(self.dumps(), encoding="utf-8")
 
     @classmethod
     def loads(cls, raw: str) -> Self:
+        """Parse Markdown text, splitting off any recognized frontmatter block.
+
+        :param raw: Raw Markdown text, optionally beginning with a YAML (`---`), JSON
+            (`;;;`), or TOML (`+++`) delimited frontmatter block.
+        :type raw: str
+        :returns: A new `MarkdownDocument` with `content` and, if found, `frontmatter`
+            and `frontmatter_format` populated.
+        :rtype: MarkdownDocument
+        """
+
         content: str = raw
         frontmatter: dict | None = None
         frontmatter_format: str | None = None
@@ -103,6 +125,14 @@ class MarkdownDocument:
 
     @classmethod
     def load(cls, file_path: Path) -> Self:
+        """Read a file and parse it into a `MarkdownDocument`.
+
+        :param file_path: Path to the Markdown file to read.
+        :type file_path: pathlib.Path
+        :returns: The parsed `MarkdownDocument`.
+        :rtype: MarkdownDocument
+        """
+
         return cls.loads(file_path.read_text(encoding="utf-8"))
 
 

@@ -102,7 +102,7 @@ def test_document_reference(tmp_path: Path):
     DocumentModelRegistry["missing"] = DocumentModel(
         id="missing", clazz=DocumentModel, default_doc_type="not/found"
     )
-    with pytest.raises(TypeError):
+    with pytest.raises(DocumentReferenceError):
         document_error.save(text_content)
 
     DocumentModelRegistry["missing"].clazz = str

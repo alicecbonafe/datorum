@@ -51,35 +51,89 @@ class ContextBindType(str, Enum):
     domain_metadata = "domain-metadata"
 
     def is_domain(self) -> bool:
+        """Whether this mode targets a domain rather than a single document.
+
+        :returns: True for `domain_path` and `domain_metadata`.
+        :rtype: bool
+        """
+
         return self.value.startswith("domain")
 
     def is_input(self) -> bool:
+        """Whether this mode allows reading (input) access.
+
+        :returns: True for every mode except the `*-output` ones.
+        :rtype: bool
+        """
+
         return not self.value.endswith("output")
 
     def is_output(self) -> bool:
+        """Whether this mode allows writing (output) access.
+
+        :returns: True for every mode except the `*-input` and `*-path` ones.
+        :rtype: bool
+        """
+
         return not self.value.endswith("input") and not self.value.endswith("path")
 
     def is_model(self) -> bool:
+        """Whether this mode resolves the target via a `DocumentReference` model.
+
+        :returns: True for `model`, `model_input`, and `model_output`.
+        :rtype: bool
+        """
+
         return self.value.startswith("model")
 
     def is_text(self) -> bool:
+        """Whether this mode reads/writes the target's text content directly.
+
+        :returns: True for `text`, `text_input`, and `text_output`.
+        :rtype: bool
+        """
+
         return self.value.startswith("text")
 
     def is_bytes(self) -> bool:
+        """Whether this mode reads/writes the target's binary content directly.
+
+        :returns: True for `bytes`, `bytes_input`, and `bytes_output`.
+        :rtype: bool
+        """
+
         return self.value.startswith("bytes")
 
     def is_path(self) -> bool:
+        """Whether this mode targets a filesystem path rather than content.
+
+        :returns: True for `document_path` and `domain_path`.
+        :rtype: bool
+        """
+
         return self.value.endswith("path")
 
     def is_metadata(self) -> bool:
+        """Whether this mode targets a document's or domain's metadata dict.
+
+        :returns: True for `document_metadata` and `domain_metadata`.
+        :rtype: bool
+        """
+
         return self.value.endswith("metadata")
 
     def is_io(self) -> bool:
+        """Whether this mode reads/writes content directly (model, text, or bytes).
+
+        :returns: True unless this mode targets a path or metadata.
+        :rtype: bool
+        """
+
         return self.is_model() or self.is_text() or self.is_bytes()
 
 
 class ContextBind(BaseDatorumSettings):
-    """Binding specification linking a job input/output field to a context item.
+    """Declares how a job's context field is resolved against a `Binder`.
 
     Allows associating contextual information (such as a document, file, path, or
     metadata dictionary) with a specific field to be used by the Worker.

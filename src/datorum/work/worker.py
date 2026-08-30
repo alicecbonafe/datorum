@@ -66,6 +66,18 @@ class Worker(ABC):
             await job.finish_broadcasting()
 
     def start(self, job: Job):
+        """Validate a job's bindings and launch it as a detached asyncio task.
+
+        This is the standard entry point applications use to launch a Worker; it
+        returns immediately once the task is scheduled.
+
+        :param job: Job to start. Must be `JobStatus.IDLE` and carry every binding
+            listed in `required_context_binds`/`required_resource_binds`.
+        :type job: Job
+        :raises WorkerStartUpError: If the job isn't idle, or required bindings are
+            missing.
+        """
+
         if job.status != JobStatus.IDLE:
             raise WorkerStartUpError(f"Job '{job.id}' is not idle")
 

@@ -18,16 +18,31 @@ class Broadcaster:
         self.finished = False
 
     def push(self, item: str):
+        """Broadcast an item to every active subscriber and record it in history.
+
+        :param item: Item to broadcast.
+        :type item: str
+        """
+
         self.history.append(item)
         for q in self.subscribers:
             q.put_nowait(item)
 
     def finish(self):
+        """Mark the broadcaster as finished, signaling every subscriber to stop."""
+
         self.finished = True
         for q in self.subscribers:
             q.put_nowait(None)
 
     async def subscribe(self) -> AsyncGenerator[str]:
+        """Subscribe to this broadcaster, replaying history then yielding new items.
+
+        :returns: Async generator yielding history items followed by live broadcasts,
+            until `finish` is called.
+        :rtype: collections.abc.AsyncGenerator[str]
+        """
+
         q: asyncio.Queue = asyncio.Queue()
         for item in self.history:  # replay backlog
             q.put_nowait(item)
@@ -115,6 +130,21 @@ class Job:
         self._pause_event.set()
 
     async def update_status(self, status: JobStatus, message: str | None = None):
+        """Update the job's status and broadcast the change.
+
+        If the job has an active delegate, the update is forwarded to it instead
+        (except for `JobStatus.CRASHED`, which always applies here first). Setting
+        `JobStatus.WORKING` while paused/pausing routes through `JobStatus.PAUSED` and
+        blocks until resumed.
+
+        :param status: New status to transition to.
+        :type status: JobStatus
+        :param message: Optional message to attach to the broadcast, defaults to None.
+        :type message: str | None, optional
+        :raises JobStatusError: If the job's last delegate is still active and `status`
+            isn't `JobStatus.CRASHED`.
+        """
+
         if self.delegates and self.delegates[-1].status not in (
             JobStatus.IDLE,
             JobStatus.FINISHED,
@@ -143,17 +173,37 @@ class Job:
             self._pause_event.set()
 
     async def push_chunk(self, chunk: str):
+        """Broadcast a streamed output chunk via `chunk_broadcaster`.
+
+        :param chunk: Output chunk to broadcast.
+        :type chunk: str
+        """
+
         self.chunk_broadcaster.push(chunk)
 
     async def push_log(self, log: str):
+        """Broadcast a log line via `log_broadcaster`.
+
+        :param log: Log line to broadcast.
+        :type log: str
+        """
+
         self.log_broadcaster.push(log)
 
     async def finish_broadcasting(self):
+        """Finish all three of the job's broadcasters (update, chunk, and log)."""
+
         self.update_broadcaster.finish()
         self.chunk_broadcaster.finish()
         self.log_broadcaster.finish()
 
     def pause(self):
+        """Request a pause. Forwarded to the active delegate, if any.
+
+        :raises JobStatusError: If the job isn't currently `JobStatus.WORKING` (and has
+            no active delegate to forward the request to).
+        """
+
         if self.delegates and self.delegates[-1].status == JobStatus.WORKING:
             self.delegates[-1].pause()
         elif self.status in (JobStatus.PAUSING, JobStatus.PAUSED):
@@ -169,6 +219,12 @@ class Job:
             )
 
     def resume(self):
+        """Request a resume. Forwarded to the active delegate, if any.
+
+        :raises JobStatusError: If the job isn't currently `JobStatus.PAUSED` (and has
+            no active delegate to forward the request to).
+        """
+
         if self.delegates and self.delegates[-1].status == JobStatus.PAUSED:
             self.delegates[-1].resume()
         elif self.status in (JobStatus.RESUMING, JobStatus.WORKING):
