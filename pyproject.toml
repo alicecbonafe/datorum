@@ -41,6 +41,14 @@ Issues = "https://codeberg.org/alicebonafe/datorum/issues"
 # Documentation = "https://codeberg.org/alicebonafe/datorum"
 
 [project.optional-dependencies]
+docs = [
+    "sphinx>=9.1",
+    "furo>=2025.12",
+    "sphinx-autodoc-typehints>=3.13",
+    "autodoc-pydantic>=2.2",
+    "myst-parser>=5.1",
+    "sphinx-autobuild>=2025.8",
+]
 test = [
     "pytest>=9.1",
     "pytest_httpserver>=1.1",
