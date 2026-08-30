@@ -28,6 +28,18 @@ steps:
       - event: pull_request
       - event: tag
 
+  docstrings:
+    image: python:3.14-slim
+    commands:
+      - pip install --upgrade pip
+      - pip install -e .
+      - python scripts/docstring_checker.py datorum
+    when:
+      - event: push
+        branch: main
+      - event: pull_request
+      - event: tag
+
   publish:
     image: python:3.14-slim
     depends_on: [lint, test]
