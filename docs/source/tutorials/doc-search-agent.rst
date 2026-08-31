@@ -67,11 +67,11 @@ A few things worth calling out:
   ``build_chat_history`` are run directly by ``ToolStep``\ s and never
   offered to a model.
 
-Wire the toolbox setup
+Bind the toolbox setup
 ------------------------
 
 Registering the class with ``@datorum.toolbox`` makes it available by name;
-it doesn't wire it to real documents. That wiring -- which document backs
+it doesn't bind it to real documents. That wiring -- which document backs
 ``domain``, which backs ``interactive``, and so on -- happens **once**, in a
 ``ToolBoxSetUp`` under the toolkit config, and is reused by every step (and
 every agent tool call) that names this setup:
@@ -106,7 +106,7 @@ a pipeline, you always name the provider explicitly, as below:
 .. literalinclude:: /examples/doc-search-agent/doc_search_agents.yaml
    :language: yaml
 
-Wire the pipeline
+Bind the pipeline
 ------------------
 
 Six steps: scaffold, pause, build the chat, decide, optionally search, then

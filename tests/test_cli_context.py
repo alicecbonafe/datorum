@@ -189,7 +189,7 @@ class TestCatchUpdatesInteractivePrompt:
 # ==============================================================================
 
 class TestBinderApiKeysFromSettingsDict:
-    def test_explicit_api_keys_dict_is_wired_into_the_binder(self, app_ctx, settings_path):
+    def test_explicit_api_keys_dict_is_tied_to_the_binder(self, app_ctx, settings_path):
         from datorum.cli.settings import CliAppSettings
         bootstrap = CliAppSettings(api_keys={"MY_PROVIDER_API_KEY": "secret-value"})
         bootstrap.save_as(settings_path)

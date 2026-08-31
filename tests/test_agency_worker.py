@@ -59,7 +59,7 @@ def _make_agent_worker(
     toolkit: Optional[ToolKit] = None,
     api_key: str = "test-api-key",
 ) -> tuple[AgentWorker, ToolWorker]:
-    """Build an AgentWorker + ToolWorker pair wired to the same context, with a
+    """Build an AgentWorker + ToolWorker pair binded to the same context, with a
     stubbed `api_key` resource factory (a real deployment would resolve this
     from a secrets store, which is out of scope here)."""
     binder: Binder = Binder()

@@ -301,7 +301,7 @@ async def test_binder(tmp_path: Path):
 
 @pytest.fixture
 def shared_ctx_and_binder(tmp_path: Path):
-    """A Binder wired to one shared context ('ctx1') holding one text
+    """A Binder tied to one shared context ('ctx1') holding one text
     document ('domain.doc'), plus a local_context_path for materializing
     local copies."""
     ctx_id = "ctx1"

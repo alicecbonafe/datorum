@@ -180,7 +180,7 @@ class ConfigGroup(BaseCommandGroup):
         "--shared_context",
         "shared_context_path",
         type=click.Path(path_type=Path),
-        default=Path("shared_context"),
+        default=Path("shared"),
         show_default=True,
     )
     @click.option(

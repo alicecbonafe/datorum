@@ -38,7 +38,7 @@ def test_init_defaults(runner, settings_path):
     result = _run(runner, settings_path, "config", "init")
     assert result.exit_code == 0
     saved = settings_path.read_text()
-    assert "shared_context_path: shared_context" in saved
+    assert "shared_context_path: shared" in saved
     assert "flows_path: flows" in saved
     assert "flow_id_template: flow_{index}" in saved
 
@@ -82,13 +82,13 @@ def test_context_create_registers_context(runner, initialized):
     assert result.exit_code == 0
     assert "work:" in initialized.read_text()
     # no --create-dir: the directory itself must not have been made
-    assert not (initialized.parent / "shared_context" / "work").exists()
+    assert not (initialized.parent / "shared" / "work").exists()
 
 
 def test_context_create_with_create_dir_makes_directory(runner, initialized):
     result = _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
     assert result.exit_code == 0
-    assert (initialized.parent / "shared_context" / "work").is_dir()
+    assert (initialized.parent / "shared" / "work").is_dir()
 
 
 def test_context_create_sanitizes_id(runner, initialized):
@@ -111,7 +111,7 @@ def test_context_create_prefixes_windows_reserved_name(runner, initialized):
 
 def test_context_link_registers_document(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    doc_file = initialized.parent / "shared_context" / "work" / "notes.txt"
+    doc_file = initialized.parent / "shared" / "work" / "notes.txt"
     doc_file.write_text("hello")
 
     result = _run(runner, initialized, "config", "context", "link", "work", str(doc_file))
@@ -124,7 +124,7 @@ def test_context_link_registers_document(runner, initialized):
 
 def test_context_link_nested_file_builds_dotted_document_id(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    nested_dir = initialized.parent / "shared_context" / "work" / "reports" / "q1"
+    nested_dir = initialized.parent / "shared" / "work" / "reports" / "q1"
     nested_dir.mkdir(parents=True)
     doc_file = nested_dir / "summary.txt"
     doc_file.write_text("hi")
@@ -136,7 +136,7 @@ def test_context_link_nested_file_builds_dotted_document_id(runner, initialized)
 
 def test_context_link_custom_doc_type_and_model(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    doc_file = initialized.parent / "shared_context" / "work" / "data.json"
+    doc_file = initialized.parent / "shared" / "work" / "data.json"
     doc_file.write_text("{}")
 
     result = _run(
@@ -170,7 +170,7 @@ def test_context_link_accepts_absolute_path_to_file_inside_context(runner, initi
     user-supplied doc_file path may be absolute -- both must resolve to the
     same real containment check rather than failing on string mismatch."""
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    doc_file = (initialized.parent / "shared_context" / "work" / "notes.txt").resolve()
+    doc_file = (initialized.parent / "shared" / "work" / "notes.txt").resolve()
     doc_file.write_text("hello")
     assert doc_file.is_absolute()
 
@@ -191,14 +191,14 @@ def test_context_link_file_outside_context_path_fails(runner, initialized, tmp_p
 
 def test_context_link_nonexistent_file_rejected_by_click(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    missing = initialized.parent / "shared_context" / "work" / "ghost.txt"
+    missing = initialized.parent / "shared" / "work" / "ghost.txt"
     result = _run(runner, initialized, "config", "context", "link", "work", str(missing))
     assert result.exit_code == 0
 
 
 def test_context_export_writes_standalone_file(runner, initialized):
     _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
-    doc_file = initialized.parent / "shared_context" / "work" / "notes.txt"
+    doc_file = initialized.parent / "shared" / "work" / "notes.txt"
     doc_file.write_text("hello")
     _run(runner, initialized, "config", "context", "link", "work", str(doc_file))
 
