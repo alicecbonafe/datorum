@@ -10,4 +10,5 @@ instead.
    :maxdepth: 1
 
    bind-a-resource
+   bind-a-tool-call
    run-from-the-cli

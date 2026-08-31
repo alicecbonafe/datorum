@@ -1,0 +1,38 @@
+# AgencyKit config for the "Doc Search Agent" tutorial.
+
+providers:
+  mistral:
+    id: mistral
+    description: Mistral inference API
+    base_url: https://api.mistral.ai/v1
+    api_key_selector: MISTRAL_API_KEY
+    supports_streaming: true
+    models: [mistral-small-latest]
+
+  deepseek:
+    id: deepseek
+    description: DeepSeek inference API
+    base_url: https://api.deepseek.com/v1
+    api_key_selector: DEEPSEEK_API_KEY
+    supports_streaming: true
+    models: [deepseek-reasoner]
+
+roles:
+  searcher:
+    id: searcher
+    system_instructions: >
+      You have one tool, search. Use it to find lines matching the user's
+      request in the enabled files. Call search at least once before
+      answering; do not answer from memory.
+    preferred_models: [mistral-small-latest]
+    tools_enabled: [doc_search.search]
+    tool_choice: required
+    tool_max_iter: 3
+
+  answerer:
+    id: answerer
+    system_instructions: >
+      Answer the user's question using the conversation so far, which may
+      include search results gathered earlier in this session. Cite the
+      source filename for any claim drawn from a search result.
+    preferred_models: [deepseek-reasoner]

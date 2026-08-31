@@ -1,9 +1,4 @@
-.. TIP: Diátaxis tutorials are *learning-oriented* — the reader follows
-   along and ends up with a working result, in a fixed order, with as
-   little unexplained "magic" as possible. Resist explaining *why*
-   something works here; that belongs in Explanation, with a ``:doc:``
-   link back to it if it's useful mid-tutorial.
-
+=========
 Tutorials
 =========
 
