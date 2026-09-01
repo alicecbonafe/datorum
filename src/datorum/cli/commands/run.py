@@ -17,6 +17,18 @@ class RunGroup(BaseCommandGroup):
     @click.argument("params", metavar="[CONTEXT:]DOCUMENT_ID")
     @click.argument("result", metavar="[CONTEXT:]DOCUMENT_ID")
     @click.option(
+        "-a",
+        "--load-agent",
+        "load_agents",
+        is_flag=True,
+    )
+    @click.option(
+        "-p",
+        "--load-pipelines",
+        "load_pipelines",
+        is_flag=True,
+    )
+    @click.option(
         "-c",
         "--bind-context",
         "context_binds",
@@ -36,9 +48,16 @@ class RunGroup(BaseCommandGroup):
         selector: str,
         params: str,
         result: str,
+        load_agents: bool,
+        load_pipelines: bool,
         context_binds: list[str],
         resource_binds: list[str],
     ):
+        if load_agents:
+            assert app_ctx.agent_worker
+        if load_pipelines:
+            assert app_ctx.pipeline_worker
+
         job = datorum.Job(
             id=f"tool_{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')}",
             context_bindings=[
