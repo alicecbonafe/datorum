@@ -150,12 +150,16 @@ class CliAppContext:
         )
 
     def parse_positional_context(self, raw: str, field_id: str) -> datorum.ContextBind:
+        bind_local = raw.startswith("_")
+        if bind_local:
+            raw = raw[1:]
         context, binded_id = self._split_context_value(raw)
         return datorum.ContextBind(
             field_id=field_id,
             binded_id=binded_id,
             context=context,
             context_bind_type=datorum.ContextBindType.model,
+            local=bind_local,
         )
 
     def run_job(
@@ -228,7 +232,9 @@ class CliAppContext:
                 for bind in job.context_bindings:
                     if bind.field_id == "interactive":
                         interactive = await self.binder.find_document(
-                            bind.binded_id, bind.context
+                            document_id=bind.binded_id,
+                            context=bind.context,
+                            local_context_id=job.local_context_id if bind.local else None
                         )
                         click.echo(
                             f"Please edit the file before resuming: '{interactive.doc_path}'"

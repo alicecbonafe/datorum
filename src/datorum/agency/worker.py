@@ -388,7 +388,9 @@ class AgentWorker(Worker):
         )
 
         chat_doc = await self.binder.find_document(
-            document_id=chat_bind.binded_id, context=chat_bind.context
+            document_id=chat_bind.binded_id,
+            context=chat_bind.context,
+            local_context_id=job.local_context_id if chat_bind.local else None,
         )
         chat: ChatHistory = chat_doc.load()
         if len(chat.messages) == 0:

@@ -157,6 +157,8 @@ class Binder:
                 )
                 shared_document.copy_to(target=local_document)
 
+                local_context.save()
+
             return local_document
 
     def add_context(self, context: DocumentContext) -> DocumentContext:

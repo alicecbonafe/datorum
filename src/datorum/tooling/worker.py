@@ -155,7 +155,10 @@ class ToolWorker(Worker):
                         )
                     continue
 
-            field_value: Any = await self.binder.pull_context(ctx_field_bind)
+            field_value: Any = await self.binder.pull_context(
+                bind=ctx_field_bind,
+                local_context_id=job.local_context_id,
+            )
             if field.attr_name:
                 setattr(toolbox, field.attr_name, field_value)
 
@@ -189,10 +192,14 @@ class ToolWorker(Worker):
                 setattr(toolbox, res_field.attr_name, field_value)
 
         params_doc = await self.binder.find_document(
-            document_id=params_bind.binded_id, context=params_bind.context
+            document_id=params_bind.binded_id,
+            context=params_bind.context,
+            local_context_id=job.local_context_id if params_bind.local else None
         )
         result_doc = await self.binder.find_document(
-            document_id=result_bind.binded_id, context=result_bind.context
+            document_id=result_bind.binded_id,
+            context=result_bind.context,
+            local_context_id=job.local_context_id if result_bind.local else None
         )
 
         params = None
@@ -268,7 +275,16 @@ class ToolWorker(Worker):
                 None,
             )
             if not field_bind:
+                field_bind = next(
+                    (bind for bind in setup.context_bindings if bind.field_id == field.attr_name),
+                    None
+                )
+            if not field_bind:
                 continue
 
             field_value = getattr(toolbox, field.attr_name)
-            await self.binder.push_context(field_bind, field_value)
+            await self.binder.push_context(
+                bind=field_bind,
+                value=field_value,
+                local_context_id=job.local_context_id
+            )
