@@ -18,7 +18,7 @@ class RunGroup(BaseCommandGroup):
     @click.argument("result", metavar="[CONTEXT:]DOCUMENT_ID")
     @click.option(
         "-a",
-        "--load-agent",
+        "--load-agents",
         "load_agents",
         is_flag=True,
     )
