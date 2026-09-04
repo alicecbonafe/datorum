@@ -17,6 +17,7 @@ we will extract the ``system_instructions``. These roles are available as a
 runtime resource.
 
 .. code-block:: python
+
     from pathlib import Path
     from typing import Any
 
@@ -46,8 +47,8 @@ runtime resource.
 Tool declarations
 =================
 
-These tools don't really need any parameters, because all relevant context are
-already binded. On the other hand, returning a ``dict[str, Any]`` is useful to
+These tools don't really need any parameters, because all relevant context is
+already bound. On the other hand, returning a ``dict[str, Any]`` is useful to
 change pipeline flow path and to manually inspect the results.
 
 
@@ -75,10 +76,10 @@ change pipeline flow path and to manually inspect the results.
         def build_chat_history(self) -> dict[str, Any]:
             """Build ``agent_chat`` from the user-edited selection document.
 
-            If chat history is empty and the user selected at least one searchable file,
-            prepare chat history for the searcher.
-            If there're no searchable files selected, or if the first model already made
-            the tool calls, prepare chat history for the final answer.
+            If the chat history is empty and the user selected at least one searchable
+            file, prepare the chat history for the searcher.
+            If there are no searchable files selected, or if the first model already
+            made the tool calls, prepare chat history for the final answer.
             """
             ...
 
@@ -95,6 +96,7 @@ Configuring
 Now let's create the toolbox setup and add the Python code to the custom registry.
 
 .. code-block:: yaml
+
     # (...)
     toolkit:
       toolboxes:
@@ -149,7 +151,7 @@ markdown for human interaction.
     datorum run tool context_builder.scaffold_selection docs:empty _docs:tool-response --load-agents
 
 This creates the ``selection.md`` file inside the local context, with all
-searchable files listed in the frontmatter
+searchable files listed in the frontmatter.
 
 The second tool can follow two distinct paths. If no searchable file has been
 selected, or if the chat history is not empty, the tool prepares the call to the
@@ -197,4 +199,4 @@ Use the correct bind to call this run.
 
     datorum run tool context_builder.extract_answer docs:empty _docs:tool-response --bind-context "agent_chat=model(docs:chat-basic)" --load-agents
 
-Now, the selection markdown within the local context holds the mocked messagem.
+Now, the selection markdown within the local context holds the mocked message.

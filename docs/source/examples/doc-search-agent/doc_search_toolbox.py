@@ -97,7 +97,7 @@ class DocSearchToolbox:
         Example: keyword_search(keywords=["refund policy", "return window"])
 
         :param keywords: A list with one or more literal words/phrases to look for.
-            Only files containing at least on of these keywords will be included in
+            Only files containing at least one of these keywords will be included in
             the results.
         :type keywords: list[str]
         :param case_sensitive: If False (default), matching ignores case.
@@ -134,10 +134,10 @@ class DocSearchToolbox:
         Only use this when keyword_search isn't precise enough -- e.g. to
         match a numeric range or a word boundary.
 
-        Example: regex_search(patterns=["error code \\d+", "failed with status])
+        Example: regex_search(patterns=["error code \\d+", "failed with status"])
 
         :param patterns: A list with one or more regex patterns to look for.
-            Only files matching at least on of these patterns will be included
+            Only files matching at least one of these patterns will be included
             in the results.
         :type patterns: list[str]
         :param case_sensitive: If False (default), matching ignores case.

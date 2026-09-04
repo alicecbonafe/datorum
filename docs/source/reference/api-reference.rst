@@ -7,6 +7,5 @@ Auto-generated reference documentation for Datorum's public API
 
 .. autosummary::
     :toctree: generated
-    :recursive:
 
     datorum

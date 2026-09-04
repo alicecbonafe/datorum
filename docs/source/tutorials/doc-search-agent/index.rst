@@ -3,7 +3,7 @@ Doc Search Agent
 ================
 
 This tutorial demonstrates how to create an agent pipeline with a customized
-toolbox, human in the loop and multi-model inference.
+toolbox, human-in-the-loop and multi-model inference.
 
 Using a markdown file to interact with the human-user, this pipeline presents
 a list of searchable files in the frontmatter. The user then selects which
@@ -13,13 +13,13 @@ a second model answers the question. The generated answer is then extracted
 and appended to the markdown body. This tutorial uses LMStudio as inference
 provider.
 
-Before you start, please make sure to install Datorum using PyPi.
+Before you start, please make sure to install Datorum using PyPI.
 You can create a Python virtual env to isolate dependencies.
 
 .. code-block:: bash
 
    python -m venv venv
-   source ./venv/bin/activeate
+   source ./venv/bin/activate
    pip install datorum
 
 Then, go to your workspace dir and start the CLI's config file.

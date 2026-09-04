@@ -1,7 +1,7 @@
 Building the pipeline
 =====================
 
-Now, that tools and agents are ready, let's assemble the pipeline. We'll need
+Now that tools and agents are ready, let's assemble the pipeline. We'll need
 these steps:
 
 * **List files** (tool): read searchable files in the domain and prepare
@@ -70,7 +70,7 @@ it.
         context: docs
         local: true
 
-Decision steps use an input data binding and a small code to determine
+Decision steps use an input data binding and a small piece code to determine
 the next target.
 
 .. code-block:: yaml
@@ -109,14 +109,14 @@ agent role.
       inference_provider:
         field_id: inference_provider
         factory_name: inference_provider
-        selector: lm-studio
+        selector: lmstudio
       agent_role:
         field_id: agent_role
         factory_name: agent_role
         selector: searcher
 
-The pipeline flow will start by the step defined in the ``first_step_id`` pipeline's field
-and will end whenever it finds a null ``target_id`` step's field.
+The pipeline flow will start at the step defined in the ``first_step_id`` pipeline's field
+and will end whenever it finds a step whose ``target_id`` field is null.
 
 See the :download:`complete settings here </examples/doc-search-agent/.datorum.yml>`.
 
@@ -135,12 +135,13 @@ The pipeline flow settings will be placed in the ``flows_path`` defined in the C
 To run the created flow, supposing you just created ``flow_0``:
 
 .. code-block:: bash
+
     datorum run pipeline flow_0
 
-The command above can also be used to resumed an interrupted or crashed pipeline, since flow
-state are stored within it's settings.
+The command above can also be used to resume an interrupted or crashed pipeline, since flow
+state is stored within its settings.
 
-You can also create and run the flow in a single command, just by ommiting the
+You can also create and run the flow in a single command, just by omitting the
 ``--create-only`` flag:
 
 .. code-block:: bash

@@ -14,10 +14,10 @@ Shared context lives in the ``shared`` directory and we are going to use
 Pipeline documents
 ==================
 
-This pipeline is expected to interact with the user thru a markdown file
-and with the models thru a chat-history file. We are going to need tools
+This pipeline is expected to interact with the user through a markdown file
+and with the models through a chat-history file. We are going to need tools
 for context building and for file searching. The first group do not need
-parameters, the files will be binded as attributes, and returns a simple
+parameters, the files will be bound as attributes, and returns a simple
 ``dict``, that will be read by a decision step to define which agent to
 use for each chat built.
 
@@ -33,11 +33,11 @@ Creating documents
 * An empty params file (``empty.txt``)
 * A dict document holding the context builder results (``tool-response.yaml``)
 
-For the ``shared/docs/selection.md``, just a placeholder for selectable files and user's
-question is enough.
+For the ``shared/docs/selection.md``, just a placeholder for selectable files and the
+user's question is enough.
 
 .. literalinclude:: /examples/doc-search-agent/shared/docs/selection.md
-   :language: python
+   :language: markdown
 
 The other files are simpler and can be created using command line.
 
@@ -63,16 +63,16 @@ CLI context. This can be done with these commands:
 Sample files
 ============
 
-Finally, we are going do download some sample files for the model to search in.
+Finally, we are going to download some sample files for the model to search in.
 For that, we are going to use the "Quirky Tech Specs" collection (IETF April
-Fools RFCs) for this tutorial. First, let's create a separeated context for that.
+Fools RFCs) for this tutorial. First, let's create a separate context for that.
 
 .. code-block:: bash
 
    mkdir -p shared/files/quirky_tech_specs
    datorum config context create files
 
-Now, we are going to download  a handful of files.
+Now, we are going to download a handful of files.
 
 .. code-block:: bash
 
@@ -154,15 +154,15 @@ look like this:
 As you can see, the shared context called ``docs`` holds references for all the
 documents we created and linked. There's also the shared context called ``files``,
 with no documents. For the downloaded files to be searchable, we do not need them
-mapped as documents, just create an empty dict as the domain metadata, so Datorum
-know it exists.
+mapped as documents, just create an empty dict as the domain metadata so Datorum
+knows it exists.
 
 .. code-block:: yaml
 
     # (...)
       files:
-      id: files
-      documents: {}
-      domain_metadata:
-        quirky_tech_specs: {}
+        id: files
+        documents: {}
+        domain_metadata:
+          quirky_tech_specs: {}
     # (...)

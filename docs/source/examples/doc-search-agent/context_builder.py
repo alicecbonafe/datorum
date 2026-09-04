@@ -69,10 +69,10 @@ class ContextBuilderToolBox:
     def build_chat_history(self) -> dict[str, Any]:
         """Build ``agent_chat`` from the user-edited selection document.
 
-        If chat history is empty and the user selected at least one searchable file,
-        prepare chat history for the searcher.
-        If there're no searchable files selected, or if the first model already made
-        the tool calls, prepare chat history for the final answer.
+        If the chat history is empty and the user selected at least one searchable
+        file, prepare the chat history for the searcher.
+        If there are no searchable files selected, or if the first model already
+        made the tool calls, prepare chat history for the final answer.
         """
         if self.agent_chat.messages:
             # Second call: searcher already called, now it's answerer turn
@@ -92,9 +92,10 @@ class ContextBuilderToolBox:
 
         else:
             # First call: extract HITL info and check if user has selected any file
-            files = self.interactive.frontmatter.get("files", {})
+            files = self.interactive.frontmatter.get("files", {}) \
+                if self.interactive.frontmatter else {}
             prompt = self.interactive.content.strip()
-            count_selected = len(files)
+            count_selected = len([name for name, selected in files.items() if selected])
 
             # Resolve the right system instructions (if exists) and create chat history
             role = self.searcher_role if count_selected else self.answerer_role

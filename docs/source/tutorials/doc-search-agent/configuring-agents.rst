@@ -9,7 +9,7 @@ create two roles to be used in the pipeline.
 Inference provider
 ==================
 
-This is how a provider definition should look like within the CLI settings file.
+This is how a provider definition should look within the CLI settings file.
 
 .. code-block:: yaml
 
@@ -48,7 +48,7 @@ Python code must be in the ``custom_registry`` list of the CLI settings file.
 Basic agent role
 ================
 
-For alpha-2, we cannot customize toolbox setup bindings in command line. Instead,
+For alpha-2, we cannot customize toolbox setup bindings from command line. Instead,
 we'll need a new toolbox setup.
 
 .. code-block:: yaml
@@ -78,7 +78,8 @@ we'll need a new toolbox setup.
 
 A testable agent should be able to decide whether to use tools. Also, we do not need
 ``system_instructions``, since it'll be in the chat history. This field is meant to
-be used by context builders to change the chat history between agent calls.
+be used by context builders to change the chat history between agent calls. The agent
+worker itself does nothing with this field.
 
 .. code-block:: yaml
 
@@ -97,7 +98,7 @@ be used by context builders to change the chat history between agent calls.
           tool_choice: auto
           tool_max_iter: 3
 
-Now, let's prepare a chat history for this run. I'll save it as ``shared/docs/chat-basic.yaml``.
+Now, let's prepare a chat history for this run. We'll save it as ``shared/docs/chat-basic.yaml``.
 
 .. literalinclude:: /examples/doc-search-agent/shared/docs/chat-basic.yaml
     :language: yaml
@@ -119,7 +120,7 @@ LMStudio should be up and running.
 The local context will be created in ``local/agent_<timestamp>`` and there you'll
 find the ``docs/chat-basic.yaml`` with all the tool calls and the final answer. In
 this file, you can verify how the model used the tools. Testing multiple models will
-lead you to the better combination between tool signature + docs and the model.
+lead you to the best combination of tool signature, docs, and model.
 
 Pipeline agent roles
 ====================

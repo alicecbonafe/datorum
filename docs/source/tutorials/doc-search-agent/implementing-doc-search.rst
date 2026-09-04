@@ -62,7 +62,7 @@ require attention in this regard.
             Example: keyword_search(keywords=["refund policy", "return window"])
 
             :param keywords: A list with one or more literal words/phrases to look for.
-                Only files containing at least on of these keywords will be included in
+                Only files containing at least one of these keywords will be included in
                 the results.
             :type keywords: list[str]
             :param case_sensitive: If False (default), matching ignores case.
@@ -77,10 +77,10 @@ require attention in this regard.
             Only use this when keyword_search isn't precise enough -- e.g. to
             match a numeric range or a word boundary.
 
-            Example: regex_search(patterns=["error code \\d+", "failed with status])
+            Example: regex_search(patterns=["error code \\d+", "failed with status"])
 
             :param patterns: A list with one or more regex patterns to look for.
-                Only files matching at least on of these patterns will be included in
+                Only files matching at least one of these patterns will be included in
                 the results.
             :type patterns: list[str]
             :param case_sensitive: If False (default), matching ignores case.
@@ -94,7 +94,7 @@ Configuring
 ===========
 
 In the ``.datorum.yml`` file, two steps are necessary. Let's start by creating the
-toolbox settings, where we can pre bind the fields we already have.
+toolbox settings, where we can pre-bind the fields we already have.
 
 .. code-block:: yaml
 
@@ -133,7 +133,7 @@ of the CLI settings.
 Testing
 =======
 
-When an agent uses a tool, its parameters and response are automatically binded
+When an agent uses a tool, its parameters and response are automatically bound
 to the chat history. Calling a tool directly requires us to create both documents.
 
 The parameters file would look like these:
@@ -167,7 +167,7 @@ Remember to enable some search files in the new markdown.
 
 When running a tool, generally we'll want to use a copy of the search result document
 in the tool's local context, so the shared document remains unchanged. In the command
-line, it is done adding an underscore (``_``) before the binding declaration.
+line, it is done by adding an underscore (``_``) before the binding declaration.
 
 .. code-block:: bash
 
@@ -178,10 +178,11 @@ In the terminal, you will see the broadcasted messages. Messages starting with
 such as ``[working]`` or ``[finished]``. Unless you see a ``[crashed]`` update,
 at this point you should have the ``local`` directory created, with a sub
 directory starting with "tool\_" followed by the current timestamp. This is the
-tool's local context, where lives all local copies of shared context documents.
+tool's local context, where all local copies of shared context documents live.
 Take a look at ``docs/search-result.yaml``, it should look like this:
 
 .. code-block:: yaml
+
     total_matches: 2
     files_matched:
     - rfc1925.txt
