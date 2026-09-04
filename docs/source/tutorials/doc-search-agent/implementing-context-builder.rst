@@ -145,9 +145,56 @@ the ``-a`` (or ``--load-agents``) flag. Let's see how the tool will prepare the
 markdown for human interaction.
 
 .. code-block:: bash
+
     datorum run tool context_builder.scaffold_selection docs:empty _docs:tool-response --load-agents
 
 This creates the ``selection.md`` file inside the local context, with all
 searchable files listed in the frontmatter
 
+The second tool can follow two distinct paths. If no searchable file has been
+selected, or if the chat history is not empty, the tool prepares the call to the
+answerer.
 
+.. code-block:: bash
+
+    datorum run tool context_builder.build_chat_history docs:empty _docs:tool-response --load-agents
+
+Since the Markdown content in the shared context does not contain any actual files,
+the chat history within the local context will include the ``system_instructions`` for
+the answerer role. Furthermore, the Markdown body contains only a placeholder for the
+user's question, and this placeholder is copied exactly as-is into the user message
+within the chat history. You can also verify in the tool's response file that it
+counted zero files; this indicates that the decision step should direct the pipeline
+flow to the final agent.
+
+To test the construction of the chat history for the searcher role, simply override
+the setup binding to call the existing test file.
+
+.. code-block:: bash
+
+    datorum run tool context_builder.build_chat_history docs:empty _docs:tool-response --bind-context "interactive=model(docs:tool-selection)" --load-agents
+
+Now, the chat history contains the ``system_instructions`` for the searcher role, and
+the tool's response includes the number of selected files, signaling the decision step
+to invoke the correct subsequent step.
+
+To test the final tool, let's modify `chat-basic.yaml` to add a mocked assistant
+message.
+
+.. code-block:: yaml
+
+    messages:
+    - role: system
+      content: You are a context-binded assistant. Call search at least once before answering; do not answer from memory.
+    - role: user
+      content: According to the documentation, how should avian carriers transport messages over IP?
+    - role: assistant
+      content: This is a mock message, and you should not take it seriously.
+
+Use the correct bind to call this run.
+
+.. code-block:: bash
+
+    datorum run tool context_builder.extract_answer docs:empty _docs:tool-response --bind-context "agent_chat=model(docs:chat-basic)" --load-agents
+
+Now, the selection markdown within the local context holds the mocked messagem.

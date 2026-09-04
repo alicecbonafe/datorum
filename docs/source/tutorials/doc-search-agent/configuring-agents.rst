@@ -36,6 +36,7 @@ this can be easily customized. For this tutorial, it's enough to create a dictio
 for ``api_keys``, in the settings file:
 
 .. code-block:: yaml
+
     api_keys:
       lmstudio: lmstudio
 
@@ -80,6 +81,7 @@ A testable agent should be able to decide whether to use tools. Also, we do not 
 be used by context builders to change the chat history between agent calls.
 
 .. code-block:: yaml
+
     agencykit:
       providers:
         # provider definition
@@ -97,12 +99,13 @@ be used by context builders to change the chat history between agent calls.
 
 Now, let's prepare a chat history for this run. I'll save it as ``shared/docs/chat-basic.yaml``.
 
-.. literalinclude:: /examples/doc-search-agent/shared/docs/chat-base.yaml
+.. literalinclude:: /examples/doc-search-agent/shared/docs/chat-basic.yaml
     :language: yaml
 
 Remember to link it.
 
 .. code-block:: bash
+
     datorum config context link docs shared/docs/chat-basic.yaml -t application/yaml -m chat-history
 
 Now, let's give it a try, always referring to the chat history as local, using the
@@ -110,6 +113,7 @@ underscore prefix, unless we want the original file to be changed. At this point
 LMStudio should be up and running.
 
 .. code-block:: bash
+
     datorum run agent basic _docs:chat-basic
 
 The local context will be created in ``local/agent_<timestamp>`` and there you'll
