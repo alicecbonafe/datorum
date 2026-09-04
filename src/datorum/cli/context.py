@@ -237,7 +237,7 @@ class CliAppContext:
                             local_context_id=job.local_context_id if bind.local else None
                         )
                         click.echo(
-                            f"Please edit the file before resuming: '{interactive.doc_path}'"
+                            f"Please edit the file before resuming: '{interactive.doc_path.absolute()}'"
                         )
                         break
 

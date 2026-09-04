@@ -232,7 +232,10 @@ class AgentWorker(Worker):
         job.is_streaming = True
         try:
             async with (
-                httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client,
+                httpx.AsyncClient(
+                    base_url=provider.base_url,
+                    timeout=provider.timeout,
+                ) as client,
                 client.stream(
                     "POST",
                     "chat/completions",
@@ -295,7 +298,7 @@ class AgentWorker(Worker):
                             extra_parts[key] = value
         except httpx.HTTPError as e:
             raise AgentWorkerError(
-                f"Failed to call inference provider '{provider.id}': {e}"
+                f"Failed to call inference provider '{provider.id}': {type(e).__name__}: {e}"
             ) from e
         finally:
             job.is_streaming = False
@@ -331,7 +334,7 @@ class AgentWorker(Worker):
                 response.raise_for_status()
         except httpx.HTTPError as e:
             raise AgentWorkerError(
-                f"Failed to call inference provider '{provider.id}': {e}"
+                f"Failed to call inference provider '{provider.id}': {type(e).__name__}: {e}"
             ) from e
 
         response_data = response.json()

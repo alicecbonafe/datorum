@@ -1,0 +1,309 @@
+shared_context_path: shared
+local_context_path: local
+flows_path: flows
+flow_id_template: flow_{index}
+toolkit:
+  toolboxes:
+    rfc_search:
+      id: rfc_search
+      toolbox_name: doc_search
+      tools_enabled:
+      - keyword_search
+      - regex_search
+      context_bindings:
+      - field_id: domain
+        binded_id: quirky_tech_specs
+        context: files
+        context_bind_type: domain-path
+        local: false
+      - field_id: interactive
+        binded_id: selection
+        context: docs
+        context_bind_type: model-input
+        local: true
+      resource_bindings: []
+    rfc_search_basic:
+      id: rfc_search_basic
+      toolbox_name: doc_search
+      tools_enabled:
+      - keyword_search
+      - regex_search
+      context_bindings:
+      - field_id: domain
+        binded_id: quirky_tech_specs
+        context: files
+        context_bind_type: domain-path
+        local: false
+      - field_id: interactive
+        binded_id: tool-selection
+        context: docs
+        context_bind_type: model-input
+        local: true
+      resource_bindings: []
+    context_builder:
+      id: context_builder
+      toolbox_name: context_builder
+      tools_enabled:
+      - scaffold_selection
+      - build_chat_history
+      - extract_answer
+      context_bindings:
+      - field_id: domain
+        binded_id: quirky_tech_specs
+        context: files
+        context_bind_type: domain-path
+        local: false
+      - field_id: interactive
+        binded_id: selection
+        context: docs
+        context_bind_type: model
+        local: true
+      - field_id: agent_chat
+        binded_id: chat
+        context: docs
+        context_bind_type: model
+        local: true
+      resource_bindings:
+      - field_id: searcher_role
+        factory_name: agent_role
+        selector: searcher
+      - field_id: answerer_role
+        factory_name: agent_role
+        selector: answerer
+agencykit:
+  providers:
+    lmstudio:
+      id: lmstudio
+      description: Local LMStudio provider.
+      base_url: http://localhost:1234/v1
+      api_key_selector: null
+      supports_streaming: true
+      models:
+      - nvidia/nemotron-3-nano-4b
+      - mistralai/ministral-3-3b
+  roles:
+    basic:
+      id: basic
+      description: A testable agent.
+      preferred_models:
+      - mistralai/ministral-3-3b
+      tools_enabled:
+      - rfc_search_basic.keyword_search
+      - rfc_search_basic.regex_search
+      tool_choice: auto
+      tool_max_iter: 3
+    searcher:
+      id: searcher
+      preferred_models:
+      - mistralai/ministral-3-3b
+      system_instructions: Use tools to find lines matching the user's request in
+          the enabled files.
+      temperature: 0.4
+      tools_enabled:
+      - rfc_search.keyword_search
+      - rfc_search.regex_search
+      tool_choice: required
+      tool_max_iter: 3
+    answerer:
+      id: answerer
+      preferred_models:
+      - nvidia/nemotron-3-nano-4b
+      system_instructions: Answer the user's question using the conversation so far,
+          which may include search results gathered earlier in this session. Cite the
+          source filename for any claim drawn from a search result.
+      temperature: 0.8
+      top_p: 0.8
+plumbingkit:
+  pipelines:
+    doc-search-agent:
+      id: doc-search-agent
+      steps:
+        list-files:
+          type: tool
+          id: list-files
+          target_id: edit-selection
+          description: Read searchable files in the domain and prepare
+            the markdown.
+          tool_params:
+            field_id: tool_params
+            binded_id: empty
+            context: docs
+          tool_result:
+            field_id: tool_result
+            binded_id: tool-response
+            context: docs
+            local: true
+          toolbox_setup:
+            field_id: toolbox_setup
+            factory_name: toolbox_setup
+            selector: context_builder.scaffold_selection
+        edit-selection:
+          type: human
+          id: edit-selection
+          target_id: build-history
+          description: Wait for the user to edit the markdown, selecting
+            files and writing the question.
+          interactive:
+            field_id: interactive
+            binded_id: selection
+            context: docs
+            context_bind_type: model
+            local: true
+        build-history:
+          type: tool
+          id: build-history
+          target_id: check-selection
+          description: Prepare the chat history document according to
+            the context.
+          tool_params:
+            field_id: tool_params
+            binded_id: empty
+            context: docs
+          tool_result:
+            field_id: tool_result
+            binded_id: tool-response
+            context: docs
+            local: true
+          toolbox_setup:
+            field_id: toolbox_setup
+            factory_name: toolbox_setup
+            selector: context_builder.build_chat_history
+        check-selection:
+          type: decision
+          id: check-selection
+          description: Check the tool response to decide which agent
+            to call.
+          target_options:
+          - search-first
+          - final-inference
+          code_type: formula
+          code: '''search-first'' if int(input_data["count"]) > 0 else ''final-inference'''
+          input_data:
+            field_id: input_data
+            binded_id: tool-response
+            context: docs
+            local: true
+        search-first:
+          type: agent
+          id: search-first
+          target_id: build-history
+          description: First agent role, forced to use the search tools.
+          chat_history:
+            field_id: chat_history
+            binded_id: chat
+            context: docs
+            context_bind_type: model
+            local: true
+          inference_provider:
+            field_id: inference_provider
+            factory_name: inference_provider
+            selector: lmstudio
+          agent_role:
+            field_id: agent_role
+            factory_name: agent_role
+            selector: searcher
+        final-inference:
+          type: agent
+          id: final-inference
+          target_id: extract-answer
+          description: Second agent role, no tools available.
+          chat_history:
+            field_id: chat_history
+            binded_id: chat
+            context: docs
+            local: true
+          inference_provider:
+            field_id: inference_provider
+            factory_name: inference_provider
+            selector: lmstudio
+          agent_role:
+            field_id: agent_role
+            factory_name: agent_role
+            selector: answerer
+        extract-answer:
+          type: tool
+          id: extract-answer
+          description: Append the assistant message to the markdown.
+          tool_params:
+            field_id: tool_params
+            binded_id: empty
+            context: docs
+          tool_result:
+            field_id: tool_result
+            binded_id: tool-response
+            context: docs
+            local: true
+          toolbox_setup:
+            field_id: toolbox_setup
+            factory_name: toolbox_setup
+            selector: context_builder.extract_answer
+      first_step_id: list-files
+shared_context:
+  docs:
+    id: docs
+    documents:
+      chat:
+        id: chat
+        doc_type: application/yaml
+        doc_model: chat-history
+        extension: yaml
+        metadata: {}
+      selection:
+        id: selection
+        doc_type: text/markdown
+        doc_model: markdown
+        extension: md
+        metadata: {}
+      empty:
+        id: empty
+        doc_type: text/plain
+        doc_model: text
+        extension: txt
+        metadata: {}
+      tool-response:
+        id: tool-response
+        doc_type: application/yaml
+        doc_model: dict
+        extension: yaml
+        metadata: {}
+      keyword-search-params:
+        id: keyword-search-params
+        doc_type: application/yaml
+        doc_model: dict
+        extension: yaml
+        metadata: {}
+      regex-search-params:
+        id: regex-search-params
+        doc_type: application/yaml
+        doc_model: dict
+        extension: yaml
+        metadata: {}
+      search-result:
+        id: search-result
+        doc_type: application/yaml
+        doc_model: dict
+        extension: yaml
+        metadata: {}
+      tool-selection:
+        id: tool-selection
+        doc_type: text/markdown
+        doc_model: markdown
+        extension: md
+        metadata: {}
+      chat-basic:
+        id: chat-basic
+        doc_type: application/yaml
+        doc_model: chat-history
+        extension: yaml
+        metadata: {}
+    domain_metadata: {}
+  files:
+    id: files
+    documents: {}
+    domain_metadata:
+      quirky_tech_specs: {}
+custom_registry:
+- doc_search_toolbox.py
+- context_builder.py
+api_keys:
+  lmstudio: lmstudio
