@@ -10,4 +10,4 @@ you already know the basics, see :doc:`../how-to/index` instead.
 .. toctree::
    :maxdepth: 1
 
-   doc-search-agent
+   doc-search-agent/index

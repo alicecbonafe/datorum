@@ -218,7 +218,11 @@ class AgentWorker(Worker):
         api_key: str,
         job: Job,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        request_payload = {**request_payload, "stream": True}
+        request_payload = {
+            **request_payload,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
         content_parts: list[str] = []
         tool_call_parts: dict[int, dict[str, Any]] = {}
         extra_parts: dict[str, Any] = {}
@@ -249,7 +253,11 @@ class AgentWorker(Worker):
                         if key != "choices" and value is not None:
                             response_meta[key] = value
 
-                    choice = event["choices"][0]
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+
+                    choice = choices[0]
                     delta = choice.get("delta", {})
                     finish_reason = choice.get("finish_reason") or finish_reason
                     response_meta["finish_reason"] = finish_reason
@@ -280,6 +288,7 @@ class AgentWorker(Worker):
                             continue
                         if isinstance(value, str):
                             extra_parts[key] = extra_parts.get(key, "") + value
+                            await job.push_chunk(value)
                         else:
                             # extra parts that are not strings are not cumulative
                             # this will be handled when a concrete case appears
@@ -413,13 +422,11 @@ class AgentWorker(Worker):
                 JobStatus.WORKING,
                 f"Calling model '{model}' at provider '{provider.id}' (round {i})",
             )
-            request_payload: dict[str, Any] = {
-                "model": model,
-                "messages": chat.prepare_request(),
-                "temperature": role.temperature,
-                "top_p": role.top_p,
-                "max_tokens": role.max_tokens,
-            }
+            request_payload = chat.prepare_request()
+            request_payload["model"] = model
+            request_payload["temperature"] = role.temperature
+            request_payload["top_p"] = role.top_p
+            request_payload["max_tokens"] = role.max_tokens
 
             if len(toolkit_schema) > 0:
                 request_payload["tools"] = toolkit_schema
@@ -428,6 +435,7 @@ class AgentWorker(Worker):
                 request_payload["response_format"] = response_format
 
             if provider.supports_streaming:
+                await job.push_log(f"Request payload: {request_payload}")
                 message, response_meta = await self._call_streamer(
                     request_payload=request_payload,
                     provider=provider,
@@ -485,12 +493,14 @@ class AgentWorker(Worker):
                                 binded_id=chat_bind.binded_id,
                                 context=chat_bind.context,
                                 context_bind_type=ContextBindType.model,
+                                local=chat_bind.local,
                             ),
                             ContextBind(
                                 field_id="tool_result",
                                 binded_id=chat_bind.binded_id,
                                 context=chat_bind.context,
                                 context_bind_type=ContextBindType.model,
+                                local=chat_bind.local,
                             ),
                         ],
                         resource_bindings=[

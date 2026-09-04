@@ -1,0 +1,4 @@
+patterns:
+- \b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b  # e-mail addresses
+- \b(?:Section|Rule)\s+\d+[a-z]?\b  # references
+case_sensitive: false

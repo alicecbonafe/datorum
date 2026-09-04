@@ -129,11 +129,23 @@ class ContextGroup(BaseCommandGroup):
 
         parts = relative_path.parts
         document_id = ".".join(parts)
+        ext = None
+
+        doc_type_obj = datorum.get_doc_type(doc_type)
+        if doc_type_obj.extensions:
+            ext_pos = document_id.rfind(".")
+            ext = document_id[ext_pos+1:]
+            if ext not in doc_type_obj.extensions:
+                raise click.ClickException(
+                    f"Unknown extension '{ext}' for '{doc_type}'"
+                )
+            document_id = document_id[:ext_pos]
 
         context.create_document(
             id=document_id,
             doc_type=doc_type,
             doc_model=doc_model,
+            extension=ext,
         )
         app_ctx.settings.save()
 
