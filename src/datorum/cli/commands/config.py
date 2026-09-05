@@ -134,7 +134,7 @@ class ContextGroup(BaseCommandGroup):
         doc_type_obj = datorum.get_doc_type(doc_type)
         if doc_type_obj.extensions:
             ext_pos = document_id.rfind(".")
-            ext = document_id[ext_pos+1:]
+            ext = document_id[ext_pos + 1 :]
             if ext not in doc_type_obj.extensions:
                 raise click.ClickException(
                     f"Unknown extension '{ext}' for '{doc_type}'"

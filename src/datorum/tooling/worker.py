@@ -194,12 +194,12 @@ class ToolWorker(Worker):
         params_doc = await self.binder.find_document(
             document_id=params_bind.binded_id,
             context=params_bind.context,
-            local_context_id=job.local_context_id if params_bind.local else None
+            local_context_id=job.local_context_id if params_bind.local else None,
         )
         result_doc = await self.binder.find_document(
             document_id=result_bind.binded_id,
             context=result_bind.context,
-            local_context_id=job.local_context_id if result_bind.local else None
+            local_context_id=job.local_context_id if result_bind.local else None,
         )
 
         params = None
@@ -276,8 +276,12 @@ class ToolWorker(Worker):
             )
             if not field_bind:
                 field_bind = next(
-                    (bind for bind in setup.context_bindings if bind.field_id == field.attr_name),
-                    None
+                    (
+                        bind
+                        for bind in setup.context_bindings
+                        if bind.field_id == field.attr_name
+                    ),
+                    None,
                 )
             if not field_bind:
                 continue
@@ -286,5 +290,5 @@ class ToolWorker(Worker):
             await self.binder.push_context(
                 bind=field_bind,
                 value=field_value,
-                local_context_id=job.local_context_id
+                local_context_id=job.local_context_id,
             )

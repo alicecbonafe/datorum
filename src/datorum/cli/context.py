@@ -234,7 +234,9 @@ class CliAppContext:
                         interactive = await self.binder.find_document(
                             document_id=bind.binded_id,
                             context=bind.context,
-                            local_context_id=job.local_context_id if bind.local else None
+                            local_context_id=job.local_context_id
+                            if bind.local
+                            else None,
                         )
                         click.echo(
                             f"Please edit the file before resuming: '{interactive.doc_path.absolute()}'"
