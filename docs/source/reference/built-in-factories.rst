@@ -1,6 +1,6 @@
-========================
+===========================
 Built-in resource factories
-========================
+===========================
 
 A resource factory is a callable registered under a name, resolved via a
 :py:class:`~datorum.ResourceBind`'s ``factory_name``. Datorum's built-in

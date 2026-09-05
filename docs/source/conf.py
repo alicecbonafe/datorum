@@ -9,8 +9,14 @@ author = 'Alice Bonafé'
 version = '0.1.0a2'
 release = '0.1.0a2'
 
+exclude_patterns = [
+    "examples",
+    "adr",
+]
+
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",

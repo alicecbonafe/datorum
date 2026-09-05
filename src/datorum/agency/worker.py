@@ -218,7 +218,11 @@ class AgentWorker(Worker):
         api_key: str,
         job: Job,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        request_payload = {**request_payload, "stream": True}
+        request_payload = {
+            **request_payload,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
         content_parts: list[str] = []
         tool_call_parts: dict[int, dict[str, Any]] = {}
         extra_parts: dict[str, Any] = {}
@@ -228,7 +232,10 @@ class AgentWorker(Worker):
         job.is_streaming = True
         try:
             async with (
-                httpx.AsyncClient(base_url=provider.base_url, timeout=120.0) as client,
+                httpx.AsyncClient(
+                    base_url=provider.base_url,
+                    timeout=provider.timeout,
+                ) as client,
                 client.stream(
                     "POST",
                     "chat/completions",
@@ -249,7 +256,11 @@ class AgentWorker(Worker):
                         if key != "choices" and value is not None:
                             response_meta[key] = value
 
-                    choice = event["choices"][0]
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+
+                    choice = choices[0]
                     delta = choice.get("delta", {})
                     finish_reason = choice.get("finish_reason") or finish_reason
                     response_meta["finish_reason"] = finish_reason
@@ -280,13 +291,14 @@ class AgentWorker(Worker):
                             continue
                         if isinstance(value, str):
                             extra_parts[key] = extra_parts.get(key, "") + value
+                            await job.push_chunk(value)
                         else:
                             # extra parts that are not strings are not cumulative
                             # this will be handled when a concrete case appears
                             extra_parts[key] = value
         except httpx.HTTPError as e:
             raise AgentWorkerError(
-                f"Failed to call inference provider '{provider.id}': {e}"
+                f"Failed to call inference provider '{provider.id}': {type(e).__name__}: {e}"
             ) from e
         finally:
             job.is_streaming = False
@@ -322,7 +334,7 @@ class AgentWorker(Worker):
                 response.raise_for_status()
         except httpx.HTTPError as e:
             raise AgentWorkerError(
-                f"Failed to call inference provider '{provider.id}': {e}"
+                f"Failed to call inference provider '{provider.id}': {type(e).__name__}: {e}"
             ) from e
 
         response_data = response.json()
@@ -388,7 +400,9 @@ class AgentWorker(Worker):
         )
 
         chat_doc = await self.binder.find_document(
-            document_id=chat_bind.binded_id, context=chat_bind.context
+            document_id=chat_bind.binded_id,
+            context=chat_bind.context,
+            local_context_id=job.local_context_id if chat_bind.local else None,
         )
         chat: ChatHistory = chat_doc.load()
         if len(chat.messages) == 0:
@@ -411,13 +425,11 @@ class AgentWorker(Worker):
                 JobStatus.WORKING,
                 f"Calling model '{model}' at provider '{provider.id}' (round {i})",
             )
-            request_payload: dict[str, Any] = {
-                "model": model,
-                "messages": chat.prepare_request(),
-                "temperature": role.temperature,
-                "top_p": role.top_p,
-                "max_tokens": role.max_tokens,
-            }
+            request_payload = chat.prepare_request()
+            request_payload["model"] = model
+            request_payload["temperature"] = role.temperature
+            request_payload["top_p"] = role.top_p
+            request_payload["max_tokens"] = role.max_tokens
 
             if len(toolkit_schema) > 0:
                 request_payload["tools"] = toolkit_schema
@@ -426,6 +438,7 @@ class AgentWorker(Worker):
                 request_payload["response_format"] = response_format
 
             if provider.supports_streaming:
+                await job.push_log(f"Request payload: {request_payload}")
                 message, response_meta = await self._call_streamer(
                     request_payload=request_payload,
                     provider=provider,
@@ -483,12 +496,14 @@ class AgentWorker(Worker):
                                 binded_id=chat_bind.binded_id,
                                 context=chat_bind.context,
                                 context_bind_type=ContextBindType.model,
+                                local=chat_bind.local,
                             ),
                             ContextBind(
                                 field_id="tool_result",
                                 binded_id=chat_bind.binded_id,
                                 context=chat_bind.context,
                                 context_bind_type=ContextBindType.model,
+                                local=chat_bind.local,
                             ),
                         ],
                         resource_bindings=[

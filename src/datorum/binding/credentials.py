@@ -6,7 +6,7 @@ from .binder import Binder
 from .exceptions import InvalidKeyNameError, KeyNotFoundError
 from .registry import ResourceFactoryRegistry, resource
 
-DEFAULT_KEY_NAME_MATCH = r"^[A-Za-z_][A-Za-z0-9_]*$"
+DEFAULT_KEY_NAME_MATCH = r"^[A-Za-z_][A-Za-z0-9_-]*$"
 
 
 def register_mapped_api_key_factory(

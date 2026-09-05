@@ -63,14 +63,14 @@ def test_run_tool_writes_result_and_leaves_params_untouched(runner, echo_tool_en
     base = echo_tool_enabled.parent / "contexts" / "work"
     (base / "params.txt").write_text("original params")
 
-    result = _run(runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params.txt", "result.txt")
+    result = _run(runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params", "result")
     assert result.exit_code == 0
     assert (base / "result.txt").read_text() == "HELLO"
     assert (base / "params.txt").read_text() == "original params"
 
 
 def test_run_tool_unknown_toolbox_reports_clean_error(runner, linked_context):
-    result = _run(runner, linked_context, "run", "tool", "no-such-toolbox.shout", "params.txt", "result.txt")
+    result = _run(runner, linked_context, "run", "tool", "no-such-toolbox.shout", "params", "result")
     assert result.exit_code != 0
     assert "Traceback" not in result.output
 
@@ -88,7 +88,7 @@ def test_run_tool_disabled_tool_reports_clean_error(runner, linked_context, echo
     )
     _run(runner, linked_context, "config", "import", "tools", str(kit_file))
 
-    result = _run(runner, linked_context, "run", "tool", f"{echo_toolbox}.shout", "params.txt", "result.txt")
+    result = _run(runner, linked_context, "run", "tool", f"{echo_toolbox}.shout", "params", "result")
     assert result.exit_code != 0
     assert "Traceback" not in result.output
 
@@ -97,19 +97,29 @@ def test_run_tool_accepts_bind_context_option(runner, echo_tool_enabled, echo_to
     """-c/--bind-context is threaded through and parses without error, even
     though this particular tool never reads the extra binding."""
     result = _run(
-        runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params.txt", "result.txt",
-        "-c", "extra=model(work:chat.txt)",
+        runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params", "result",
+        "-c", "extra=model(work:chat)",
     )
     assert result.exit_code == 0
 
 
 def test_run_tool_malformed_bind_context_reports_clean_error(runner, echo_tool_enabled, echo_toolbox):
     result = _run(
-        runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params.txt", "result.txt",
+        runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params", "result",
         "-c", "not-a-valid-binding",
     )
     assert result.exit_code != 0
     assert "Traceback" not in result.output
+
+
+def test_run_tool_load_agents_and_pipelines_flags_wire_up_workers(runner, echo_tool_enabled, echo_toolbox):
+    """-a/-p just assert the lazily-built worker properties are reachable;
+    exercised here purely for their side effect of constructing them."""
+    result = _run(
+        runner, echo_tool_enabled, "run", "tool", f"{echo_toolbox}.shout", "params", "result",
+        "-a", "-p",
+    )
+    assert result.exit_code == 0
 
 
 # ==============================================================================
@@ -117,13 +127,13 @@ def test_run_tool_malformed_bind_context_reports_clean_error(runner, echo_tool_e
 # ==============================================================================
 
 def test_run_agent_unknown_role_reports_clean_error(runner, linked_context):
-    result = _run(runner, linked_context, "run", "agent", "no-such-role", "chat.txt")
+    result = _run(runner, linked_context, "run", "agent", "no-such-role", "chat")
     assert result.exit_code != 0
     assert "Traceback" not in result.output
 
 
 def test_run_agent_with_explicit_provider_still_fails_cleanly_when_unknown(runner, linked_context):
-    result = _run(runner, linked_context, "run", "agent", "no-such-role", "chat.txt", "-p", "no-such-provider")
+    result = _run(runner, linked_context, "run", "agent", "no-such-role", "chat", "-p", "no-such-provider")
     assert result.exit_code != 0
     assert "Traceback" not in result.output
 
@@ -147,7 +157,7 @@ def hitl_pipeline_kit(linked_context):
         "        target_id: null\n"
         "        interactive:\n"
         "          field_id: interactive\n"
-        "          binded_id: chat.txt\n"
+        "          binded_id: chat\n"
         "          context: work\n"
         "          context_bind_type: model\n"
         "          local: false\n"
