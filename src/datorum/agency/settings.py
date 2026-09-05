@@ -15,10 +15,7 @@ class InferenceServiceProvider(BaseDatorumSettings):
     )
 
     base_url: str = Field(description="Base endpoint URL.")
-    timeout: float = Field(
-        default=120.0,
-        description="Timeout for this provider."
-    )
+    timeout: float = Field(default=120.0, description="Timeout for this provider.")
     api_key_selector: str | None = Field(
         default=None,
         description="Used if API key resource selector is not the provider ID.",
