@@ -117,7 +117,11 @@ def test_context_link_registers_document(runner, initialized):
     result = _run(runner, initialized, "config", "context", "link", "work", str(doc_file))
     assert result.exit_code == 0
     saved = initialized.read_text()
-    assert "notes.txt" in saved
+    # the extension is stripped off into its own field -- the document's id is
+    # the bare name ("notes"), not the filename ("notes.txt")
+    assert "notes:" in saved
+    assert "id: notes" in saved
+    assert "extension: txt" in saved
     assert "doc_type: text/plain" in saved
     assert "doc_model: text" in saved
 
@@ -131,7 +135,10 @@ def test_context_link_nested_file_builds_dotted_document_id(runner, initialized)
 
     result = _run(runner, initialized, "config", "context", "link", "work", str(doc_file))
     assert result.exit_code == 0
-    assert "reports.q1.summary.txt" in initialized.read_text()
+    saved = initialized.read_text()
+    assert "reports.q1.summary:" in saved
+    assert "id: reports.q1.summary" in saved
+    assert "extension: txt" in saved
 
 
 def test_context_link_custom_doc_type_and_model(runner, initialized):
@@ -147,6 +154,19 @@ def test_context_link_custom_doc_type_and_model(runner, initialized):
     saved = initialized.read_text()
     assert "doc_type: application/json" in saved
     assert "doc_model: dict" in saved
+
+
+def test_context_link_extension_not_valid_for_doc_type_fails(runner, initialized):
+    _run(runner, initialized, "config", "context", "create", "work", "--create-dir")
+    doc_file = initialized.parent / "shared" / "work" / "data.txt"
+    doc_file.write_text("hello")
+
+    result = _run(
+        runner, initialized, "config", "context", "link", "work", str(doc_file),
+        "-t", "application/json",
+    )
+    assert result.exit_code != 0
+    assert "Unknown extension 'txt' for 'application/json'" in result.output
 
 
 def test_context_link_unknown_context_fails(runner, initialized, tmp_path):
@@ -176,7 +196,9 @@ def test_context_link_accepts_absolute_path_to_file_inside_context(runner, initi
 
     result = _run(runner, initialized, "config", "context", "link", "work", str(doc_file))
     assert result.exit_code == 0
-    assert "notes.txt" in initialized.read_text()
+    saved = initialized.read_text()
+    assert "notes:" in saved
+    assert "id: notes" in saved
 
 
 def test_context_link_file_outside_context_path_fails(runner, initialized, tmp_path):
@@ -206,7 +228,10 @@ def test_context_export_writes_standalone_file(runner, initialized):
     result = _run(runner, initialized, "config", "context", "export", "work", str(export_file))
     assert result.exit_code == 0
     assert export_file.exists()
-    assert "notes.txt" in export_file.read_text()
+    exported = export_file.read_text()
+    assert "notes:" in exported
+    assert "id: notes" in exported
+    assert "extension: txt" in exported
 
 
 def test_context_export_unknown_context_fails(runner, initialized, tmp_path):

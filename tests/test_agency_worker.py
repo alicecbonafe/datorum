@@ -407,6 +407,9 @@ async def test_call_streamer_success_content_and_response_meta(tmp_path, httpser
         "data: " + json.dumps({"id": "chatcmpl-1", "model": "gpt-test", "choices": [{"delta": {"role": "assistant"}}]}) + "\n\n"
         "data: " + json.dumps({"id": "chatcmpl-1", "choices": [{"delta": {"content": "Hel"}}]}) + "\n\n"
         ": keep-alive\n\n"
+        # an event with an empty choices list (e.g. a provider-side heartbeat
+        # wrapped as a real SSE data event) must be skipped without erroring
+        "data: " + json.dumps({"choices": []}) + "\n\n"
         "data: " + json.dumps({"choices": [{"delta": {"content": "lo"}}]}) + "\n\n"
         # id is None here -> must NOT overwrite the previously captured "chatcmpl-1"
         "data: " + json.dumps({"id": None, "choices": [{"delta": {}, "finish_reason": "stop"}]}) + "\n\n"
@@ -704,14 +707,13 @@ async def test_work_success_streaming_with_explicit_provider(tmp_path, httpserve
     assert sent["max_tokens"] == role.max_tokens
     assert "tools" not in sent
     assert "response_format" not in sent
-    # NOTE: ChatHistory.prepare_request() itself returns {"messages": [...]}, and
-    # work() assigns that whole dict directly as request_payload["messages"].
-    assert sent["messages"] == {
-        "messages": [
-            {"role": "system", "content": "You are helpful."},
-            {"role": "user", "content": "hi"},
-        ]
-    }
+    # NOTE: ChatHistory.prepare_request() returns {"messages": [...]} and work()
+    # uses that whole dict directly as request_payload, so request_payload["messages"]
+    # is the flat list of dumped messages, not a further-nested dict.
+    assert sent["messages"] == [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": "hi"},
+    ]
 
 
 @pytest.mark.asyncio
@@ -847,7 +849,7 @@ async def test_work_tool_call_round_trip_success(tmp_path, httpserver, agent_too
 
     # the second round's request already includes the tool result in its messages
     second_request = httpserver.log[1][0].get_json()
-    assert second_request["messages"]["messages"][2]["role"] == "tool"
+    assert second_request["messages"][2]["role"] == "tool"
 
 
 @pytest.mark.asyncio

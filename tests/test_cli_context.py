@@ -168,7 +168,7 @@ class TestCatchUpdatesInteractivePrompt:
         job = _FakeJob(
             ["[paused]"],
             context_bindings=[
-                datorum.ContextBind(field_id="interactive", binded_id="chat.txt", context="work"),
+                datorum.ContextBind(field_id="interactive", binded_id="chat", context="work"),
             ],
         )
 
@@ -297,4 +297,17 @@ def test_parse_context_bind_local():
     assert bind.context_bind_type == datorum.ContextBindType.model
     assert bind.context == "my_ctx"
     assert bind.binded_id == "my_doc"
+    assert bind.local is True
+
+
+def test_parse_positional_context_local():
+    """A '_'-prefixed positional DOCUMENT_ID sets bind_local and strips the prefix."""
+    app_ctx = CliAppContext(settings_path=Path("dummy.yml"))
+
+    bind = app_ctx.parse_positional_context("_work:my_doc", field_id="tool_params")
+
+    assert bind.field_id == "tool_params"
+    assert bind.context == "work"
+    assert bind.binded_id == "my_doc"
+    assert bind.context_bind_type == datorum.ContextBindType.model
     assert bind.local is True
