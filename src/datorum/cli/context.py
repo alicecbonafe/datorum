@@ -90,9 +90,23 @@ class CliAppContext:
             if not module_path.exists():
                 raise click.ClickException(f"Registry file not found: {module_path}")
 
-            module_spec = importlib.util.spec_from_file_location(
-                module_path.stem, module_path
-            )
+            if module_path.is_dir():
+                init_path = module_path / "__init__.py"
+                if not init_path.exists():
+                    raise click.ClickException(
+                        f"Registry package missing __init__.py: {module_path}"
+                    )
+                module_spec = importlib.util.spec_from_file_location(
+                    module_path.stem,
+                    init_path,
+                    submodule_search_locations=[str(module_path)],
+                )
+
+            else:
+                module_spec = importlib.util.spec_from_file_location(
+                    module_path.stem, module_path
+                )
+
             if module_spec is None or module_spec.loader is None:
                 raise click.ClickException(
                     f"Failed to load custom registry: {module_path}"
