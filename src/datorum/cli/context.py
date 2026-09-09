@@ -85,36 +85,21 @@ class CliAppContext:
             return
 
         for file_path in self.settings.custom_registry:
-            module_key = ".".join([p for p in file_path.parts if "/" not in p])
             module_path = file_path.resolve()
             if not module_path.exists():
                 raise click.ClickException(f"Registry file not found: {module_path}")
 
             if module_path.is_dir():
-                init_path = module_path / "__init__.py"
-                if not init_path.exists():
-                    raise click.ClickException(
-                        f"Registry package missing __init__.py: {module_path}"
-                    )
-                module_spec = importlib.util.spec_from_file_location(
-                    module_path.stem,
-                    init_path,
-                    submodule_search_locations=[str(module_path)],
-                )
-
+                module_name = module_path.name
             else:
-                module_spec = importlib.util.spec_from_file_location(
-                    module_path.stem, module_path
-                )
+                module_name = module_path.stem
 
-            if module_spec is None or module_spec.loader is None:
-                raise click.ClickException(
-                    f"Failed to load custom registry: {module_path}"
-                )
-            module = importlib.util.module_from_spec(module_spec)
-            sys.modules[module_key] = module
+            parent_dir = str(module_path.parent)
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+
             try:
-                module_spec.loader.exec_module(module)
+                importlib.import_module(module_name)
             except Exception as e:  # noqa: BLE001
                 raise click.ClickException(
                     f"An error occurred while loading custom registry '{module_path}': {e}"
